@@ -1,0 +1,1867 @@
+{
+ "chain": {
+  "answer": "polished",
+  "config_version": "659e9b41e30f",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "outline"
+    },
+    {
+     "source": "outline",
+     "target": "gate"
+    },
+    {
+     "source": "gate",
+     "target": "draft"
+    },
+    {
+     "source": "draft",
+     "target": "polish"
+    },
+    {
+     "source": "polish",
+     "target": "end"
+    },
+    {
+     "source": "gate",
+     "target": "end"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "id": "outline",
+     "kind": "llm",
+     "label": "outline (LLM)",
+     "x": 200.0,
+     "y": 0.0
+    },
+    {
+     "id": "gate",
+     "kind": "code",
+     "label": "gate (code)",
+     "x": 400.0,
+     "y": 0.0
+    },
+    {
+     "id": "draft",
+     "kind": "llm",
+     "label": "draft (LLM)",
+     "x": 600.0,
+     "y": 0.0
+    },
+    {
+     "id": "polish",
+     "kind": "llm",
+     "label": "polish (LLM)",
+     "x": 800.0,
+     "y": 0.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 1000.0,
+     "y": 110.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Write an outline for a short product blurb about the user's product: 3 to 5 bullet points, one per line, each starting with '- '. Output only the bullets.",
+      "role": "system"
+     },
+     {
+      "content": "A bottle",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Write a product blurb of at most 80 words that follows the outline.",
+      "role": "system"
+     },
+     {
+      "content": "Product: A bottle\n\nOutline:\n- a\n- b\n- c",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Polish the blurb: fix grammar and tighten the wording, keep it under 80 words. Output only the blurb.",
+      "role": "system"
+     },
+     {
+      "content": "draft",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "draft",
+    "polish"
+   ],
+   [
+    "gate",
+    "draft"
+   ],
+   [
+    "outline",
+    "gate"
+   ],
+   [
+    "polish",
+    "end"
+   ],
+   [
+    "start",
+    "outline"
+   ]
+  ]
+ },
+ "chain-gate-fails": {
+  "answer": null,
+  "config_version": "659e9b41e30f",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "outline"
+    },
+    {
+     "source": "outline",
+     "target": "gate"
+    },
+    {
+     "source": "gate",
+     "target": "draft"
+    },
+    {
+     "source": "draft",
+     "target": "polish"
+    },
+    {
+     "source": "polish",
+     "target": "end"
+    },
+    {
+     "source": "gate",
+     "target": "end"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "id": "outline",
+     "kind": "llm",
+     "label": "outline (LLM)",
+     "x": 200.0,
+     "y": 0.0
+    },
+    {
+     "id": "gate",
+     "kind": "code",
+     "label": "gate (code)",
+     "x": 400.0,
+     "y": 0.0
+    },
+    {
+     "id": "draft",
+     "kind": "llm",
+     "label": "draft (LLM)",
+     "x": 600.0,
+     "y": 0.0
+    },
+    {
+     "id": "polish",
+     "kind": "llm",
+     "label": "polish (LLM)",
+     "x": 800.0,
+     "y": 0.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 1000.0,
+     "y": 110.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Write an outline for a short product blurb about the user's product: 3 to 5 bullet points, one per line, each starting with '- '. Output only the bullets.",
+      "role": "system"
+     },
+     {
+      "content": "A bottle",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "error",
+  "taken_edges": [
+   [
+    "gate",
+    "end"
+   ],
+   [
+    "outline",
+    "gate"
+   ],
+   [
+    "start",
+    "outline"
+   ]
+  ]
+ },
+ "evaluator": {
+  "answer": "SunSip charges you",
+  "config_version": "5c409451dd19",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "generator"
+    },
+    {
+     "source": "generator",
+     "target": "evaluator"
+    },
+    {
+     "source": "evaluator",
+     "target": "end"
+    },
+    {
+     "source": "evaluator",
+     "target": "generator"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "id": "generator",
+     "kind": "llm",
+     "label": "generator (LLM)",
+     "x": 220.0,
+     "y": 0.0
+    },
+    {
+     "id": "evaluator",
+     "kind": "llm",
+     "label": "evaluator (LLM)",
+     "x": 440.0,
+     "y": 0.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 660.0,
+     "y": 0.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Write one slogan of fewer than 12 words for the product. It must mention the product name. Output only the slogan.",
+      "role": "system"
+     },
+     {
+      "content": "SunSip charger",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Check the slogan: fewer than 12 words, mentions the product name, catchy. Approve only if all hold; otherwise give one sentence of concrete feedback.",
+      "role": "system"
+     },
+     {
+      "content": "Product: SunSip charger\nSlogan: Charge it",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "verdict",
+      "schema": {
+       "properties": {
+        "approved": {
+         "title": "Approved",
+         "type": "boolean"
+        },
+        "feedback": {
+         "title": "Feedback",
+         "type": "string"
+        }
+       },
+       "required": [
+        "approved",
+        "feedback"
+       ],
+       "title": "Verdict",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Write one slogan of fewer than 12 words for the product. It must mention the product name. Output only the slogan.",
+      "role": "system"
+     },
+     {
+      "content": "SunSip charger\n\nPrevious slogan: Charge it\nFeedback: Mention SunSip.\nWrite a better one.",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Check the slogan: fewer than 12 words, mentions the product name, catchy. Approve only if all hold; otherwise give one sentence of concrete feedback.",
+      "role": "system"
+     },
+     {
+      "content": "Product: SunSip charger\nSlogan: SunSip charges you",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "verdict",
+      "schema": {
+       "properties": {
+        "approved": {
+         "title": "Approved",
+         "type": "boolean"
+        },
+        "feedback": {
+         "title": "Feedback",
+         "type": "string"
+        }
+       },
+       "required": [
+        "approved",
+        "feedback"
+       ],
+       "title": "Verdict",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "evaluator",
+    "end"
+   ],
+   [
+    "evaluator",
+    "generator"
+   ],
+   [
+    "generator",
+    "evaluator"
+   ],
+   [
+    "start",
+    "generator"
+   ]
+  ]
+ },
+ "orchestrator": {
+  "answer": "note",
+  "config_version": "8c11e6ebb30d",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "orchestrator"
+    },
+    {
+     "source": "orchestrator",
+     "target": "worker"
+    },
+    {
+     "source": "worker",
+     "target": "synthesizer"
+    },
+    {
+     "source": "synthesizer",
+     "target": "end"
+    },
+    {
+     "source": "orchestrator",
+     "target": "end"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "id": "orchestrator",
+     "kind": "llm",
+     "label": "orchestrator (LLM)",
+     "x": 200.0,
+     "y": 0.0
+    },
+    {
+     "id": "worker",
+     "kind": "llm",
+     "label": "worker (LLM)",
+     "x": 420.0,
+     "y": 0.0
+    },
+    {
+     "id": "synthesizer",
+     "kind": "llm",
+     "label": "synthesizer (LLM)",
+     "x": 640.0,
+     "y": 0.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 860.0,
+     "y": 110.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Combine the parts into one short, well-structured trip note of at most 200 words.",
+      "role": "system"
+     },
+     {
+      "content": "Request: Porto trip\n\nPart 1: getting there\npart for: Subtask: getting there\n\nPart 2: food\npart for: Subtask: food",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Do the subtask for the request in at most 60 words.",
+      "role": "system"
+     },
+     {
+      "content": "Request: Porto trip\n\nSubtask: food",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Do the subtask for the request in at most 60 words.",
+      "role": "system"
+     },
+     {
+      "content": "Request: Porto trip\n\nSubtask: getting there",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Split the user's trip-note request into 2 to 4 independent subtasks, e.g. one per topic (getting there, sights, food, practical tips). Each subtask is one short instruction.",
+      "role": "system"
+     },
+     {
+      "content": "Porto trip",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "plan",
+      "schema": {
+       "properties": {
+        "subtasks": {
+         "items": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+         },
+         "maxItems": 4,
+         "minItems": 1,
+         "title": "Subtasks",
+         "type": "array"
+        }
+       },
+       "required": [
+        "subtasks"
+       ],
+       "title": "Plan",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "orchestrator",
+    "worker"
+   ],
+   [
+    "start",
+    "orchestrator"
+   ],
+   [
+    "synthesizer",
+    "end"
+   ],
+   [
+    "worker",
+    "synthesizer"
+   ]
+  ]
+ },
+ "parallel": {
+  "answer": "merged",
+  "config_version": "126b8e7e0cff",
+  "graph": {
+   "edges": [
+    {
+     "source": "merge",
+     "target": "end"
+    },
+    {
+     "source": "start",
+     "target": "clarity"
+    },
+    {
+     "source": "clarity",
+     "target": "merge"
+    },
+    {
+     "source": "clarity",
+     "target": "end"
+    },
+    {
+     "source": "start",
+     "target": "tone"
+    },
+    {
+     "source": "tone",
+     "target": "merge"
+    },
+    {
+     "source": "tone",
+     "target": "end"
+    },
+    {
+     "source": "start",
+     "target": "claims"
+    },
+    {
+     "source": "claims",
+     "target": "merge"
+    },
+    {
+     "source": "claims",
+     "target": "end"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 110.0
+    },
+    {
+     "id": "clarity",
+     "kind": "llm",
+     "label": "clarity (LLM)",
+     "x": 220.0,
+     "y": 0.0
+    },
+    {
+     "id": "tone",
+     "kind": "llm",
+     "label": "tone (LLM)",
+     "x": 220.0,
+     "y": 110.0
+    },
+    {
+     "id": "claims",
+     "kind": "llm",
+     "label": "claims (LLM)",
+     "x": 220.0,
+     "y": 220.0
+    },
+    {
+     "id": "merge",
+     "kind": "llm",
+     "label": "merge (LLM)",
+     "x": 440.0,
+     "y": 110.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 660.0,
+     "y": 110.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Merge the reviews into one short list of the most important improvements, most important first.",
+      "role": "system"
+     },
+     {
+      "content": "Text:\nBest app!!!\n\nclarity review:\nclarity review\n\ntone review:\ntone review\n\nclaims review:\nclaims review",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "You review a short text for claims only. Which claims are unsupported, exaggerated or possibly false? Reply with at most 3 short bullet points.",
+      "role": "system"
+     },
+     {
+      "content": "Best app!!!",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "You review a short text for clarity only. Is it easy to understand? Point out confusing sentences. Reply with at most 3 short bullet points.",
+      "role": "system"
+     },
+     {
+      "content": "Best app!!!",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "You review a short text for tone only. Is the tone consistent and right for its audience? Reply with at most 3 short bullet points.",
+      "role": "system"
+     },
+     {
+      "content": "Best app!!!",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "claims",
+    "merge"
+   ],
+   [
+    "clarity",
+    "merge"
+   ],
+   [
+    "merge",
+    "end"
+   ],
+   [
+    "start",
+    "claims"
+   ],
+   [
+    "start",
+    "clarity"
+   ],
+   [
+    "start",
+    "tone"
+   ],
+   [
+    "tone",
+    "merge"
+   ]
+  ]
+ },
+ "react": {
+  "answer": "391",
+  "config_version": "68228ed54396",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "llm"
+    },
+    {
+     "source": "llm",
+     "target": "end"
+    },
+    {
+     "source": "llm",
+     "target": "tool:calculator"
+    },
+    {
+     "source": "tool:calculator",
+     "target": "llm"
+    },
+    {
+     "source": "llm",
+     "target": "tool:get_weather"
+    },
+    {
+     "source": "tool:get_weather",
+     "target": "llm"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "id": "llm",
+     "kind": "llm",
+     "label": "reason (LLM)",
+     "x": 240.0,
+     "y": 0.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 480.0,
+     "y": 0.0
+    },
+    {
+     "id": "tool:calculator",
+     "kind": "tool",
+     "label": "calculator",
+     "x": 130.0,
+     "y": 180.0
+    },
+    {
+     "id": "tool:get_weather",
+     "kind": "tool",
+     "label": "get_weather",
+     "x": 350.0,
+     "y": 180.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "You are a precise assistant. Use the provided tools for arithmetic and weather instead of guessing. When you have everything you need, answer briefly without calling tools.",
+      "role": "system"
+     },
+     {
+      "content": "17*23?",
+      "role": "user"
+     }
+    ],
+    "reasoning": true,
+    "response_format": null,
+    "tools": [
+     {
+      "function": {
+       "description": "Evaluate an arithmetic expression with + - * / % ** and parentheses.",
+       "name": "calculator",
+       "parameters": {
+        "additionalProperties": false,
+        "properties": {
+         "expression": {
+          "description": "e.g. (17*23)+4",
+          "type": "string"
+         }
+        },
+        "required": [
+         "expression"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     },
+     {
+      "function": {
+       "description": "Get the current weather for a city (temperature in Celsius and condition).",
+       "name": "get_weather",
+       "parameters": {
+        "additionalProperties": false,
+        "properties": {
+         "city": {
+          "description": "City name, e.g. Berlin",
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     }
+    ]
+   },
+   {
+    "messages": [
+     {
+      "content": "You are a precise assistant. Use the provided tools for arithmetic and weather instead of guessing. When you have everything you need, answer briefly without calling tools.",
+      "role": "system"
+     },
+     {
+      "content": "17*23?",
+      "role": "user"
+     },
+     {
+      "content": null,
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "function": {
+         "arguments": "{\"expression\": \"17*23\"}",
+         "name": "calculator"
+        },
+        "id": "c1",
+        "type": "function"
+       }
+      ]
+     },
+     {
+      "content": "391",
+      "role": "tool",
+      "tool_call_id": "c1"
+     }
+    ],
+    "reasoning": true,
+    "response_format": null,
+    "tools": [
+     {
+      "function": {
+       "description": "Evaluate an arithmetic expression with + - * / % ** and parentheses.",
+       "name": "calculator",
+       "parameters": {
+        "additionalProperties": false,
+        "properties": {
+         "expression": {
+          "description": "e.g. (17*23)+4",
+          "type": "string"
+         }
+        },
+        "required": [
+         "expression"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     },
+     {
+      "function": {
+       "description": "Get the current weather for a city (temperature in Celsius and condition).",
+       "name": "get_weather",
+       "parameters": {
+        "additionalProperties": false,
+        "properties": {
+         "city": {
+          "description": "City name, e.g. Berlin",
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     }
+    ]
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "llm",
+    "end"
+   ],
+   [
+    "llm",
+    "tool:calculator"
+   ],
+   [
+    "start",
+    "llm"
+   ],
+   [
+    "tool:calculator",
+    "llm"
+   ]
+  ]
+ },
+ "routing-general": {
+  "answer": "Paris",
+  "config_version": "76608b5c1108",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "router"
+    },
+    {
+     "source": "router",
+     "target": "math"
+    },
+    {
+     "source": "math",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "general"
+    },
+    {
+     "source": "general",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "weather"
+    },
+    {
+     "source": "weather",
+     "target": "end"
+    },
+    {
+     "source": "math",
+     "target": "tool:calculator"
+    },
+    {
+     "source": "tool:calculator",
+     "target": "math"
+    },
+    {
+     "source": "weather",
+     "target": "tool:get_weather"
+    },
+    {
+     "source": "tool:get_weather",
+     "target": "weather"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 220.0
+    },
+    {
+     "id": "router",
+     "kind": "llm",
+     "label": "router (LLM)",
+     "x": 200.0,
+     "y": 220.0
+    },
+    {
+     "id": "math",
+     "kind": "llm",
+     "label": "math (LLM)",
+     "x": 450.0,
+     "y": 0.0
+    },
+    {
+     "id": "tool:calculator",
+     "kind": "tool",
+     "label": "calculator",
+     "x": 450.0,
+     "y": 110.0
+    },
+    {
+     "id": "general",
+     "kind": "llm",
+     "label": "general (LLM)",
+     "x": 450.0,
+     "y": 220.0
+    },
+    {
+     "id": "weather",
+     "kind": "llm",
+     "label": "weather (LLM)",
+     "x": 450.0,
+     "y": 330.0
+    },
+    {
+     "id": "tool:get_weather",
+     "kind": "tool",
+     "label": "get_weather",
+     "x": 450.0,
+     "y": 440.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 700.0,
+     "y": 220.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Classify the user's question. math: arithmetic or a calculation. weather: the weather or temperature in a city. general: anything else.",
+      "role": "system"
+     },
+     {
+      "content": "Capital of France?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "route",
+      "schema": {
+       "properties": {
+        "label": {
+         "enum": [
+          "math",
+          "weather",
+          "general"
+         ],
+         "title": "Label",
+         "type": "string"
+        }
+       },
+       "required": [
+        "label"
+       ],
+       "title": "Route",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Answer the question briefly and accurately.",
+      "role": "system"
+     },
+     {
+      "content": "Capital of France?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "general",
+    "end"
+   ],
+   [
+    "router",
+    "general"
+   ],
+   [
+    "start",
+    "router"
+   ]
+  ]
+ },
+ "routing-invalid": {
+  "answer": "No idea",
+  "config_version": "76608b5c1108",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "router"
+    },
+    {
+     "source": "router",
+     "target": "math"
+    },
+    {
+     "source": "math",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "general"
+    },
+    {
+     "source": "general",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "weather"
+    },
+    {
+     "source": "weather",
+     "target": "end"
+    },
+    {
+     "source": "math",
+     "target": "tool:calculator"
+    },
+    {
+     "source": "tool:calculator",
+     "target": "math"
+    },
+    {
+     "source": "weather",
+     "target": "tool:get_weather"
+    },
+    {
+     "source": "tool:get_weather",
+     "target": "weather"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 220.0
+    },
+    {
+     "id": "router",
+     "kind": "llm",
+     "label": "router (LLM)",
+     "x": 200.0,
+     "y": 220.0
+    },
+    {
+     "id": "math",
+     "kind": "llm",
+     "label": "math (LLM)",
+     "x": 450.0,
+     "y": 0.0
+    },
+    {
+     "id": "tool:calculator",
+     "kind": "tool",
+     "label": "calculator",
+     "x": 450.0,
+     "y": 110.0
+    },
+    {
+     "id": "general",
+     "kind": "llm",
+     "label": "general (LLM)",
+     "x": 450.0,
+     "y": 220.0
+    },
+    {
+     "id": "weather",
+     "kind": "llm",
+     "label": "weather (LLM)",
+     "x": 450.0,
+     "y": 330.0
+    },
+    {
+     "id": "tool:get_weather",
+     "kind": "tool",
+     "label": "get_weather",
+     "x": 450.0,
+     "y": 440.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 700.0,
+     "y": 220.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Classify the user's question. math: arithmetic or a calculation. weather: the weather or temperature in a city. general: anything else.",
+      "role": "system"
+     },
+     {
+      "content": "Who won?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "route",
+      "schema": {
+       "properties": {
+        "label": {
+         "enum": [
+          "math",
+          "weather",
+          "general"
+         ],
+         "title": "Label",
+         "type": "string"
+        }
+       },
+       "required": [
+        "label"
+       ],
+       "title": "Route",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Answer the question briefly and accurately.",
+      "role": "system"
+     },
+     {
+      "content": "Who won?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "general",
+    "end"
+   ],
+   [
+    "router",
+    "general"
+   ],
+   [
+    "start",
+    "router"
+   ]
+  ]
+ },
+ "routing-math": {
+  "answer": "1024",
+  "config_version": "76608b5c1108",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "router"
+    },
+    {
+     "source": "router",
+     "target": "math"
+    },
+    {
+     "source": "math",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "general"
+    },
+    {
+     "source": "general",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "weather"
+    },
+    {
+     "source": "weather",
+     "target": "end"
+    },
+    {
+     "source": "math",
+     "target": "tool:calculator"
+    },
+    {
+     "source": "tool:calculator",
+     "target": "math"
+    },
+    {
+     "source": "weather",
+     "target": "tool:get_weather"
+    },
+    {
+     "source": "tool:get_weather",
+     "target": "weather"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 220.0
+    },
+    {
+     "id": "router",
+     "kind": "llm",
+     "label": "router (LLM)",
+     "x": 200.0,
+     "y": 220.0
+    },
+    {
+     "id": "math",
+     "kind": "llm",
+     "label": "math (LLM)",
+     "x": 450.0,
+     "y": 0.0
+    },
+    {
+     "id": "tool:calculator",
+     "kind": "tool",
+     "label": "calculator",
+     "x": 450.0,
+     "y": 110.0
+    },
+    {
+     "id": "general",
+     "kind": "llm",
+     "label": "general (LLM)",
+     "x": 450.0,
+     "y": 220.0
+    },
+    {
+     "id": "weather",
+     "kind": "llm",
+     "label": "weather (LLM)",
+     "x": 450.0,
+     "y": 330.0
+    },
+    {
+     "id": "tool:get_weather",
+     "kind": "tool",
+     "label": "get_weather",
+     "x": 450.0,
+     "y": 440.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 700.0,
+     "y": 220.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Classify the user's question. math: arithmetic or a calculation. weather: the weather or temperature in a city. general: anything else.",
+      "role": "system"
+     },
+     {
+      "content": "2**10?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "route",
+      "schema": {
+       "properties": {
+        "label": {
+         "enum": [
+          "math",
+          "weather",
+          "general"
+         ],
+         "title": "Label",
+         "type": "string"
+        }
+       },
+       "required": [
+        "label"
+       ],
+       "title": "Route",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Answer the arithmetic question. Use the calculator tool for every calculation, then answer briefly.",
+      "role": "system"
+     },
+     {
+      "content": "2**10?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": [
+     {
+      "function": {
+       "description": "Evaluate an arithmetic expression with + - * / % ** and parentheses.",
+       "name": "calculator",
+       "parameters": {
+        "additionalProperties": false,
+        "properties": {
+         "expression": {
+          "description": "e.g. (17*23)+4",
+          "type": "string"
+         }
+        },
+        "required": [
+         "expression"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     }
+    ]
+   },
+   {
+    "messages": [
+     {
+      "content": "Answer the arithmetic question. Use the calculator tool for every calculation, then answer briefly.",
+      "role": "system"
+     },
+     {
+      "content": "2**10?",
+      "role": "user"
+     },
+     {
+      "content": null,
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "function": {
+         "arguments": "{\"expression\": \"2**10\"}",
+         "name": "calculator"
+        },
+        "id": "c1",
+        "type": "function"
+       }
+      ]
+     },
+     {
+      "content": "1024",
+      "role": "tool",
+      "tool_call_id": "c1"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "math",
+    "end"
+   ],
+   [
+    "math",
+    "tool:calculator"
+   ],
+   [
+    "router",
+    "math"
+   ],
+   [
+    "start",
+    "router"
+   ],
+   [
+    "tool:calculator",
+    "math"
+   ]
+  ]
+ },
+ "routing-weather": {
+  "answer": "Cold",
+  "config_version": "76608b5c1108",
+  "graph": {
+   "edges": [
+    {
+     "source": "start",
+     "target": "router"
+    },
+    {
+     "source": "router",
+     "target": "math"
+    },
+    {
+     "source": "math",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "general"
+    },
+    {
+     "source": "general",
+     "target": "end"
+    },
+    {
+     "source": "router",
+     "target": "weather"
+    },
+    {
+     "source": "weather",
+     "target": "end"
+    },
+    {
+     "source": "math",
+     "target": "tool:calculator"
+    },
+    {
+     "source": "tool:calculator",
+     "target": "math"
+    },
+    {
+     "source": "weather",
+     "target": "tool:get_weather"
+    },
+    {
+     "source": "tool:get_weather",
+     "target": "weather"
+    }
+   ],
+   "nodes": [
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "start",
+     "x": 0.0,
+     "y": 220.0
+    },
+    {
+     "id": "router",
+     "kind": "llm",
+     "label": "router (LLM)",
+     "x": 200.0,
+     "y": 220.0
+    },
+    {
+     "id": "math",
+     "kind": "llm",
+     "label": "math (LLM)",
+     "x": 450.0,
+     "y": 0.0
+    },
+    {
+     "id": "tool:calculator",
+     "kind": "tool",
+     "label": "calculator",
+     "x": 450.0,
+     "y": 110.0
+    },
+    {
+     "id": "general",
+     "kind": "llm",
+     "label": "general (LLM)",
+     "x": 450.0,
+     "y": 220.0
+    },
+    {
+     "id": "weather",
+     "kind": "llm",
+     "label": "weather (LLM)",
+     "x": 450.0,
+     "y": 330.0
+    },
+    {
+     "id": "tool:get_weather",
+     "kind": "tool",
+     "label": "get_weather",
+     "x": 450.0,
+     "y": 440.0
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "end",
+     "x": 700.0,
+     "y": 220.0
+    }
+   ]
+  },
+  "requests": [
+   {
+    "messages": [
+     {
+      "content": "Classify the user's question. math: arithmetic or a calculation. weather: the weather or temperature in a city. general: anything else.",
+      "role": "system"
+     },
+     {
+      "content": "Weather in Oslo?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": {
+     "json_schema": {
+      "name": "route",
+      "schema": {
+       "properties": {
+        "label": {
+         "enum": [
+          "math",
+          "weather",
+          "general"
+         ],
+         "title": "Label",
+         "type": "string"
+        }
+       },
+       "required": [
+        "label"
+       ],
+       "title": "Route",
+       "type": "object"
+      },
+      "strict": true
+     },
+     "type": "json_schema"
+    },
+    "tools": []
+   },
+   {
+    "messages": [
+     {
+      "content": "Answer the weather question. Use the get_weather tool, then answer briefly.",
+      "role": "system"
+     },
+     {
+      "content": "Weather in Oslo?",
+      "role": "user"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": [
+     {
+      "function": {
+       "description": "Get the current weather for a city (temperature in Celsius and condition).",
+       "name": "get_weather",
+       "parameters": {
+        "additionalProperties": false,
+        "properties": {
+         "city": {
+          "description": "City name, e.g. Berlin",
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     }
+    ]
+   },
+   {
+    "messages": [
+     {
+      "content": "Answer the weather question. Use the get_weather tool, then answer briefly.",
+      "role": "system"
+     },
+     {
+      "content": "Weather in Oslo?",
+      "role": "user"
+     },
+     {
+      "content": null,
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "function": {
+         "arguments": "{\"city\": \"Oslo\"}",
+         "name": "get_weather"
+        },
+        "id": "c1",
+        "type": "function"
+       }
+      ]
+     },
+     {
+      "content": "{\"city\": \"Oslo\", \"temperature_c\": -6, \"condition\": \"cloudy\"}",
+      "role": "tool",
+      "tool_call_id": "c1"
+     }
+    ],
+    "reasoning": false,
+    "response_format": null,
+    "tools": []
+   }
+  ],
+  "status": "completed",
+  "taken_edges": [
+   [
+    "router",
+    "weather"
+   ],
+   [
+    "start",
+    "router"
+   ],
+   [
+    "tool:get_weather",
+    "weather"
+   ],
+   [
+    "weather",
+    "end"
+   ],
+   [
+    "weather",
+    "tool:get_weather"
+   ]
+  ]
+ }
+}
