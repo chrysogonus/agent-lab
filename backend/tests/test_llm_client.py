@@ -101,3 +101,14 @@ async def test_transport_error_becomes_llm_error() -> None:
 
     with pytest.raises(LLMError):
         await client_with(httpx.MockTransport(handler)).chat([], [])
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("field", ["reasoning", "reasoning_content"])
+async def test_reasoning_parsed(field: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        message = {"role": "assistant", "content": "5", field: "2 plus 3 is 5"}
+        return httpx.Response(200, json={"choices": [{"message": message}]})
+
+    result = await client_with(httpx.MockTransport(handler)).chat([], [])
+    assert (result.content, result.reasoning) == ("5", "2 plus 3 is 5")

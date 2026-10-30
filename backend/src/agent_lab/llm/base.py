@@ -16,6 +16,8 @@ class ToolCall(BaseModel):
 
 class ChatResponse(BaseModel):
     content: str | None = None
+    # Thinking text some providers return beside the answer; traced, never sent back.
+    reasoning: str | None = None
     tool_calls: list[ToolCall] = []
     tokens_in: int | None = None
     tokens_out: int | None = None

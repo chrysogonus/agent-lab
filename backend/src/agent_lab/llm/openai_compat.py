@@ -48,6 +48,8 @@ def _parse(data: dict[str, Any]) -> ChatResponse:
     usage = data.get("usage") or {}
     return ChatResponse(
         content=message.get("content"),
+        # Ollama names it "reasoning"; vLLM and DeepSeek use "reasoning_content".
+        reasoning=message.get("reasoning") or message.get("reasoning_content"),
         tool_calls=[
             ToolCall(
                 id=call["id"],

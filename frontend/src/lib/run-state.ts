@@ -49,14 +49,30 @@ export function activeNode(spans: Record<string, Span>): string | null {
   return running.at(-1)?.node_id ?? null;
 }
 
-/** Edges taken so far: consecutive node visits that are declared edges of the graph. */
+/**
+ * Edges taken so far. Tool calls fan out from the node that requested them and all return to
+ * the next non-tool node, so several tools called in one turn each get both edges.
+ */
 export function takenEdges(graph: Graph, spans: Record<string, Span>): Set<string> {
   const declared = new Set(graph.edges.map((e) => edgeKey(e.source, e.target)));
+  const tools = new Set(graph.nodes.filter((n) => n.kind === "tool").map((n) => n.id));
   const taken = new Set<string>();
-  const path = byStart(spans).map((s) => s.node_id);
-  for (let i = 1; i < path.length; i++) {
-    const key = edgeKey(path[i - 1], path[i]);
+  const take = (source: string, target: string) => {
+    const key = edgeKey(source, target);
     if (declared.has(key)) taken.add(key);
+  };
+  let caller: string | null = null;
+  let pending: string[] = [];
+  for (const { node_id } of byStart(spans)) {
+    if (tools.has(node_id)) {
+      if (caller) take(caller, node_id);
+      pending.push(node_id);
+      continue;
+    }
+    if (pending.length) pending.forEach((tool) => take(tool, node_id));
+    else if (caller) take(caller, node_id);
+    pending = [];
+    caller = node_id;
   }
   return taken;
 }

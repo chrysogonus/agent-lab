@@ -144,6 +144,8 @@ class ReActAgent:
         ) as span:
             response = await self.llm.chat(messages, [t.schema() for t in self.tools.values()])
             span.output = response.as_message()
+            if response.reasoning:
+                span.output["reasoning"] = response.reasoning
             span.model = response.model or model
             span.tokens_in = response.tokens_in
             span.tokens_out = response.tokens_out

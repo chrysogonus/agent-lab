@@ -161,8 +161,9 @@ is a basic safety budget.
 - **FR-010**: Every agent iteration, model call and tool call MUST produce a span with all
   fields of core contract 1, nested via `parent_span_id` (iteration → model/tool calls).
 - **FR-011**: Model spans MUST record the model name, the full message list sent (as input),
-  the response (as output) and input/output token counts reported by the provider. Model calls
-  are non-streaming; spans update only on start and end.
+  the response (as output, including the model's reasoning text when the provider returns it)
+  and input/output token counts reported by the provider. Reasoning is traced but not sent back
+  to the model. Model calls are non-streaming; spans update only on start and end.
 - **FR-012**: The agent MUST declare its static graph (nodes and edges) as data, and every
   span MUST reference a node id from that graph.
 - **FR-013**: Each run MUST record `agent_id` and a `config_version` derived deterministically
@@ -185,7 +186,7 @@ is a basic safety budget.
 
 - **FR-020**: The page MUST offer a prompt input that starts a run.
 - **FR-021**: The page MUST render the agent's declared graph, highlight the active node and
-  mark the edges taken so far.
+  mark the edges taken so far, including every tool called in a single model turn.
 - **FR-022**: The page MUST render a waterfall of spans (nesting, relative start, duration,
   running vs. finished vs. error).
 - **FR-023**: Selecting a span MUST show its input, output, error, tokens in/out, model and

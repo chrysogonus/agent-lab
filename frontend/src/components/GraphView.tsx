@@ -62,7 +62,8 @@ function LabNode({ data }: NodeProps<Node<LabNodeData>>) {
 
 const nodeTypes = { lab: LabNode };
 
-// Fixed sizes: React Flow drops measured sizes when it receives new node objects each render.
+// Nodes are rebuilt on every span event. React Flow keeps a node's handle positions (needed to
+// draw edges) only when the new node object carries `measured`, so pass a fixed size as both.
 const NODE_WIDTH = 150;
 const NODE_HEIGHT = 44;
 
@@ -90,6 +91,7 @@ export function GraphView({
     position: { x: n.x, y: n.y },
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
+    measured: { width: NODE_WIDTH, height: NODE_HEIGHT },
     data: {
       label: n.label,
       kind: n.kind,

@@ -68,13 +68,19 @@ contracts/, quickstart.md)
 - [X] T029 [P] AGENTS.md (commands, gates, layout, contracts), CLAUDE.md (pointer), README.md (run instructions)
 - [X] T030 Run quickstart.md manual checks (real model if available; else FakeLLM smoke) and record results
 
+## Phase 7: Fixes from the first real-model run
+
+- [X] T031 [US1] Trace the model's reasoning text (`reasoning` / `reasoning_content`) on llm spans, never resend it, in backend/src/agent_lab/llm/openai_compat.py and backend/src/agent_lab/agents/react.py
+- [X] T032 [US1] Mark every edge for tools called in one model turn in frontend/src/lib/run-state.ts
+- [X] T033 [US1] Keep graph edges visible while a live run re-renders the graph (pass `measured` with node size) in frontend/src/components/GraphView.tsx
+
 ## Manual check results (T030, 2026-10-30)
 
 No Ollama model was pulled, so the smoke test ran the real API and UI against a scripted slow
 model (headless Chromium): quickstart steps 1–5 and 7 pass (live graph/waterfall, span detail,
 replay after reload, mobile width, both servers bound to 127.0.0.1, foreign `Host` → 400).
 Step 6 passed with the scripted `2**999` call (error on the tool span, run continued). A
-real-model run is still open.
+real-model run with `qwen3:8b` followed and passed; it exposed T031 and T032.
 
 ## Dependencies
 
@@ -99,7 +105,7 @@ T002 ∥ T001; T004, T005, T007–T011 in parallel; T013–T016 and T022 in para
 | FR-008 | test_react.py (agent typed against `LLMClient`, driven by FakeLLM; pyright gate) |
 | FR-009 | whole suite runs without network (FakeLLM / MockTransport) |
 | FR-010 | test_react.py::test_multi_step_tool_run (span tree), test_tracing.py::test_nesting |
-| FR-011 | test_react.py::test_multi_step_tool_run (model, tokens, messages) |
+| FR-011 | test_react.py::test_multi_step_tool_run (model, tokens, messages), test_reasoning_traced_not_resent; test_llm_client.py::test_reasoning_parsed |
 | FR-012 | test_react.py::test_multi_step_tool_run (node ids ⊆ graph) |
 | FR-013 | test_react.py::test_config_version_stable |
 | FR-014 | test_tracing.py::test_redact_*, test_redaction.py::test_secrets_never_stored |

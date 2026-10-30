@@ -154,3 +154,17 @@ def test_ungranted_scope_rejected() -> None:
     tracer = Tracer(run_id="r", agent_id="react", config_version="v", sink=lambda e, s: None)
     with pytest.raises(ValueError, match="ungranted scopes"):
         ReActAgent(llm=FakeLLM([]), tools=[risky], config=config, tracer=tracer)
+
+
+@pytest.mark.anyio
+async def test_reasoning_traced_not_resent() -> None:
+    thinking = tool_call("calculator", '{"expression": "2+3"}')
+    thinking.reasoning = "I should use the calculator."
+    llm = FakeLLM([thinking, answer("5")])
+    agent, events = make_agent(llm)
+    await agent.run("2+3?")
+
+    first_llm = next(s for s in ended(events) if s.kind == SpanKind.LLM)
+    assert first_llm.output["reasoning"] == "I should use the calculator."
+    # The model's history holds the assistant message without the reasoning.
+    assert all("reasoning" not in m for m in llm.calls[1])
