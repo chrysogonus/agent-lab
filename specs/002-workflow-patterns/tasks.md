@@ -129,12 +129,12 @@ the expected taken edges; totals match the spans.
 **Independent test**: scripted failure runs record the error on the relevant span and end in the
 documented status; no run hangs.
 
-- [ ] T037 [P] [US3] Routing test `test_invalid_label_falls_back_to_general` in backend/tests/test_workflow_routing.py: `{"label": "sports"}` → route span error records the invalid output, general handler runs, run `completed`, edge router→general taken (US3-1)
-- [ ] T038 [P] [US3] Orchestrator tests in backend/tests/test_workflow_orchestrator.py: unreadable plan, 5 subtasks, 0 subtasks, a subtask over 200 chars → plan span error, no worker spans, run `error`, final span ← orchestrator (US3-2)
-- [ ] T039 [P] [US3] Evaluator tests in backend/tests/test_workflow_evaluator.py: `test_never_approves` → 3 rounds, run `max_iterations`, answer = third draft (US3-3); `test_invalid_verdict_counts_as_rejection` → verdict span error, next generator gets the error text as feedback
-- [ ] T040 [P] [US3] Parallel tests in backend/tests/test_workflow_parallel.py: `test_one_branch_fails` → failed aspect span has the error, merge gets two reviews and ← the two survivors, run `completed` (US3-4); `test_all_branches_fail` → no merge span, run `error`, final span ← the three aspects
-- [ ] T041 [P] [US3] Model transport error mid-workflow (`LLMError` in the script) → span error, run status `error`, `run_ended` published, in backend/tests/test_api.py `test_workflow_llm_error_ends_run`; plus `test_two_workflow_runs_stream_independently` (routing and parallel runs started together, each WS receives only its own spans)
-- [ ] T042 [US3] Fix any defects exposed by T037–T041 in the workflow modules under backend/src/agent_lab/workflows/
+- [X] T037 [P] [US3] Routing test `test_invalid_label_falls_back_to_general` in backend/tests/test_workflow_routing.py: `{"label": "sports"}` → route span error records the invalid output, general handler runs, run `completed`, edge router→general taken (US3-1)
+- [X] T038 [P] [US3] Orchestrator tests in backend/tests/test_workflow_orchestrator.py: unreadable plan, 5 subtasks, 0 subtasks, a subtask over 200 chars → plan span error, no worker spans, run `error`, final span ← orchestrator (US3-2)
+- [X] T039 [P] [US3] Evaluator tests in backend/tests/test_workflow_evaluator.py: `test_never_approves` → 3 rounds, run `max_iterations`, answer = third draft (US3-3); `test_invalid_verdict_counts_as_rejection` → verdict span error, next generator gets the error text as feedback
+- [X] T040 [P] [US3] Parallel tests in backend/tests/test_workflow_parallel.py: `test_one_branch_fails` → failed aspect span has the error, merge gets two reviews and ← the two survivors, run `completed` (US3-4); `test_all_branches_fail` → no merge span, run `error`, final span ← the three aspects
+- [X] T041 [P] [US3] Model transport error mid-workflow (`LLMError` in the script) → span error, run status `error`, `run_ended` published, in backend/tests/test_api.py `test_workflow_llm_error_ends_run`; plus `test_two_workflow_runs_stream_independently` (routing and parallel runs started together, each WS receives only its own spans)
+- [X] T042 [US3] Fix any defects exposed by T037–T041 in the workflow modules under backend/src/agent_lab/workflows/ (none exposed)
 
 **Checkpoint**: every US2 decision and US3 failure has a passing test (SC-004).
 

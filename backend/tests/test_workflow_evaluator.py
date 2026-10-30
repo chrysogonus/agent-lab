@@ -55,3 +55,32 @@ async def test_approved_round_two() -> None:
     ]
     assert ("evaluator", "generator") in taken_edges(spans)
     assert_trace_valid(build_graph(), spans)
+
+
+@pytest.mark.anyio
+async def test_never_approves() -> None:
+    reject = json_answer({"approved": False, "feedback": "Shorter."})
+    script: list[ScriptItem] = []
+    for i in range(3):
+        script += [answer(f"draft {i + 1}"), reject]
+    outcome, spans, llm = await run(script)
+
+    assert (outcome.status, outcome.answer) == ("max_iterations", "draft 3")
+    assert len(llm.calls) == 6
+    assert spans[-1].error == "not approved after 3 rounds"
+    assert spans[0].error == spans[-1].error
+    assert_trace_valid(build_graph(), spans)
+
+
+@pytest.mark.anyio
+async def test_invalid_verdict_counts_as_rejection() -> None:
+    outcome, spans, llm = await run(
+        [answer("draft 1"), answer("looks great!"), answer("draft 2"), APPROVE]
+    )
+
+    assert (outcome.status, outcome.answer) == ("completed", "draft 2")
+    verdict = next(s for s in spans if s.name == "verdict")
+    assert verdict.error is not None and verdict.error.startswith("invalid verdict:")
+    # The validation error is the feedback for the next draft.
+    assert verdict.error in llm.calls[2][-1]["content"]
+    assert_trace_valid(build_graph(), spans)

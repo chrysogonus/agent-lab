@@ -9,7 +9,7 @@ from helpers import answer, json_answer, tool_call
 from starlette.websockets import WebSocketDisconnect
 
 from agent_lab.api import create_app
-from agent_lab.llm.base import ChatResponse, Message
+from agent_lab.llm.base import ChatResponse, LLMError, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 
@@ -198,3 +198,43 @@ def test_workflow_run_streams(store: Store) -> None:
     assert {(s["agent_id"], s["config_version"]) for s in spans} == {
         ("routing", run["config_version"])
     }
+
+
+def test_workflow_llm_error_ends_run(store: Store) -> None:
+    llm = FakeLLM([LLMError("HTTP 500: boom")])
+    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+        run_id = client.post("/runs", json={"prompt": "bottle", "agent_id": "chain"}).json()
+        with client.websocket_connect(f"{WS_BASE}/runs/{run_id['run_id']}/stream") as ws:
+            events = read_until_run_ended(ws)
+
+    assert events[-1]["run"]["status"] == "error"
+    spans = list(final_spans(events).values())
+    assert all(s["ended_at"] is not None for s in spans)
+    assert {s["error"] for s in spans} == {"LLMError: HTTP 500: boom"}
+
+
+def respond(messages: list[Message]) -> ChatResponse:
+    """Answers any call of the routing or parallel workflow, in whatever order they come."""
+    system = messages[0]["content"]
+    if system.startswith("Classify"):
+        return json_answer({"label": "general"})
+    return answer(system[:20])
+
+
+def test_two_workflow_runs_stream_independently(store: Store) -> None:
+    llm = FakeLLM([respond] * 6, delay=0.02)  # routing: 2 calls, parallel: 3 reviews + merge
+    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+        runs = [
+            client.post("/runs", json={"prompt": "hi", "agent_id": agent}).json()
+            for agent in ("routing", "parallel")
+        ]
+        streams: dict[str, list[dict[str, Any]]] = {}
+        for run in runs:
+            with client.websocket_connect(f"{WS_BASE}/runs/{run['run_id']}/stream") as ws:
+                streams[run["run_id"]] = read_until_run_ended(ws)
+
+    for run in runs:
+        events = streams[run["run_id"]]
+        assert events[-1]["run"]["status"] == "completed"
+        spans = final_spans(events).values()
+        assert {(s["run_id"], s["agent_id"]) for s in spans} == {(run["run_id"], run["agent_id"])}

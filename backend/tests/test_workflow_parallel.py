@@ -2,7 +2,7 @@ import pytest
 from helpers import answer, assert_trace_valid, ended, make_tracer, taken_edges
 
 from agent_lab.agents.steps import Outcome
-from agent_lab.llm.base import ChatResponse, Message
+from agent_lab.llm.base import ChatResponse, LLMError, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.tracing.span import Span
 from agent_lab.workflows.parallel import AGENT_ID, Config, ParallelWorkflow, build_graph
@@ -61,3 +61,35 @@ async def test_branches_overlap_and_join() -> None:
         *((a, "merge") for a in ASPECTS),
         ("merge", "end"),
     }
+
+
+def tone_fails(messages: list[Message]) -> ChatResponse | Exception:
+    return LLMError("HTTP 500: boom") if aspect_of(messages) == "tone" else review(messages)
+
+
+@pytest.mark.anyio
+async def test_one_branch_fails() -> None:
+    outcome, spans, llm = await run([tone_fails, tone_fails, tone_fails, answer("merged")])
+
+    assert (outcome.status, outcome.answer) == ("completed", "merged")
+    tone = next(s for s in spans if s.node_id == "tone")
+    assert tone.error == "LLMError: HTTP 500: boom"
+    merge = next(s for s in spans if s.node_id == "merge")
+    assert set(merge.attributes["lab.came_from"]) == {"clarity", "claims"}
+    merge_input = llm.calls[3][-1]["content"]
+    assert "clarity review" in merge_input and "tone review" not in merge_input
+    # The failure stays on the branch; the run around it is fine.
+    assert spans[0].error is None
+    assert_trace_valid(build_graph(Config(model="m")), spans)
+
+
+@pytest.mark.anyio
+async def test_all_branches_fail() -> None:
+    outcome, spans, _ = await run([LLMError("down")] * 3)
+
+    assert (outcome.status, outcome.answer) == ("error", None)
+    assert not any(s.node_id == "merge" for s in spans)
+    end = spans[-1]
+    assert end.error == "all 3 reviews failed"
+    assert set(end.attributes["lab.came_from"]) == set(ASPECTS)
+    assert_trace_valid(build_graph(Config(model="m")), spans)

@@ -49,3 +49,28 @@ async def test_three_subtasks() -> None:
     synth = next(s for s in spans if s.node_id == "synthesizer")
     assert synth.attributes["lab.came_from"] == ["worker"]
     assert_trace_valid(build_graph(), spans)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "content",
+    [
+        "I would rather not plan.",
+        '{"subtasks": ["a", "b", "c", "d", "e"]}',
+        '{"subtasks": []}',
+        '{"subtasks": ["a", "   "]}',
+        '{"subtasks": ["' + "x" * 201 + '"]}',
+    ],
+)
+async def test_invalid_plan_ends_run(content: str) -> None:
+    outcome, spans, llm = await run([answer(content)])
+
+    assert (outcome.status, outcome.answer) == ("error", None)
+    plan_span = next(s for s in spans if s.name == "plan")
+    assert plan_span.error is not None and plan_span.error.startswith("invalid plan:")
+    assert len(llm.calls) == 1
+    assert not any(s.node_id == "worker" for s in spans)
+    end = spans[-1]
+    assert (end.node_id, end.error) == ("end", plan_span.error)
+    assert end.attributes["lab.came_from"] == ["orchestrator"]
+    assert_trace_valid(build_graph(), spans)

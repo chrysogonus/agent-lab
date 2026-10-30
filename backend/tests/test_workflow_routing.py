@@ -108,3 +108,15 @@ async def test_handler_unknown_tool_records_no_edge() -> None:
     tool = next(s for s in spans if s.kind == SpanKind.TOOL)
     assert (tool.node_id, tool.error) == ("math", "unknown tool 'get_weather'")
     assert_trace_valid(build_graph(), spans)
+
+
+@pytest.mark.anyio
+async def test_invalid_label_falls_back_to_general() -> None:
+    outcome, spans, _ = await run([json_answer({"label": "sports"}), answer("Go team")])
+
+    assert (outcome.status, outcome.answer) == ("completed", "Go team")
+    route = next(s for s in spans if s.kind == SpanKind.ROUTE)
+    assert route.error is not None and "sports" in route.error
+    assert route.output is None
+    assert ("router", "general") in taken_edges(spans)
+    assert_trace_valid(build_graph(), spans)
