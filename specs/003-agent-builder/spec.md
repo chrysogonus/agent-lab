@@ -28,13 +28,29 @@ configuration; spans are persisted and streamed; secrets are redacted; servers s
 | Template | Prompts | Structure and limits |
 |---|---|---|
 | **ReAct** | system prompt | which existing tools it may use (none, some or all); max iterations |
-| **Prompt chaining** | one prompt per step | ordered list of model steps (add, remove, reorder); code gate after the first step on or off, with its minimum bullet count |
+| **Prompt chaining** | one prompt per step | ordered list of model steps (add, remove, reorder), each with an "also include the original input" switch; code gate after the first step on or off, with its minimum bullet count |
 | **Routing** | router prompt; one handler prompt per route | list of routes, each with a name, a description the router sees and an optional existing tool; which route is the fallback |
 | **Parallelization** | review prompt (filled per aspect); merge prompt | list of aspects, each with a name and a focus |
 | **Orchestrator-workers** | orchestrator, worker and synthesizer prompts | max number of subtasks |
 | **Evaluator-optimizer** | generator and evaluator prompts | max rounds |
 
 Every agent also has a name, a one-line description, a sample prompt and the reasoning setting.
+
+## Clarifications
+
+### Session 2026-10-30
+
+- Q: When editing an agent in the builder, can the owner run changes before saving them? → A:
+  Run saves the agent first, then starts the run, in one click; a rejected save starts no run.
+- Q: In a custom prompt-chaining agent, what does each step receive as input? → A: The previous
+  step's output, plus a per-step switch "also include the original input"; the first step always
+  gets the input. The M2 chain maps to it as draft on, polish off.
+- Q: Where in the UI should the builder live? → A: On the existing page: the selected agent's
+  preview area becomes the builder (graph plus settings panel); Run shows the live run in the
+  same area with a way back to editing; the past-runs list stays visible.
+- Q: Are the size limits right (steps, routes, aspects, subtasks 6; rounds 5; iterations 10;
+  prompts 4000 characters)? → A: Yes, as drafted; branches beyond what the model server runs at
+  once wait for a free slot, and the waterfall shows it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -125,7 +141,8 @@ the list still names the agent.
 
 - The owner leaves the builder or picks another agent with unsaved changes → asked to discard
   or keep editing; nothing is saved silently.
-- A run is started while its agent is being edited → the run uses the last saved version.
+- Run is pressed in the builder with unsaved changes → the agent is saved first and the run
+  uses the just-saved version; if the save is rejected, no run starts.
 - The agent is deleted while one of its runs is still running → the run finishes and stays in
   the past-runs list.
 - A routing copy is reduced to its last two routes and one is removed → rejected: routing needs
@@ -138,6 +155,9 @@ the list still names the agent.
   reviewer then gets the same instruction (allowed, the owner may want that).
 - Two custom agents with the same name → rejected; names are unique, ignoring case and
   surrounding spaces.
+- More parallel aspects or orchestrator subtasks than the model server serves at once (4 with
+  the default setup) → all branches still run; the extra ones start when a slot frees up, which
+  the waterfall shows as later start times.
 - An M1/M2 database → existing runs still list and replay; the six templates behave exactly as
   before.
 
@@ -166,9 +186,11 @@ the list still names the agent.
 - **FR-007**: ReAct: the set of allowed tools is any subset of the existing tools (including
   none); max iterations 1–10.
 - **FR-008**: Prompt chaining: 1–6 model steps, each with a short name (unique within the agent)
-  and a prompt; steps can be added, removed and reordered; each step gets the previous step's
-  output and the first step gets the user's input; the code gate, when on, sits after the first
-  step and requires 1–10 bullet lines.
+  and a prompt; steps can be added, removed and reordered; the first step gets the user's input,
+  every later step gets the previous step's output plus, when its "also include the original
+  input" switch is on, the user's input; the code gate, when on, sits after the first step and
+  requires 1–10 bullet lines. The prompt-chaining template is expressed this way (outline, then
+  draft with the switch on, then polish with it off) and behaves exactly as in M2.
 - **FR-009**: Routing: 2–6 routes, each with a name (unique, lowercase letters, digits and
   hyphens, up to 30 characters), a description of up to 300 characters that the router sees,
   a handler prompt and at most one existing tool; exactly one route MUST be the fallback. The
@@ -182,13 +204,18 @@ the list still names the agent.
 
 **Builder UI**
 
-- **FR-013**: The builder MUST show the agent's graph; clicking a node MUST open that node's
-  settings (model node → prompt; gate → minimum bullets; tool node → tool name and description;
-  start or empty area → agent-level settings).
+- **FR-013**: The builder MUST live on the existing page, in the selected agent's preview area:
+  the agent's graph plus a settings panel; clicking a node MUST open that node's settings (model
+  node → prompt; gate → minimum bullets; tool node → tool name and description; start or empty
+  area → agent-level settings). The past-runs list MUST stay visible while building.
+- **FR-024**: Starting a run from the builder MUST show the live run in the same area, with an
+  action back to editing that agent; opening a past run of a custom agent MUST offer the same
+  action while the agent exists.
 - **FR-014**: Structural edits and limit changes MUST redraw the graph before saving; the graph
   shown MUST be the one the server derives from the configuration.
 - **FR-015**: The builder MUST show whether there are unsaved changes and MUST ask before
-  discarding them.
+  discarding them. Run in the builder MUST save the agent first and then start the run with the
+  saved version; a rejected save MUST start no run.
 - **FR-016**: Invalid values MUST be reported next to the field they belong to; a rejected save
   MUST store nothing.
 
@@ -258,7 +285,8 @@ the list still names the agent.
 
 - One owner, one browser; concurrent edits of the same agent are not coordinated (last save
   wins).
-- Runs always use the saved version of an agent; unsaved builder changes are never run.
+- Runs always use a saved version of an agent; Run in the builder saves first (see
+  Clarifications), so a draft is never run without being stored.
 - The model stays the configured default for every agent; choosing a model per agent or per node
   is out of scope.
 - Templates cannot be edited or deleted; to change one, the owner customizes a copy.
@@ -268,5 +296,6 @@ the list still names the agent.
 - Orchestrator workers stay plain model calls without tools; evaluator verdicts keep the M2
   approve-or-feedback shape.
 - Limits (steps, routes, aspects, subtasks, rounds, iterations) are chosen to keep graphs
-  readable and runs short on the local model; they can be raised in a later milestone.
+  readable and runs short on the local model, not to match the model server's concurrency; they
+  can be raised in a later milestone.
 - Custom agents are kept until deleted; no retention policy.
