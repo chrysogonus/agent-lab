@@ -1,6 +1,7 @@
 # Quickstart / validation: M2
 
-Prerequisites: as M1; `qwen3:8b` pulled in Ollama for the manual part.
+Prerequisites: as M1; for the manual part a model server: `make dev-llm` (vLLM, `qwen3.5-9b`), or
+Ollama with `qwen3:8b`.
 
 ## Automated
 
@@ -13,6 +14,7 @@ Expected: all gates pass; workflow tests run on `FakeLLM` only.
 ## Manual (real model)
 
 ```bash
+make dev-llm
 make dev-backend
 make dev-frontend
 ```

@@ -1,4 +1,4 @@
-"""Thin client for OpenAI-compatible `POST /chat/completions` (Ollama, OpenAI, vLLM, ...)."""
+"""Thin client for OpenAI-compatible `POST /chat/completions` (vLLM, Ollama, OpenAI, ...)."""
 
 from typing import Any
 
@@ -41,7 +41,9 @@ class OpenAICompatClient:
         if response_format is not None:
             body["response_format"] = response_format
         if reasoning is False:
+            # Ollama reads reasoning_effort; vLLM passes chat_template_kwargs to the Qwen template.
             body["reasoning_effort"] = "none"
+            body["chat_template_kwargs"] = {"enable_thinking": False}
         try:
             response = await self._http.post(self._url, json=body, headers=self._headers)
         except httpx.HTTPError as exc:

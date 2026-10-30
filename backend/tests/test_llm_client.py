@@ -134,6 +134,8 @@ async def test_response_format_and_reasoning_sent() -> None:
     first, on, default = (json.loads(r.content) for r in seen)
     assert first["response_format"] == schema
     assert first["reasoning_effort"] == "none"
+    assert first["chat_template_kwargs"] == {"enable_thinking": False}
     for body in (on, default):
         assert "response_format" not in body
         assert "reasoning_effort" not in body
+        assert "chat_template_kwargs" not in body

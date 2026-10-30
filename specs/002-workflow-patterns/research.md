@@ -51,3 +51,16 @@
 - Decision: `ReActConfig.reasoning = True`; new ReAct runs get a new `config_version`.
 - Rationale: the config really changed (it now states the setting); old runs keep their stored
   config and version.
+
+## Model server: vLLM (2026-10-30, after implementation)
+- Decision: serve `RedHatAI/Qwen3.5-9B-quantized.w4a16` with vLLM v0.31.0 (Docker, `make dev-llm`)
+  instead of Ollama. Thinking off sends both `reasoning_effort: "none"` (Ollama) and
+  `chat_template_kwargs: {"enable_thinking": false}` (the Qwen template under vLLM).
+- Rationale: Ollama (0.21.2 and 0.40.13, default settings) processed concurrent requests one at
+  a time: parallel branches and orchestrator workers started together but finished staggered, so
+  the orchestrator run on `qwen3.5:9b` missed SC-003. vLLM batches concurrent requests: on it
+  three orchestrator workers started together and all ended within 1.04-1.13 s (Ollama: 1.37,
+  2.80, 4.45 s). The w4a16 checkpoint takes 9.48 GiB (embeddings stay 16-bit), so the server runs
+  with `--gpu-memory-utilization 0.78`, 4 sequences and an 8,192-token context.
+- Alternatives: `OLLAMA_NUM_PARALLEL=4` (not tried; owner chose vLLM); FP8 checkpoint (13 GiB,
+  does not fit next to ~4 GiB used by other programs on the 16 GiB GPU).
