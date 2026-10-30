@@ -11,7 +11,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import type { Graph, GraphNode } from "@/lib/api";
-import { edgeKey } from "@/lib/run-state";
+import { edgeKey, isBackEdge } from "@/lib/run-state";
 
 type NodeState = "active" | "visited" | "idle";
 type LabNodeData = { label: string; kind: GraphNode["kind"]; state: NodeState };
@@ -24,7 +24,7 @@ const KIND_COLOR: Record<GraphNode["kind"], string> = {
   code: "var(--color-step)",
 };
 
-// Hidden handles: left/right for the main line, top/bottom pairs for the llm <-> tool loop.
+// Hidden handles: left/right for the main line, top/bottom pairs for llm <-> tool and back edges.
 const HANDLES = [
   { id: "l", type: "target", position: Position.Left },
   { id: "r", type: "source", position: Position.Right },
@@ -69,7 +69,8 @@ const nodeTypes = { lab: LabNode };
 const NODE_WIDTH = 150;
 const NODE_HEIGHT = 44;
 
-function handlesFor(source: GraphNode, target: GraphNode) {
+function handlesFor(source: GraphNode, target: GraphNode, back: boolean) {
+  if (back) return { sourceHandle: "b-out", targetHandle: "b-in" }; // loop drawn below
   if (source.kind === "llm" && target.kind === "tool") return { sourceHandle: "b-out", targetHandle: "t-in" };
   if (source.kind === "tool" && target.kind === "llm") return { sourceHandle: "t-out", targetHandle: "b-in" };
   return { sourceHandle: "r", targetHandle: "l" };
@@ -107,7 +108,7 @@ export function GraphView({
       id: edgeKey(e.source, e.target),
       source: e.source,
       target: e.target,
-      ...handlesFor(byId.get(e.source)!, byId.get(e.target)!),
+      ...handlesFor(byId.get(e.source)!, byId.get(e.target)!, isBackEdge(graph, e)),
       style: { stroke: color, strokeWidth: isTaken ? 2 : 1.5, strokeDasharray: isTaken ? undefined : "4 4" },
       markerEnd: { type: MarkerType.ArrowClosed, color },
     };

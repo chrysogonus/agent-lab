@@ -51,6 +51,24 @@ CREATE INDEX IF NOT EXISTS spans_by_run ON spans(run_id, started_at);
 
 _SPAN_JSON = ("input", "output", "attributes")
 
+# Runs with their totals, computed from their spans so M1 runs get them too.
+_RUNS_WITH_TOTALS = """
+SELECT runs.*,
+    COUNT(CASE WHEN spans.kind = 'llm' THEN 1 END) AS llm_calls,
+    COUNT(CASE WHEN spans.kind = 'tool' THEN 1 END) AS tool_calls,
+    COALESCE(SUM(spans.tokens_in), 0) AS tokens_in,
+    COALESCE(SUM(spans.tokens_out), 0) AS tokens_out
+FROM runs LEFT JOIN spans ON spans.run_id = runs.run_id
+"""
+
+
+class RunTotals(BaseModel):
+    llm_calls: int
+    tool_calls: int
+    tokens_in: int
+    tokens_out: int
+    wall_ms: int | None  # None while the run is running
+
 
 class Run(BaseModel):
     run_id: str
@@ -63,6 +81,7 @@ class Run(BaseModel):
     config: dict[str, Any]
     started_at: float
     ended_at: float | None = None
+    totals: RunTotals | None = None  # filled when read from the store
 
 
 class Store:
@@ -119,13 +138,16 @@ class Store:
 
     def get_run(self, run_id: str) -> Run | None:
         with self._lock:
-            row = self._db.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            row = self._db.execute(
+                _RUNS_WITH_TOTALS + "WHERE runs.run_id=? GROUP BY runs.run_id", (run_id,)
+            ).fetchone()
         return _run(row) if row else None
 
     def list_runs(self, limit: int = 100) -> list[Run]:
         with self._lock:
             rows = self._db.execute(
-                "SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (limit,)
+                _RUNS_WITH_TOTALS + "GROUP BY runs.run_id ORDER BY runs.started_at DESC LIMIT ?",
+                (limit,),
             ).fetchall()
         return [_run(r) for r in rows]
 
@@ -147,4 +169,12 @@ def _run(row: sqlite3.Row) -> Run:
     data = dict(row)
     data["graph"] = Graph.model_validate_json(data["graph"])
     data["config"] = json.loads(data["config"])
+    ended = data["ended_at"]
+    data["totals"] = RunTotals(
+        llm_calls=data.pop("llm_calls"),
+        tool_calls=data.pop("tool_calls"),
+        tokens_in=data.pop("tokens_in"),
+        tokens_out=data.pop("tokens_out"),
+        wall_ms=round((ended - data["started_at"]) * 1000) if ended is not None else None,
+    )
     return Run.model_validate(data)

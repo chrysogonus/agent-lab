@@ -1,5 +1,5 @@
 import type { AgentInfo, Run } from "@/lib/api";
-import { agentName } from "@/lib/run-state";
+import { agentName, formatTotals } from "@/lib/run-state";
 
 const STATUS_DOT: Record<Run["status"], string> = {
   running: "bg-signal",
@@ -49,6 +49,7 @@ export function RunList({
               <span className={`size-2 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />
               {run.status.replace("_", " ")}, {when(run.started_at)}
             </span>
+            {run.totals && <span className="text-xs text-muted">{formatTotals(run.totals)}</span>}
           </button>
         </li>
       ))}

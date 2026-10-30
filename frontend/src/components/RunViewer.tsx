@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { Run } from "@/lib/api";
-import { activeNodes, takenEdges } from "@/lib/run-state";
+import { activeNodes, formatTotals, runTotals, takenEdges } from "@/lib/run-state";
+import { useNow } from "@/lib/use-now";
 import { useRunStream } from "@/lib/use-run-stream";
 import { GraphView } from "./GraphView";
 import { SpanDetail } from "./SpanDetail";
@@ -11,7 +12,7 @@ import { Waterfall } from "./Waterfall";
 const STATUS_TEXT: Record<Run["status"], string> = {
   running: "Running",
   completed: "Completed",
-  max_iterations: "Stopped at the iteration cap",
+  max_iterations: "Stopped at the iteration or round cap",
   error: "Failed",
 };
 
@@ -20,6 +21,7 @@ export function RunViewer({ initial, onEnded }: { initial: Run; onEnded: (run: R
   const view = useRunStream(initial.run_id);
   const run = view.run ?? initial;
   const [selected, setSelected] = useState<string | null>(null);
+  const now = useNow(run.status === "running");
 
   useEffect(() => {
     if (view.run) onEnded(view.run);
@@ -37,6 +39,7 @@ export function RunViewer({ initial, onEnded }: { initial: Run; onEnded: (run: R
             <span className={`text-sm ${run.status === "running" ? "text-signal-ink" : run.status === "completed" ? "text-tool" : "text-fault"}`}>
               {STATUS_TEXT[run.status]}
             </span>
+            <span className="text-sm text-muted">{formatTotals(runTotals(view.spans, run, now))}</span>
           </div>
           {run.answer && <p className="px-4 py-3 text-sm text-ink">{run.answer}</p>}
           {view.error && <p role="alert" className="px-4 py-3 text-sm text-fault">{view.error}</p>}

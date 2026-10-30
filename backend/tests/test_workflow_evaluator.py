@@ -29,3 +29,29 @@ async def test_happy_path() -> None:
         ("generator", "evaluator"),
         ("evaluator", "end"),
     }
+
+
+@pytest.mark.anyio
+async def test_approved_round_two() -> None:
+    reject = json_answer({"approved": False, "feedback": "Mention SunSip."})
+    outcome, spans, llm = await run(
+        [answer("Charge anywhere"), reject, answer("SunSip charges anywhere"), APPROVE]
+    )
+
+    assert (outcome.status, outcome.answer) == ("completed", "SunSip charges anywhere")
+    second_prompt = llm.calls[2][-1]["content"]
+    assert "Charge anywhere" in second_prompt and "Mention SunSip." in second_prompt
+    rounds = [(s.name, s.attributes["lab.round"]) for s in spans if "lab.round" in s.attributes]
+    assert rounds == [
+        ("chat fake-model", 1),
+        ("verdict", 1),
+        ("chat fake-model", 2),
+        ("verdict", 2),
+    ]
+    verdicts = [s.output for s in spans if s.name == "verdict"]
+    assert verdicts == [
+        {"approved": False, "feedback": "Mention SunSip."},
+        {"approved": True, "feedback": ""},
+    ]
+    assert ("evaluator", "generator") in taken_edges(spans)
+    assert_trace_valid(build_graph(), spans)

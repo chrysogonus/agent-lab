@@ -1,24 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { Span, SpanKind } from "@/lib/api";
 import { durationMs, spanRows } from "@/lib/run-state";
+import { useNow } from "@/lib/use-now";
 
 const KIND_BAR: Partial<Record<SpanKind, string>> = {
   llm: "bg-llm",
   tool: "bg-tool",
 };
-
-/** Wall clock in epoch seconds, ticking only while something is running. */
-function useNow(running: boolean): number {
-  const [now, setNow] = useState(0);
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setNow(Date.now() / 1000), 200);
-    return () => clearInterval(id);
-  }, [running]);
-  return now;
-}
 
 export function Waterfall({
   spans,

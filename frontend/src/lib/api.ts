@@ -35,6 +35,14 @@ export type Graph = { nodes: GraphNode[]; edges: { source: string; target: strin
 
 export type RunStatus = "running" | "completed" | "max_iterations" | "error";
 
+export type RunTotals = {
+  llm_calls: number;
+  tool_calls: number;
+  tokens_in: number;
+  tokens_out: number;
+  wall_ms: number | null; // null while running
+};
+
 export type Run = {
   run_id: string;
   agent_id: string;
@@ -46,6 +54,7 @@ export type Run = {
   config: Record<string, unknown>;
   started_at: number;
   ended_at: number | null;
+  totals: RunTotals | null; // null on the run returned by POST /runs
 };
 
 export type AgentInfo = {

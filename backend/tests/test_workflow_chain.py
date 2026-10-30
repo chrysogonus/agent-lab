@@ -36,3 +36,18 @@ async def test_happy_path() -> None:
         ("draft", "polish"),
         ("polish", "end"),
     }
+
+
+@pytest.mark.anyio
+async def test_gate_fails_stops_chain() -> None:
+    outcome, spans, llm = await run([answer("- only one\n- and two\njust prose")])
+
+    assert (outcome.status, outcome.answer) == ("error", None)
+    gate = next(s for s in spans if s.name == "gate")
+    assert gate.error == "outline has 2 bullet lines, needs at least 3"
+    assert gate.output == {"passed": False, "reason": gate.error}
+    assert len(llm.calls) == 1  # no draft or polish
+    assert {s.node_id for s in spans} == {"start", "outline", "gate", "end"}
+    assert spans[-1].error == f"gate failed: {gate.error}"
+    assert taken_edges(spans) == {("start", "outline"), ("outline", "gate"), ("gate", "end")}
+    assert_trace_valid(build_graph(), spans)

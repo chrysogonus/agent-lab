@@ -1,5 +1,5 @@
 // Pure view logic shared by live runs and replays: both are built from the same stream events.
-import type { AgentInfo, Graph, Run, Span, StreamEvent } from "./api";
+import type { AgentInfo, Graph, Run, RunTotals, Span, StreamEvent } from "./api";
 
 export type RunView = { run: Run | null; spans: Record<string, Span>; error: string | null };
 
@@ -51,17 +51,25 @@ export function activeNodes(spans: Record<string, Span>): Set<string> {
 }
 
 /**
- * Edges taken so far. Tool calls fan out from the node that requested them and all return to
- * the next non-tool node, so several tools called in one turn each get both edges.
+ * Edges taken so far. Runs from M2 on record them on spans as `lab.came_from`, which covers
+ * fan-out, fan-in and loops. M1 runs lack it, so their edges are inferred: tool calls fan out
+ * from the node that requested them and all return to the next non-tool node.
  */
 export function takenEdges(graph: Graph, spans: Record<string, Span>): Set<string> {
   const declared = new Set(graph.edges.map((e) => edgeKey(e.source, e.target)));
-  const tools = new Set(graph.nodes.filter((n) => n.kind === "tool").map((n) => n.id));
   const taken = new Set<string>();
   const take = (source: string, target: string) => {
     const key = edgeKey(source, target);
     if (declared.has(key)) taken.add(key);
   };
+  const recorded = Object.values(spans).filter((s) => Array.isArray(s.attributes["lab.came_from"]));
+  if (recorded.length) {
+    for (const span of recorded) {
+      for (const source of span.attributes["lab.came_from"] as string[]) take(source, span.node_id);
+    }
+    return taken;
+  }
+  const tools = new Set(graph.nodes.filter((n) => n.kind === "tool").map((n) => n.id));
   let caller: string | null = null;
   let pending: string[] = [];
   for (const { node_id } of byStart(spans)) {
@@ -76,6 +84,12 @@ export function takenEdges(graph: Graph, spans: Record<string, Span>): Set<strin
     caller = node_id;
   }
   return taken;
+}
+
+/** An edge pointing left, e.g. a feedback loop; drawn below the nodes so it stays visible. */
+export function isBackEdge(graph: Graph, edge: { source: string; target: string }): boolean {
+  const x = (id: string) => graph.nodes.find((n) => n.id === id)?.x ?? 0;
+  return x(edge.source) > x(edge.target);
 }
 
 export function edgeKey(source: string, target: string): string {
@@ -94,4 +108,28 @@ export function agentPreview(agents: AgentInfo[], id: string): AgentInfo | null 
 /** Display name for a run's agent; the raw id when the agent is not (or no longer) listed. */
 export function agentName(agents: AgentInfo[], id: string): string {
   return agentPreview(agents, id)?.name ?? id;
+}
+
+/** Same definition as the backend's stored totals; wall time counts up to `now` while running. */
+export function runTotals(spans: Record<string, Span>, run: Run, now: number): RunTotals {
+  const all = Object.values(spans);
+  const end = run.ended_at ?? Math.max(now, run.started_at);
+  return {
+    llm_calls: all.filter((s) => s.kind === "llm").length,
+    tool_calls: all.filter((s) => s.kind === "tool").length,
+    tokens_in: all.reduce((sum, s) => sum + (s.tokens_in ?? 0), 0),
+    tokens_out: all.reduce((sum, s) => sum + (s.tokens_out ?? 0), 0),
+    wall_ms: Math.round((end - run.started_at) * 1000),
+  };
+}
+
+export function formatTotals(t: RunTotals): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const parts = [
+    plural(t.llm_calls, "model call"),
+    plural(t.tool_calls, "tool call"),
+    `${t.tokens_in} in / ${t.tokens_out} out tokens`,
+  ];
+  if (t.wall_ms != null) parts.push(`${(t.wall_ms / 1000).toFixed(1)} s`);
+  return parts.join(" · ");
 }

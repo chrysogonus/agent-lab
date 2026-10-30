@@ -8,6 +8,9 @@ import {
   durationMs,
   edgeKey,
   emptyView,
+  formatTotals,
+  isBackEdge,
+  runTotals,
   spanRows,
   takenEdges,
 } from "./run-state";
@@ -60,6 +63,26 @@ function span(
     attributes: {},
   };
 }
+
+function from(s: Span, ...sources: string[]): Span {
+  return { ...s, attributes: { "lab.came_from": sources } };
+}
+
+// Same shape as the backend's evaluator workflow graph.
+const loopGraph: Graph = {
+  nodes: [
+    { id: "start", label: "start", kind: "start", x: 0, y: 0 },
+    { id: "generator", label: "generator", kind: "llm", x: 220, y: 0 },
+    { id: "evaluator", label: "evaluator", kind: "llm", x: 440, y: 0 },
+    { id: "end", label: "end", kind: "end", x: 660, y: 0 },
+  ],
+  edges: [
+    { source: "start", target: "generator" },
+    { source: "generator", target: "evaluator" },
+    { source: "evaluator", target: "end" },
+    { source: "evaluator", target: "generator" },
+  ],
+};
 
 function bySpanId(...spans: Span[]): Record<string, Span> {
   return Object.fromEntries(spans.map((s) => [s.span_id, s]));
@@ -224,6 +247,105 @@ describe("takenEdges", () => {
 
   it("is empty before any span arrives", () => {
     expect(takenEdges(graph, {}).size).toBe(0);
+  });
+});
+
+describe("takenEdges from lab.came_from", () => {
+  const parallel: Graph = {
+    nodes: ["start", "a", "b", "merge", "end"].map((id, i) => ({
+      id,
+      label: id,
+      kind: "llm" as const,
+      x: i * 100,
+      y: 0,
+    })),
+    edges: [
+      { source: "start", target: "a" },
+      { source: "start", target: "b" },
+      { source: "a", target: "merge" },
+      { source: "b", target: "merge" },
+      { source: "a", target: "end" },
+      { source: "b", target: "end" },
+      { source: "merge", target: "end" },
+    ],
+  };
+
+  it("marks fan-out and fan-in, not the unused exits", () => {
+    const spans = bySpanId(
+      span("root", "start", 0),
+      from(span("a", "a", 1), "start"),
+      from(span("b", "b", 1), "start"),
+      from(span("merge", "merge", 2), "a", "b"),
+      from(span("end", "end", 3), "merge"),
+    );
+    expect(takenEdges(parallel, spans)).toEqual(
+      edges(["start", "a"], ["start", "b"], ["a", "merge"], ["b", "merge"], ["merge", "end"]),
+    );
+  });
+
+  it("marks the loop edge of a revision round", () => {
+    const spans = bySpanId(
+      span("root", "start", 0),
+      from(span("g1", "generator", 1), "start"),
+      from(span("v1", "evaluator", 2), "generator"),
+      from(span("g2", "generator", 3), "evaluator"),
+      from(span("v2", "evaluator", 4), "generator"),
+      from(span("end", "end", 5), "evaluator"),
+    );
+    expect(takenEdges(loopGraph, spans)).toEqual(
+      edges(
+        ["start", "generator"],
+        ["generator", "evaluator"],
+        ["evaluator", "generator"],
+        ["evaluator", "end"],
+      ),
+    );
+  });
+
+  it("ignores an edge the graph does not declare", () => {
+    const spans = bySpanId(from(span("x", "end", 1), "start"));
+    expect(takenEdges(loopGraph, spans).size).toBe(0);
+  });
+});
+
+describe("isBackEdge", () => {
+  it("is true only for edges pointing left", () => {
+    expect(isBackEdge(loopGraph, { source: "evaluator", target: "generator" })).toBe(true);
+    expect(isBackEdge(loopGraph, { source: "generator", target: "evaluator" })).toBe(false);
+    // Tools sit below their caller at the same x: not a back edge.
+    expect(isBackEdge(graph, { source: "llm", target: "llm" })).toBe(false);
+  });
+});
+
+describe("runTotals and formatTotals", () => {
+  const run = { run_id: "r", started_at: 10, ended_at: null } as Run;
+  const spans = bySpanId(
+    { ...span("c1", "llm", 10, 11, null, "llm"), tokens_in: 100, tokens_out: 20 },
+    { ...span("c2", "llm", 11, null, null, "llm"), tokens_in: 50 },
+    span("t1", "tool:calculator", 11, 12, null, "tool"),
+    span("root", "start", 10, null),
+  );
+
+  it("counts calls and tokens; wall time runs to now while running", () => {
+    expect(runTotals(spans, run, 12.5)).toEqual({
+      llm_calls: 2,
+      tool_calls: 1,
+      tokens_in: 150,
+      tokens_out: 20,
+      wall_ms: 2500,
+    });
+  });
+
+  it("stops the wall clock when the run ends", () => {
+    expect(runTotals(spans, { ...run, ended_at: 13 }, 99).wall_ms).toBe(3000);
+  });
+
+  it("formats with plurals and an optional wall time", () => {
+    const t = { llm_calls: 1, tool_calls: 2, tokens_in: 5, tokens_out: 6, wall_ms: 1234 };
+    expect(formatTotals(t)).toBe("1 model call · 2 tool calls · 5 in / 6 out tokens · 1.2 s");
+    expect(formatTotals({ ...t, wall_ms: null })).toBe(
+      "1 model call · 2 tool calls · 5 in / 6 out tokens",
+    );
   });
 });
 

@@ -29,3 +29,23 @@ async def test_happy_path() -> None:
     ]
     synth_input = llm.calls[3][-1]["content"]
     assert "getting there" in synth_input and "food" in synth_input
+
+
+@pytest.mark.anyio
+async def test_three_subtasks() -> None:
+    plan = json_answer({"subtasks": ["train", "sights", "food"]})
+    parts = [answer("part")] * 3
+    outcome, spans, _ = await run([plan, *parts, answer("note")], delay=0.05)
+
+    assert outcome.status == "completed"
+    plan_span = next(s for s in spans if s.name == "plan")
+    assert plan_span.output == {"subtasks": ["train", "sights", "food"]}
+    workers = [s for s in spans if s.name.startswith("worker ")]
+    assert {w.node_id for w in workers} == {"worker"}
+    assert sorted(w.attributes["lab.worker.index"] for w in workers) == [0, 1, 2]
+    assert {w.input for w in workers} == {"train", "sights", "food"}
+    assert {w.parent_span_id for w in workers} == {spans[0].span_id}
+    assert max(w.started_at for w in workers) < min(w.ended_at or 0 for w in workers)
+    synth = next(s for s in spans if s.node_id == "synthesizer")
+    assert synth.attributes["lab.came_from"] == ["worker"]
+    assert_trace_valid(build_graph(), spans)
