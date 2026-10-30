@@ -60,8 +60,8 @@ contracts/, quickstart.md)
 
 **Independent test**: scripted runs with tool errors and endless tool calls.
 
-- [ ] T027 [US3] Tests: tool error / unknown tool / malformed args fed back, max-iterations cap, model transport error → status `error`, ungranted tool scope rejected in backend/tests/test_react.py
-- [ ] T028 [US3] End-to-end redaction test (secret in prompt and API key never in the SQLite file) in backend/tests/test_redaction.py
+- [X] T027 [US3] Tests: tool error / unknown tool / malformed args fed back, max-iterations cap, model transport error → status `error`, ungranted tool scope rejected in backend/tests/test_react.py
+- [X] T028 [US3] End-to-end redaction test (secret in prompt and API key never in the SQLite file) in backend/tests/test_redaction.py
 
 ## Phase 6: Polish
 
