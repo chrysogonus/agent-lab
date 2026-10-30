@@ -3,6 +3,8 @@
 import json
 import sqlite3
 import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,7 +26,20 @@ CREATE TABLE IF NOT EXISTS runs (
     graph TEXT NOT NULL,
     config TEXT NOT NULL,
     started_at REAL NOT NULL,
-    ended_at REAL
+    ended_at REAL,
+    agent_name TEXT,
+    template_id TEXT
+);
+CREATE TABLE IF NOT EXISTS agents (
+    agent_id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    sample_prompt TEXT NOT NULL,
+    config TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS spans (
     span_id TEXT PRIMARY KEY,
@@ -48,6 +63,9 @@ CREATE TABLE IF NOT EXISTS spans (
 );
 CREATE INDEX IF NOT EXISTS spans_by_run ON spans(run_id, started_at);
 """
+
+# Columns added after M2; older databases get them in place, their runs keep NULL.
+_RUN_COLUMNS_SINCE_M3 = ("agent_name", "template_id")
 
 _SPAN_JSON = ("input", "output", "attributes")
 
@@ -82,6 +100,23 @@ class Run(BaseModel):
     started_at: float
     ended_at: float | None = None
     totals: RunTotals | None = None  # filled when read from the store
+    agent_name: str | None = None  # the agent's name when the run started; None before M3
+    template_id: str | None = None  # None before M3
+
+
+class NameInUse(Exception):
+    """Another custom agent already has this name (ignoring case and surrounding spaces)."""
+
+
+class CustomAgent(BaseModel):
+    agent_id: str
+    template_id: str
+    name: str
+    description: str
+    sample_prompt: str
+    config: dict[str, Any]  # the template's config without `model`
+    created_at: float
+    updated_at: float
 
 
 class Store:
@@ -93,6 +128,10 @@ class Store:
         self._db.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._db.executescript(_SCHEMA)
+        columns = {r["name"] for r in self._db.execute("PRAGMA table_info(runs)")}
+        for column in _RUN_COLUMNS_SINCE_M3:
+            if column not in columns:
+                self._db.execute(f"ALTER TABLE runs ADD COLUMN {column} TEXT")
 
     def close(self) -> None:
         self._db.close()
@@ -100,7 +139,9 @@ class Store:
     def create_run(self, run: Run) -> None:
         with self._lock:
             self._db.execute(
-                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO runs (run_id, agent_id, config_version, prompt, status, answer, graph,"
+                " config, started_at, ended_at, agent_name, template_id)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.run_id,
                     run.agent_id,
@@ -112,6 +153,8 @@ class Store:
                     json.dumps(run.config),
                     run.started_at,
                     run.ended_at,
+                    run.agent_name,
+                    run.template_id,
                 ),
             )
 
@@ -163,6 +206,103 @@ class Store:
                 data[key] = json.loads(data[key]) if data[key] is not None else None
             spans.append(Span.model_validate(data))
         return spans
+
+    def create_agent(
+        self,
+        *,
+        template_id: str,
+        name: str,
+        description: str,
+        sample_prompt: str,
+        config: dict[str, Any],
+    ) -> CustomAgent:
+        now = time.time()
+        agent = CustomAgent(
+            agent_id=f"custom-{uuid.uuid4().hex[:12]}",
+            template_id=template_id,
+            name=name,
+            description=description,
+            sample_prompt=sample_prompt,
+            config=config,
+            created_at=now,
+            updated_at=now,
+        )
+        self._write_agent(
+            "INSERT INTO agents (name, name_key, description, sample_prompt, config, created_at,"
+            " updated_at, agent_id, template_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            agent,
+        )
+        return agent
+
+    def update_agent(
+        self,
+        agent_id: str,
+        *,
+        name: str,
+        description: str,
+        sample_prompt: str,
+        config: dict[str, Any],
+    ) -> CustomAgent | None:
+        current = self.get_agent(agent_id)
+        if current is None:
+            return None
+        agent = current.model_copy(
+            update={
+                "name": name,
+                "description": description,
+                "sample_prompt": sample_prompt,
+                "config": config,
+                "updated_at": time.time(),
+            }
+        )
+        self._write_agent(
+            "UPDATE agents SET name=?, name_key=?, description=?, sample_prompt=?, config=?,"
+            " created_at=?, updated_at=? WHERE agent_id=? AND template_id=?",
+            agent,
+        )
+        return agent
+
+    def _write_agent(self, sql: str, agent: CustomAgent) -> None:
+        # The INSERT and UPDATE above both take their parameters in this order.
+        values = (
+            agent.name,
+            agent.name.strip().lower(),
+            agent.description,
+            agent.sample_prompt,
+            json.dumps(agent.config),
+            agent.created_at,
+            agent.updated_at,
+            agent.agent_id,
+            agent.template_id,
+        )
+        try:
+            with self._lock:
+                self._db.execute(sql, values)
+        except sqlite3.IntegrityError as exc:
+            raise NameInUse(agent.name) from exc
+
+    def delete_agent(self, agent_id: str) -> bool:
+        """Runs of the agent keep their own snapshot and stay."""
+        with self._lock:
+            cursor = self._db.execute("DELETE FROM agents WHERE agent_id=?", (agent_id,))
+        return cursor.rowcount > 0
+
+    def get_agent(self, agent_id: str) -> CustomAgent | None:
+        with self._lock:
+            row = self._db.execute("SELECT * FROM agents WHERE agent_id=?", (agent_id,)).fetchone()
+        return _agent(row) if row else None
+
+    def list_agents(self) -> list[CustomAgent]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM agents ORDER BY name_key").fetchall()
+        return [_agent(r) for r in rows]
+
+
+def _agent(row: sqlite3.Row) -> CustomAgent:
+    data = dict(row)
+    del data["name_key"]
+    data["config"] = json.loads(data["config"])
+    return CustomAgent.model_validate(data)
 
 
 def _run(row: sqlite3.Row) -> Run:

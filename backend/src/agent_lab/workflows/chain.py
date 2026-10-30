@@ -1,11 +1,13 @@
-"""Prompt chaining: outline -> gate (code) -> draft -> polish, each step feeding the next."""
+"""Prompt chaining: a list of model steps, each feeding the next; a code gate can stop the chain."""
 
 import re
 from itertools import pairwise
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from agent_lab.agents import steps
+from agent_lab.agents.config_fields import ItemName, Prompt, unique
 from agent_lab.agents.steps import Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -17,22 +19,51 @@ NAME = "Prompt chaining"
 DESCRIPTION = "Outline, check, draft and polish a product blurb; a code gate can stop the chain."
 SAMPLE_PROMPT = "A reusable water bottle that tracks how much you drink"
 
-MIN_BULLETS = 3
 _BULLET = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\S")
+
+
+class ChainStep(BaseModel):
+    name: ItemName
+    prompt: Prompt
+    # Later steps get the previous output; this adds the user's input (ignored for the first).
+    include_input: bool = False
 
 
 class Config(BaseModel):
     model: str
     reasoning: bool = False
-    outline_prompt: str = (
-        "Write an outline for a short product blurb about the user's product: 3 to 5 bullet "
-        "points, one per line, each starting with '- '. Output only the bullets."
+    steps: list[ChainStep] = Field(
+        default=[
+            ChainStep(
+                name="outline",
+                prompt="Write an outline for a short product blurb about the user's product: 3 to "
+                "5 bullet points, one per line, each starting with '- '. Output only the bullets.",
+            ),
+            ChainStep(
+                name="draft",
+                prompt="Write a product blurb of at most 80 words that follows the outline.",
+                include_input=True,
+            ),
+            ChainStep(
+                name="polish",
+                prompt="Polish the blurb: fix grammar and tighten the wording, keep it under 80 "
+                "words. Output only the blurb.",
+            ),
+        ],
+        min_length=1,
+        max_length=6,
     )
-    draft_prompt: str = "Write a product blurb of at most 80 words that follows the outline."
-    polish_prompt: str = (
-        "Polish the blurb: fix grammar and tighten the wording, keep it under 80 words. "
-        "Output only the blurb."
-    )
+    input_label: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)
+    ] = "Product"
+    gate: bool = True
+    gate_min_bullets: int = Field(default=3, ge=1, le=10)
+
+    @field_validator("steps")
+    @classmethod
+    def unique_names(cls, value: list[ChainStep]) -> list[ChainStep]:
+        unique((s.name for s in value), "step")
+        return value
 
 
 class GateResult(BaseModel):
@@ -40,27 +71,37 @@ class GateResult(BaseModel):
     reason: str
 
 
-def check_outline(outline: str) -> GateResult:
+def check_outline(outline: str, min_bullets: int) -> GateResult:
     bullets = sum(1 for line in outline.splitlines() if _BULLET.match(line))
-    if bullets >= MIN_BULLETS:
+    if bullets >= min_bullets:
         return GateResult(passed=True, reason=f"{bullets} bullet lines")
     return GateResult(
-        passed=False, reason=f"outline has {bullets} bullet lines, needs at least {MIN_BULLETS}"
+        passed=False, reason=f"outline has {bullets} bullet lines, needs at least {min_bullets}"
     )
 
 
-def build_graph() -> Graph:
+def _path(config: Config) -> list[str]:
+    names = [s.name for s in config.steps]
+    if config.gate:
+        names.insert(1, "gate")
+    return ["start", *names]
+
+
+def build_graph(config: Config) -> Graph:
+    path = _path(config)
     nodes = [
         Node(id="start", label="start", kind="start", x=0, y=0),
-        Node(id="outline", label="outline (LLM)", kind="llm", x=200, y=0),
-        Node(id="gate", label="gate (code)", kind="code", x=400, y=0),
-        Node(id="draft", label="draft (LLM)", kind="llm", x=600, y=0),
-        Node(id="polish", label="polish (LLM)", kind="llm", x=800, y=0),
-        Node(id="end", label="end", kind="end", x=1000, y=110),
+        *(
+            Node(id="gate", label="gate (code)", kind="code", x=200 * i, y=0)
+            if node == "gate"
+            else Node(id=node, label=f"{node} (LLM)", kind="llm", x=200 * i, y=0)
+            for i, node in enumerate(path[1:], start=1)
+        ),
+        Node(id="end", label="end", kind="end", x=200 * len(path), y=110),
     ]
-    path = ["start", "outline", "gate", "draft", "polish", "end"]
-    edges = [Edge(source=a, target=b) for a, b in pairwise(path)]
-    edges.append(Edge(source="gate", target="end"))  # gate failed
+    edges = [Edge(source=a, target=b) for a, b in pairwise([*path, "end"])]
+    if config.gate and len(config.steps) > 1:
+        edges.append(Edge(source="gate", target="end"))  # gate failed
     return Graph(nodes=nodes, edges=edges)
 
 
@@ -70,32 +111,43 @@ class ChainWorkflow:
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
     async def run(self, prompt: str) -> Outcome:
-        return await steps.invoke(self.ctx, AGENT_ID, prompt, self._flow)
+        return await steps.invoke(self.ctx, prompt, self._flow)
 
-    async def _flow(self, prompt: str) -> Outcome:
-        ctx, c = self.ctx, self.config
-        reply = await steps.chat(
-            ctx, "outline", steps.messages(c.outline_prompt, prompt), came_from=["start"]
-        )
-        outline = reply.content or ""
-        async with ctx.tracer.span(
+    async def _gate(self, outline: str, came_from: str) -> GateResult:
+        async with self.ctx.tracer.span(
             SpanKind.STEP,
             "gate",
             node_id="gate",
             input=outline,
-            attributes=steps.came_from(["outline"]),
+            attributes=steps.came_from([came_from]),
         ) as span:
-            gate = check_outline(outline)
+            gate = check_outline(outline, self.config.gate_min_bullets)
             span.output = gate.model_dump()
             if not gate.passed:
                 span.error = gate.reason
-        if not gate.passed:
-            return Outcome("error", None, ["gate"], f"gate failed: {gate.reason}")
-        user = f"Product: {prompt}\n\nOutline:\n{outline}"
-        draft = await steps.chat(
-            ctx, "draft", steps.messages(c.draft_prompt, user), came_from=["gate"]
+        return gate
+
+    async def _flow(self, prompt: str) -> Outcome:
+        ctx, c = self.ctx, self.config
+        first, *rest = c.steps
+        reply = await steps.chat(
+            ctx, first.name, steps.messages(first.prompt, prompt), came_from=["start"]
         )
-        polished = await steps.chat(
-            ctx, "polish", steps.messages(c.polish_prompt, draft.content or ""), came_from=["draft"]
-        )
-        return Outcome("completed", polished.content or "", ["polish"])
+        previous, output = first.name, reply.content or ""
+        if c.gate:
+            gate = await self._gate(output, first.name)
+            if not gate.passed:
+                return Outcome("error", None, ["gate"], f"gate failed: {gate.reason}")
+            previous = "gate"
+        prev_name = first.name
+        for step in rest:
+            user = output
+            if step.include_input:
+                user = f"{c.input_label}: {prompt}\n\n{prev_name.capitalize()}:\n{output}"
+            reply = await steps.chat(
+                ctx, step.name, steps.messages(step.prompt, user), came_from=[previous]
+            )
+            previous = prev_name = step.name
+            output = reply.content or ""
+        # With the gate after the only step, the chain ends at the gate.
+        return Outcome("completed", output, [previous])

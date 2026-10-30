@@ -6,7 +6,7 @@ import uuid
 
 from pydantic import BaseModel
 
-from agent_lab.agents.registry import AGENTS
+from agent_lab.agents.registry import AGENTS, AgentSpec, validate_config
 from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
 from agent_lab.llm.base import LLMClient
@@ -18,11 +18,26 @@ from agent_lab.tracing.tracer import Tracer
 log = logging.getLogger(__name__)
 
 
+class UnknownAgent(Exception):
+    pass
+
+
+def resolve(agent_id: str, store: Store, llm: LLMClient) -> tuple[AgentSpec, BaseModel, str]:
+    """A template, or a custom agent as (its template, its validated config, its name)."""
+    if agent_id in AGENTS:
+        spec = AGENTS[agent_id]
+        return spec, spec.make_config(llm), spec.name
+    agent = store.get_agent(agent_id)
+    if agent is None:
+        raise UnknownAgent(agent_id)
+    config = validate_config(agent.template_id, agent.config, llm.model)
+    return AGENTS[agent.template_id], config, agent.name
+
+
 def new_run(
-    prompt: str, agent_id: str, llm: LLMClient, secrets: tuple[str, ...] = ()
-) -> tuple[Run, BaseModel]:
-    spec = AGENTS[agent_id]
-    config = spec.make_config(llm)
+    prompt: str, agent_id: str, llm: LLMClient, store: Store, secrets: tuple[str, ...] = ()
+) -> tuple[Run, BaseModel, AgentSpec]:
+    spec, config, name = resolve(agent_id, store, llm)
     run = Run(
         run_id=uuid.uuid4().hex,
         agent_id=agent_id,
@@ -30,10 +45,12 @@ def new_run(
         prompt=redact(prompt, secrets),
         status="running",
         graph=spec.graph(config),
-        config=config.model_dump(),
+        config=redact(config.model_dump(), secrets),
         started_at=time.time(),
+        agent_name=name,
+        template_id=spec.id,
     )
-    return run, config
+    return run, config, spec
 
 
 async def execute_run(
@@ -41,6 +58,7 @@ async def execute_run(
     run: Run,
     prompt: str,
     config: BaseModel,
+    spec: AgentSpec,
     llm: LLMClient,
     store: Store,
     bus: Bus,
@@ -57,7 +75,7 @@ async def execute_run(
         sink=sink,
         secrets=secrets,
     )
-    agent = AGENTS[run.agent_id].create(llm, config, tracer)
+    agent = spec.create(llm, config, tracer)
     status: RunStatus = "error"
     answer: str | None = None
     try:

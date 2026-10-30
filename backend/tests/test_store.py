@@ -1,8 +1,11 @@
+import sqlite3
 import time
 from pathlib import Path
 
+import pytest
+
 from agent_lab.agents.react import build_graph
-from agent_lab.store import Run, RunTotals, Store
+from agent_lab.store import CustomAgent, NameInUse, Run, RunTotals, Store
 from agent_lab.tracing.span import Span, SpanKind
 
 
@@ -112,3 +115,76 @@ def test_m1_run_still_lists(tmp_path: Path) -> None:
     assert (listed.run_id, listed.agent_id, listed.config) == ("r1", "react", m1.config)
     assert listed.totals is not None and listed.totals.llm_calls == 1
     assert reopened.get_spans("r1") == [make_span("s1", 2.0)]
+
+
+M2_RUNS_TABLE = """
+CREATE TABLE runs (
+    run_id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, config_version TEXT NOT NULL,
+    prompt TEXT NOT NULL, status TEXT NOT NULL, answer TEXT, graph TEXT NOT NULL,
+    config TEXT NOT NULL, started_at REAL NOT NULL, ended_at REAL
+);
+"""
+
+
+def test_migrates_m2_database(tmp_path: Path) -> None:
+    path = tmp_path / "lab.db"
+    db = sqlite3.connect(path)
+    db.executescript(M2_RUNS_TABLE)
+    graph = build_graph(["calculator"]).model_dump_json()
+    db.execute(
+        "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ("r1", "chain", "v1", "hi", "completed", "yo", graph, '{"model": "m"}', 1.0, 2.0),
+    )
+    db.commit()
+    db.close()
+
+    store = Store(path)
+    [old] = store.list_runs()
+    assert (old.run_id, old.agent_name, old.template_id) == ("r1", None, None)
+    new = make_run("r2", 3.0).model_copy(update={"agent_name": "Mine", "template_id": "react"})
+    store.create_run(new)
+    stored = store.get_run("r2")
+    assert stored is not None and stored.model_copy(update={"totals": None}) == new
+
+
+def test_agent_crud(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = store.create_agent(
+        template_id="routing", name="Mine", description="d", sample_prompt="p", config={"a": 1}
+    )
+    assert agent.agent_id.startswith("custom-") and len(agent.agent_id) == len("custom-") + 12
+    assert store.get_agent(agent.agent_id) == agent
+    updated = store.update_agent(
+        agent.agent_id, name="Mine 2", description="", sample_prompt="q", config={"a": 2}
+    )
+    assert updated is not None and store.get_agent(agent.agent_id) == updated
+    assert (updated.template_id, updated.created_at) == ("routing", agent.created_at)
+    assert (
+        store.update_agent("custom-missing", name="x", description="", sample_prompt="p", config={})
+        is None
+    )
+    assert [a.name for a in store.list_agents()] == ["Mine 2"]
+    assert store.delete_agent(agent.agent_id) and store.get_agent(agent.agent_id) is None
+    assert not store.delete_agent(agent.agent_id)
+
+
+def test_name_unique_ignoring_case_and_spaces(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+
+    def add(name: str) -> CustomAgent:
+        return store.create_agent(
+            template_id="chain", name=name, description="", sample_prompt="p", config={}
+        )
+
+    def rename(agent: CustomAgent, name: str) -> CustomAgent | None:
+        return store.update_agent(
+            agent.agent_id, name=name, description="", sample_prompt="p", config={}
+        )
+
+    first = add("Mine")
+    with pytest.raises(NameInUse):
+        add("  mINE ")
+    other = add("Other")
+    with pytest.raises(NameInUse):
+        rename(other, "mine")
+    assert rename(first, "MINE") is not None  # its own name in another case is fine

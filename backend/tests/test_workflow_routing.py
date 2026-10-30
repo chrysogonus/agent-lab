@@ -28,7 +28,7 @@ async def test_happy_path() -> None:
     outcome, spans, llm = await run([json_answer({"label": "general"}), answer("Paris")])
 
     assert (outcome.status, outcome.answer) == ("completed", "Paris")
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)
     assert all(r["reasoning"] is False for r in llm.requests)
     route = next(s for s in spans if s.kind == SpanKind.ROUTE)
     assert route.output == {"label": "general"}
@@ -61,7 +61,7 @@ async def test_route_math() -> None:
         ("tool:calculator", "math"),
         ("math", "end"),
     }
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)
 
 
 @pytest.mark.anyio
@@ -83,7 +83,7 @@ async def test_route_weather() -> None:
         ("tool:get_weather", "weather"),
         ("weather", "end"),
     }
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)
 
 
 @pytest.mark.anyio
@@ -107,7 +107,7 @@ async def test_handler_unknown_tool_records_no_edge() -> None:
 
     tool = next(s for s in spans if s.kind == SpanKind.TOOL)
     assert (tool.node_id, tool.error) == ("math", "unknown tool 'get_weather'")
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)
 
 
 @pytest.mark.anyio
@@ -119,4 +119,4 @@ async def test_invalid_label_falls_back_to_general() -> None:
     assert route.error is not None and "sports" in route.error
     assert route.output is None
     assert ("router", "general") in taken_edges(spans)
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)

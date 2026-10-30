@@ -2,9 +2,10 @@
 
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from agent_lab.agents import steps
+from agent_lab.agents.config_fields import Prompt, known_tool, unique
 from agent_lab.agents.steps import StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient, Message
@@ -25,10 +26,16 @@ class ReActConfig(BaseModel):
     """Everything that changes behavior; hashed into `config_version`."""
 
     model: str
-    system_prompt: str = SYSTEM_PROMPT
-    tools: list[str]
-    max_iterations: int = 6
+    system_prompt: Prompt = SYSTEM_PROMPT
+    tools: list[str] = ["calculator", "get_weather"]
+    max_iterations: int = Field(default=6, ge=1, le=10)
     reasoning: bool = True
+
+    @field_validator("tools")
+    @classmethod
+    def known_unique_tools(cls, tools: list[str]) -> list[str]:
+        unique(tools, "tool")
+        return [known_tool(t) for t in tools]
 
 
 def build_graph(tool_names: list[str]) -> Graph:
@@ -58,8 +65,6 @@ class ReActState:
 
 
 class ReActAgent:
-    agent_id = AGENT_ID
-
     def __init__(
         self,
         *,
@@ -90,7 +95,7 @@ class ReActAgent:
         state = self.start(prompt)
         async with self.tracer.span(
             SpanKind.STEP,
-            f"invoke_agent {self.agent_id}",
+            f"invoke_agent {self.tracer.agent_id}",
             node_id="start",
             input=prompt,
             attributes={"gen_ai.operation.name": "invoke_agent"},

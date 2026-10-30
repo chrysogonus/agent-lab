@@ -1,10 +1,11 @@
-"""Parallelization (sectioning): three aspect reviews run concurrently, then one merge call."""
+"""Parallelization (sectioning): one review per aspect runs concurrently, then one merge call."""
 
 import asyncio
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agent_lab.agents import steps
+from agent_lab.agents.config_fields import ItemName, Prompt, ShortText, fill
 from agent_lab.agents.steps import Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -24,16 +25,20 @@ class Config(BaseModel):
     model: str
     reasoning: bool = False
     # aspect -> what its reviewer looks for; one graph node per aspect.
-    aspects: dict[str, str] = {
-        "clarity": "Is it easy to understand? Point out confusing sentences.",
-        "tone": "Is the tone consistent and right for its audience?",
-        "claims": "Which claims are unsupported, exaggerated or possibly false?",
-    }
-    review_prompt: str = (
+    aspects: dict[ItemName, ShortText] = Field(
+        default={
+            "clarity": "Is it easy to understand? Point out confusing sentences.",
+            "tone": "Is the tone consistent and right for its audience?",
+            "claims": "Which claims are unsupported, exaggerated or possibly false?",
+        },
+        min_length=1,
+        max_length=6,
+    )
+    review_prompt: Prompt = (
         "You review a short text for {aspect} only. {focus} Reply with at most 3 short bullet "
         "points."
     )
-    merge_prompt: str = (
+    merge_prompt: Prompt = (
         "Merge the reviews into one short list of the most important improvements, most "
         "important first."
     )
@@ -66,10 +71,10 @@ class ParallelWorkflow:
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
     async def run(self, prompt: str) -> Outcome:
-        return await steps.invoke(self.ctx, AGENT_ID, prompt, self._flow)
+        return await steps.invoke(self.ctx, prompt, self._flow)
 
     async def _review(self, aspect: str, focus: str, text: str) -> str:
-        system = self.config.review_prompt.format(aspect=aspect, focus=focus)
+        system = fill(self.config.review_prompt, aspect=aspect, focus=focus)
         reply = await steps.chat(
             self.ctx, aspect, steps.messages(system, text), came_from=["start"]
         )

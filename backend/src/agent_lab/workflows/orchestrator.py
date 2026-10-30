@@ -1,12 +1,13 @@
-"""Orchestrator-workers: the model plans 1-4 subtasks at run time, workers run concurrently."""
+"""Orchestrator-workers: the model plans subtasks at run time, workers run them concurrently."""
 
 import asyncio
 from itertools import pairwise
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, create_model
 
 from agent_lab.agents import steps
+from agent_lab.agents.config_fields import Prompt, fill
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -18,19 +19,19 @@ NAME = "Orchestrator-workers"
 DESCRIPTION = "Split a trip-note request into subtasks at run time, work them, combine the parts."
 SAMPLE_PROMPT = "A weekend trip note for Porto in autumn, travelling by train from Lisbon."
 
-MAX_SUBTASKS = 4
-
 
 class Config(BaseModel):
     model: str
     reasoning: bool = False
-    orchestrator_prompt: str = (
-        f"Split the user's trip-note request into 2 to {MAX_SUBTASKS} independent subtasks, "
-        "e.g. one per topic (getting there, sights, food, practical tips). Each subtask is one "
-        "short instruction."
+    max_subtasks: int = Field(default=4, ge=1, le=6)
+    # {min_subtasks} and {max_subtasks} follow the limit, so the range always matches the schema.
+    orchestrator_prompt: Prompt = (
+        "Split the user's trip-note request into {min_subtasks} to {max_subtasks} independent "
+        "subtasks, e.g. one per topic (getting there, sights, food, practical tips). Each subtask "
+        "is one short instruction."
     )
-    worker_prompt: str = "Do the subtask for the request in at most 60 words."
-    synthesizer_prompt: str = (
+    worker_prompt: Prompt = "Do the subtask for the request in at most 60 words."
+    synthesizer_prompt: Prompt = (
         "Combine the parts into one short, well-structured trip note of at most 200 words."
     )
 
@@ -38,8 +39,15 @@ class Config(BaseModel):
 Subtask = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
-class Plan(BaseModel):
-    subtasks: list[Subtask] = Field(min_length=1, max_length=MAX_SUBTASKS)
+def plan_model(max_subtasks: int) -> type[BaseModel]:
+    """The plan schema allows at most `max_subtasks` subtasks."""
+    subtasks: Any = (list[Subtask], Field(min_length=1, max_length=max_subtasks))
+    return create_model("Plan", subtasks=subtasks)
+
+
+def orchestrator_system(config: Config) -> str:
+    n = config.max_subtasks
+    return fill(config.orchestrator_prompt, min_subtasks=min(2, n), max_subtasks=n)
 
 
 def build_graph() -> Graph:
@@ -62,7 +70,7 @@ class OrchestratorWorkflow:
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
     async def run(self, prompt: str) -> Outcome:
-        return await steps.invoke(self.ctx, AGENT_ID, prompt, self._flow)
+        return await steps.invoke(self.ctx, prompt, self._flow)
 
     async def _work(self, index: int, subtask: str, prompt: str) -> str:
         # One node for all workers; the span name and index tell them apart.
@@ -87,18 +95,16 @@ class OrchestratorWorkflow:
                 self.ctx,
                 "orchestrator",
                 "plan",
-                steps.messages(c.orchestrator_prompt, prompt),
-                Plan,
+                steps.messages(orchestrator_system(c), prompt),
+                plan_model(c.max_subtasks),
                 came_from=["start"],
             )
         except DecisionError as exc:
             return Outcome("error", None, ["orchestrator"], str(exc))  # no safe default plan
-        parts = await asyncio.gather(
-            *(self._work(i, s, prompt) for i, s in enumerate(plan.subtasks))
-        )
+        subtasks: list[str] = plan.model_dump()["subtasks"]
+        parts = await asyncio.gather(*(self._work(i, s, prompt) for i, s in enumerate(subtasks)))
         body = "\n\n".join(
-            f"Part {i + 1}: {s}\n{p}"
-            for i, (s, p) in enumerate(zip(plan.subtasks, parts, strict=True))
+            f"Part {i + 1}: {s}\n{p}" for i, (s, p) in enumerate(zip(subtasks, parts, strict=True))
         )
         reply = await steps.chat(
             self.ctx,

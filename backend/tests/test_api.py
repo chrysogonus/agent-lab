@@ -179,6 +179,17 @@ def test_unknown_agent_id_422(store: Store) -> None:
     with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
         response = client.post("/runs", json={"prompt": "hi", "agent_id": "nope"})
     assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "agent_id"]
+
+
+def test_template_run_records_name_and_template(store: Store) -> None:
+    llm = FakeLLM([json_answer({"label": "general"}), answer("Paris")])
+    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+        run = client.post("/runs", json={"prompt": "Capital?", "agent_id": "routing"}).json()
+        with client.websocket_connect(f"{WS_BASE}/runs/{run['run_id']}/stream") as ws:
+            read_until_run_ended(ws)
+        stored = client.get(f"/runs/{run['run_id']}").json()["run"]
+    assert (stored["agent_name"], stored["template_id"]) == ("Routing", "routing")
 
 
 def test_workflow_run_streams(store: Store) -> None:

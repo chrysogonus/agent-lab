@@ -123,3 +123,19 @@ async def test_templates_match_m2() -> None:
         want = {k: v for k, v in golden[case].items() if k != "config_version"}
         got = {k: v for k, v in actual[case].items() if k != "config_version"}
         assert got == want, case
+
+
+@pytest.mark.anyio
+async def test_config_versions() -> None:
+    """Configs that kept their shape keep their version; re-expressed ones change it once."""
+    golden = json.loads(GOLDEN.read_text())
+    for case, same in [
+        ("react", True),
+        ("parallel", True),
+        ("evaluator", True),
+        ("chain", False),
+        ("routing-math", False),
+        ("orchestrator", False),
+    ]:
+        actual = (await run_template(case))["config_version"]
+        assert (actual == golden[case]["config_version"]) is same, case

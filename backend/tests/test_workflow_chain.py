@@ -22,7 +22,7 @@ async def test_happy_path() -> None:
     outcome, spans, llm = await run([answer(OUTLINE), answer("draft"), answer("final blurb")])
 
     assert (outcome.status, outcome.answer) == ("completed", "final blurb")
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)
     assert {s.agent_id for s in spans} == {AGENT_ID}
     assert all(r["reasoning"] is False for r in llm.requests)
     gate = next(s for s in spans if s.name == "gate")
@@ -50,4 +50,4 @@ async def test_gate_fails_stops_chain() -> None:
     assert {s.node_id for s in spans} == {"start", "outline", "gate", "end"}
     assert spans[-1].error == f"gate failed: {gate.error}"
     assert taken_edges(spans) == {("start", "outline"), ("outline", "gate"), ("gate", "end")}
-    assert_trace_valid(build_graph(), spans)
+    assert_trace_valid(build_graph(Config(model="m")), spans)

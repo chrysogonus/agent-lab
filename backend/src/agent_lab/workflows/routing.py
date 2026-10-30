@@ -1,16 +1,16 @@
-"""Routing: one model decision picks math, weather or general; only that handler runs."""
+"""Routing: one model decision picks a route; only that route's handler runs."""
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model, field_validator, model_validator
 
 from agent_lab.agents import steps
+from agent_lab.agents.config_fields import ItemName, Prompt, ShortText, known_tool, unique
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
 from agent_lab.tools.base import Tool
-from agent_lab.tools.calculator import CALCULATOR
-from agent_lab.tools.weather import WEATHER
+from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import SpanKind
 from agent_lab.tracing.tracer import Tracer
 
@@ -19,48 +19,106 @@ NAME = "Routing"
 DESCRIPTION = "Classify the question as math, weather or general, then hand it to that handler."
 SAMPLE_PROMPT = "What is 2**10 minus 24?"
 
-# The tool each tool-using handler gets.
-HANDLER_TOOLS: dict[str, Tool] = {"math": CALCULATOR, "weather": WEATHER}
+
+class RouteSpec(BaseModel):
+    name: ItemName
+    description: ShortText  # what the router reads about this route
+    prompt: Prompt
+    tool: str | None = None
+
+    @field_validator("tool")
+    @classmethod
+    def tool_known(cls, tool: str | None) -> str | None:
+        return None if tool is None else known_tool(tool)
 
 
 class Config(BaseModel):
     model: str
     reasoning: bool = False
-    router_prompt: str = (
-        "Classify the user's question. math: arithmetic or a calculation. weather: the weather "
-        "or temperature in a city. general: anything else."
+    router_prompt: Prompt = "Classify the user's question."
+    routes: list[RouteSpec] = Field(
+        default=[
+            RouteSpec(
+                name="math",
+                description="arithmetic or a calculation",
+                prompt="Answer the arithmetic question. Use the calculator tool for every "
+                "calculation, then answer briefly.",
+                tool="calculator",
+            ),
+            RouteSpec(
+                name="general",
+                description="anything else",
+                prompt="Answer the question briefly and accurately.",
+            ),
+            RouteSpec(
+                name="weather",
+                description="the weather or temperature in a city",
+                prompt="Answer the weather question. Use the get_weather tool, then answer "
+                "briefly.",
+                tool="get_weather",
+            ),
+        ],
+        min_length=2,
+        max_length=6,
     )
-    math_prompt: str = (
-        "Answer the arithmetic question. Use the calculator tool for every calculation, "
-        "then answer briefly."
-    )
-    weather_prompt: str = (
-        "Answer the weather question. Use the get_weather tool, then answer briefly."
-    )
-    general_prompt: str = "Answer the question briefly and accurately."
+    fallback: str = "general"  # used when the router's answer is unusable
+
+    @field_validator("routes")
+    @classmethod
+    def unique_names(cls, routes: list[RouteSpec]) -> list[RouteSpec]:
+        unique((r.name for r in routes), "route")
+        return routes
+
+    @model_validator(mode="after")
+    def fallback_is_a_route(self) -> "Config":
+        if self.fallback not in {r.name for r in self.routes}:
+            raise ValueError(f"fallback {self.fallback!r} is not one of the routes")
+        return self
 
 
-class Route(BaseModel):
-    label: Literal["math", "weather", "general"]
+def router_order(config: Config) -> list[RouteSpec]:
+    """The routes as the router sees them: the fallback ("anything else") last."""
+    others = [r for r in config.routes if r.name != config.fallback]
+    return [*others, *(r for r in config.routes if r.name == config.fallback)]
 
 
-def build_graph() -> Graph:
+def router_system(config: Config) -> str:
+    lines = (f" {r.name}: {r.description.rstrip('.')}." for r in router_order(config))
+    return config.router_prompt + "".join(lines)
+
+
+def route_model(names: list[str]) -> type[BaseModel]:
+    """The decision schema lists exactly the agent's route names."""
+    label: Any = Literal[tuple(names)]  # names are only known at run time
+    return create_model("Route", label=(label, ...))
+
+
+def build_graph(config: Config) -> Graph:
+    # One column: each route, then its tool where that tool first appears (a shared tool is one
+    # node).
+    items: list[tuple[str, str, Literal["llm", "tool"]]] = []
+    for route in config.routes:
+        items.append((route.name, f"{route.name} (LLM)", "llm"))
+        if route.tool and f"tool:{route.tool}" not in {i for i, _, _ in items}:
+            items.append((f"tool:{route.tool}", route.tool, "tool"))
+    column = [
+        Node(id=id_, label=label, kind=kind, x=450, y=i * 110)
+        for i, (id_, label, kind) in enumerate(items)
+    ]
+    mid = (len(column) - 1) * 55
     nodes = [
-        Node(id="start", label="start", kind="start", x=0, y=220),
-        Node(id="router", label="router (LLM)", kind="llm", x=200, y=220),
-        Node(id="math", label="math (LLM)", kind="llm", x=450, y=0),
-        Node(id="tool:calculator", label="calculator", kind="tool", x=450, y=110),
-        Node(id="general", label="general (LLM)", kind="llm", x=450, y=220),
-        Node(id="weather", label="weather (LLM)", kind="llm", x=450, y=330),
-        Node(id="tool:get_weather", label="get_weather", kind="tool", x=450, y=440),
-        Node(id="end", label="end", kind="end", x=700, y=220),
+        Node(id="start", label="start", kind="start", x=0, y=mid),
+        Node(id="router", label="router (LLM)", kind="llm", x=200, y=mid),
+        *column,
+        Node(id="end", label="end", kind="end", x=700, y=mid),
     ]
     edges = [Edge(source="start", target="router")]
-    for handler in ("math", "general", "weather"):
-        edges += [Edge(source="router", target=handler), Edge(source=handler, target="end")]
-    for handler, tool in HANDLER_TOOLS.items():
-        node = f"tool:{tool.name}"
-        edges += [Edge(source=handler, target=node), Edge(source=node, target=handler)]
+    for route in config.routes:
+        edges += [Edge(source="router", target=route.name), Edge(source=route.name, target="end")]
+    for route in config.routes:
+        if route.tool:
+            tool = f"tool:{route.tool}"
+            edges += [Edge(source=route.name, target=tool), Edge(source=tool, target=route.name)]
     return Graph(nodes=nodes, edges=edges)
 
 
@@ -70,30 +128,31 @@ class RoutingWorkflow:
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
     async def run(self, prompt: str) -> Outcome:
-        return await steps.invoke(self.ctx, AGENT_ID, prompt, self._flow)
+        return await steps.invoke(self.ctx, prompt, self._flow)
 
     async def _flow(self, prompt: str) -> Outcome:
         ctx, c = self.ctx, self.config
+        routes = {r.name: r for r in c.routes}
         try:
-            route = await steps.decide(
+            decision = await steps.decide(
                 ctx,
                 "router",
                 "route",
-                steps.messages(c.router_prompt, prompt),
-                Route,
+                steps.messages(router_system(c), prompt),
+                route_model([r.name for r in router_order(c)]),
                 kind=SpanKind.ROUTE,
                 came_from=["start"],
             )
-            label = route.label
+            label: str = decision.model_dump()["label"]
         except DecisionError:
-            label = "general"  # always safe; the route span keeps the error
-        if label == "general":
+            label = c.fallback  # always safe; the route span keeps the error
+        route = routes[label]
+        if route.tool is None:
             reply = await steps.chat(
-                ctx, "general", steps.messages(c.general_prompt, prompt), came_from=["router"]
+                ctx, route.name, steps.messages(route.prompt, prompt), came_from=["router"]
             )
-            return Outcome("completed", reply.content or "", ["general"])
-        system = c.math_prompt if label == "math" else c.weather_prompt
-        return await self._with_tool(label, HANDLER_TOOLS[label], system, prompt)
+            return Outcome("completed", reply.content or "", [route.name])
+        return await self._with_tool(route.name, TOOLS[route.tool], route.prompt, prompt)
 
     async def _with_tool(self, node: str, tool: Tool, system: str, prompt: str) -> Outcome:
         """One model call with the handler's tool, its tool calls, then the answer."""

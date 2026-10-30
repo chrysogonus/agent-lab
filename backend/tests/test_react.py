@@ -155,7 +155,8 @@ def test_ungranted_scope_rejected() -> None:
         fn=lambda: "",
         scopes=frozenset({"fs:read"}),
     )
-    config = ReActConfig(model="m", tools=["read_file"])
+    # read_file is not a known tool, so skip validation: the agent's own scope check is tested.
+    config = ReActConfig.model_construct(model="m", tools=["read_file"])
     tracer = Tracer(run_id="r", agent_id="react", config_version="v", sink=lambda e, s: None)
     with pytest.raises(ValueError, match="ungranted scopes"):
         ReActAgent(llm=FakeLLM([]), tools=[risky], config=config, tracer=tracer)

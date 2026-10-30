@@ -3,15 +3,16 @@
 import asyncio
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from agent_lab.agents.registry import AGENTS
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
 from agent_lab.llm.base import LLMClient
-from agent_lab.runs import execute_run, new_run
+from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import Run, Store
 from agent_lab.tracing.span import Span
 
@@ -21,14 +22,7 @@ ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 class RunRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
-    agent_id: str = "react"
-
-    @field_validator("agent_id")
-    @classmethod
-    def known_agent(cls, agent_id: str) -> str:
-        if agent_id not in AGENTS:
-            raise ValueError(f"unknown agent {agent_id!r}")
-        return agent_id
+    agent_id: str = "react"  # a template id or a custom agent's id
 
 
 class AgentInfo(BaseModel):
@@ -42,6 +36,11 @@ class AgentInfo(BaseModel):
 class RunDetail(BaseModel):
     run: Run
     spans: list[Span]
+
+
+def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
+    """A 422 in FastAPI's own shape, so every rejection names its field the same way."""
+    return RequestValidationError([{"loc": loc, "msg": msg, "type": "value_error"}])
 
 
 def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -> FastAPI:
@@ -72,13 +71,17 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
 
     @app.post("/runs", status_code=status.HTTP_202_ACCEPTED)
     async def start_run(body: RunRequest) -> Run:
-        run, config = new_run(body.prompt, body.agent_id, llm, secrets)
+        try:
+            run, config, spec = new_run(body.prompt, body.agent_id, llm, store, secrets)
+        except UnknownAgent:
+            raise field_error(("body", "agent_id"), f"unknown agent {body.agent_id!r}") from None
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(
                 run=run,
                 prompt=body.prompt,
                 config=config,
+                spec=spec,
                 llm=llm,
                 store=store,
                 bus=bus,

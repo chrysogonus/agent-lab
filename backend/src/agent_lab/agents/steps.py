@@ -170,15 +170,12 @@ async def decide[T: BaseModel](
 
 
 async def invoke(
-    ctx: StepContext,
-    agent_id: str,
-    prompt: str,
-    flow: Callable[[str], Awaitable[Outcome]],
+    ctx: StepContext, prompt: str, flow: Callable[[str], Awaitable[Outcome]]
 ) -> Outcome:
     """Run `flow` between the root span at `start` and the final span at `end`."""
     async with ctx.tracer.span(
         SpanKind.STEP,
-        f"invoke_agent {agent_id}",
+        f"invoke_agent {ctx.tracer.agent_id}",  # the run's agent: a template or a custom agent
         node_id="start",
         input=prompt,
         attributes={"gen_ai.operation.name": "invoke_agent"},

@@ -3,9 +3,10 @@
 from itertools import pairwise
 from typing import Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from agent_lab.agents import steps
+from agent_lab.agents.config_fields import Prompt
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -20,12 +21,12 @@ SAMPLE_PROMPT = "A solar-powered phone charger called SunSip"
 class Config(BaseModel):
     model: str
     reasoning: bool = False
-    max_rounds: int = 3
-    generator_prompt: str = (
+    max_rounds: int = Field(default=3, ge=1, le=5)
+    generator_prompt: Prompt = (
         "Write one slogan of fewer than 12 words for the product. It must mention the product "
         "name. Output only the slogan."
     )
-    evaluator_prompt: str = (
+    evaluator_prompt: Prompt = (
         "Check the slogan: fewer than 12 words, mentions the product name, catchy. Approve only "
         "if all hold; otherwise give one sentence of concrete feedback."
     )
@@ -61,7 +62,7 @@ class EvaluatorWorkflow:
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
     async def run(self, prompt: str) -> Outcome:
-        return await steps.invoke(self.ctx, AGENT_ID, prompt, self._flow)
+        return await steps.invoke(self.ctx, prompt, self._flow)
 
     async def _flow(self, prompt: str) -> Outcome:
         c = self.config
