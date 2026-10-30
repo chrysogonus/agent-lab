@@ -65,8 +65,16 @@ contracts/, quickstart.md)
 
 ## Phase 6: Polish
 
-- [ ] T029 [P] AGENTS.md (commands, gates, layout, contracts), CLAUDE.md (pointer), README.md (run instructions)
-- [ ] T030 Run quickstart.md manual checks (real model if available; else FakeLLM smoke) and record results
+- [X] T029 [P] AGENTS.md (commands, gates, layout, contracts), CLAUDE.md (pointer), README.md (run instructions)
+- [X] T030 Run quickstart.md manual checks (real model if available; else FakeLLM smoke) and record results
+
+## Manual check results (T030, 2026-10-30)
+
+No Ollama model was pulled, so the smoke test ran the real API and UI against a scripted slow
+model (headless Chromium): quickstart steps 1–5 and 7 pass (live graph/waterfall, span detail,
+replay after reload, mobile width, both servers bound to 127.0.0.1, foreign `Host` → 400).
+Step 6 passed with the scripted `2**999` call (error on the tool span, run continued). A
+real-model run is still open.
 
 ## Dependencies
 

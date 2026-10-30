@@ -37,7 +37,7 @@ function LabNode({ data }: NodeProps<Node<LabNodeData>>) {
   const color = KIND_COLOR[data.kind];
   return (
     <div
-      className={`lab-node rounded-md border-2 bg-panel px-4 py-2 text-sm font-medium text-ink ${
+      className={`lab-node flex size-full items-center justify-center rounded-md border-2 bg-panel px-3 text-sm font-medium text-ink ${
         data.state === "active" ? "lab-node--active" : ""
       }`}
       style={{
@@ -62,6 +62,10 @@ function LabNode({ data }: NodeProps<Node<LabNodeData>>) {
 
 const nodeTypes = { lab: LabNode };
 
+// Fixed sizes: React Flow drops measured sizes when it receives new node objects each render.
+const NODE_WIDTH = 150;
+const NODE_HEIGHT = 44;
+
 function handlesFor(source: GraphNode, target: GraphNode) {
   if (source.kind === "llm" && target.kind === "tool") return { sourceHandle: "b-out", targetHandle: "t-in" };
   if (source.kind === "tool" && target.kind === "llm") return { sourceHandle: "t-out", targetHandle: "b-in" };
@@ -84,6 +88,8 @@ export function GraphView({
     id: n.id,
     type: "lab",
     position: { x: n.x, y: n.y },
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
     data: {
       label: n.label,
       kind: n.kind,
@@ -112,7 +118,6 @@ export function GraphView({
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
-      proOptions={{ hideAttribution: true }}
       aria-label="Agent graph"
     />
   );

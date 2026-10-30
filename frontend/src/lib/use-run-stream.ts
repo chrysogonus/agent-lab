@@ -13,7 +13,12 @@ export function useRunStream(runId: string): RunView {
     ws.onmessage = (message) => dispatch(JSON.parse(message.data) as StreamEvent);
     ws.onerror = () =>
       dispatch({ type: "error", message: "Lost the connection to the backend stream." });
-    return () => ws.close();
+    return () => {
+      // Detach first: closing a still-connecting socket fires onerror, which is not a failure.
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.close();
+    };
   }, [runId]);
   return view;
 }
