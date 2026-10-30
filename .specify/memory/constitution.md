@@ -64,7 +64,8 @@ Rationale: seeing every step is the point of the lab.
   reserved for Phase 2.
 - LLM access: a thin own client over the OpenAI-compatible `/v1/chat/completions` API with
   native tool calling. Provider, base URL and model come from the environment. Default target:
-  Ollama at `http://localhost:11434/v1`.
+  vLLM (Docker image `vllm/vllm-openai`, started by `make dev-llm`) at `http://localhost:8001/v1`,
+  bound to 127.0.0.1. Ollama remains supported as an alternative OpenAI-compatible endpoint.
 - Layout: monorepo with `backend/`, `frontend/`, `specs/`, `.specify/`.
 
 ## Development Workflow
@@ -87,4 +88,4 @@ Rationale: seeing every step is the point of the lab.
 - Reviews verify gate results, span coverage of new LLM/tool calls, and requirement → test
   mapping.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
+**Version**: 1.3.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
