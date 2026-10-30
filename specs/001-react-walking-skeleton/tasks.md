@@ -16,9 +16,9 @@ contracts/, quickstart.md)
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `backend/` uv package `agent_lab` (Python 3.12; deps fastapi, uvicorn[standard], httpx, pydantic; dev ruff, pyright, pytest) with ruff/pyright/pytest config in backend/pyproject.toml
-- [ ] T002 [P] Scaffold `frontend/` with create-next-app (TypeScript, App Router, Tailwind, ESLint, pnpm, src dir), add @xyflow/react, bind dev server to 127.0.0.1 in frontend/package.json
-- [ ] T003 Add Makefile (`install`, `check`, `check-backend`, `check-frontend`, `dev-backend`, `dev-frontend`) and .env.example (`LLM_PROVIDER`, `LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=qwen3:8b`, `LLM_API_KEY`, `AGENT_LAB_DB`)
+- [X] T001 Create `backend/` uv package `agent_lab` (Python 3.12; deps fastapi, uvicorn[standard], httpx, pydantic; dev ruff, pyright, pytest) with ruff/pyright/pytest config in backend/pyproject.toml
+- [X] T002 [P] Scaffold `frontend/` with create-next-app (TypeScript, App Router, Tailwind, ESLint, pnpm, src dir), add @xyflow/react, bind dev server to 127.0.0.1 in frontend/package.json
+- [X] T003 Add Makefile (`install`, `check`, `check-backend`, `check-frontend`, `dev-backend`, `dev-frontend`) and .env.example (`LLM_PROVIDER`, `LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=qwen3:8b`, `LLM_API_KEY`, `AGENT_LAB_DB`)
 
 ## Phase 2: Foundational (blocks all stories)
 
