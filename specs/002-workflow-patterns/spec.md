@@ -203,8 +203,8 @@ well-defined end state, never a hung or crashed run.
   the five workflows.
 - **Decision**: a validated control-flow result produced from model output: route label, gate
   result, plan (list of subtasks), verdict (approve or feedback). Recorded as a span's output.
-- **Run, Span, Graph**: as in M1. Graph nodes gain kinds for code-only steps (gate, merge,
-  route) so the UI can tell model calls from code.
+- **Run, Span, Graph**: as in M1. Graph nodes gain a `code` kind for code-only steps (the chain
+  gate) so the UI can tell model calls from code.
 
 ## Success Criteria *(mandatory)*
 
