@@ -4,7 +4,8 @@ import logging
 import time
 import uuid
 
-from agent_lab.agents.react import AGENT_ID, ReActAgent, ReActConfig, build_graph, config_version
+from agent_lab.agents.react import AGENT_ID, ReActAgent, ReActConfig, build_graph
+from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
 from agent_lab.llm.base import LLMClient
 from agent_lab.store import Run, RunStatus, Store

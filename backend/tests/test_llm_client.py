@@ -115,3 +115,25 @@ async def test_reasoning_parsed(field: str) -> None:
 
     result = await client_with(httpx.MockTransport(handler)).chat([], [])
     assert (result.content, result.reasoning) == ("5", "2 plus 3 is 5")
+
+
+@pytest.mark.anyio
+async def test_response_format_and_reasoning_sent() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    client = client_with(httpx.MockTransport(handler))
+    schema: dict[str, Any] = {"type": "json_schema", "json_schema": {"name": "route"}}
+    await client.chat([], [], response_format=schema, reasoning=False)
+    await client.chat([], [], reasoning=True)
+    await client.chat([], [])
+
+    first, on, default = (json.loads(r.content) for r in seen)
+    assert first["response_format"] == schema
+    assert first["reasoning_effort"] == "none"
+    for body in (on, default):
+        assert "response_format" not in body
+        assert "reasoning_effort" not in body

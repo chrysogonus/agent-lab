@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class Node(BaseModel):
     id: str
     label: str
-    kind: Literal["start", "llm", "tool", "end"]
+    kind: Literal["start", "llm", "tool", "code", "end"]  # code: a step without a model call
     # Hand-set layout for the UI, so no layout library is needed.
     x: float
     y: float

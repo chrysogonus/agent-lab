@@ -27,10 +27,21 @@ class OpenAICompatClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def chat(self, messages: list[Message], tools: list[dict[str, Any]]) -> ChatResponse:
+    async def chat(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]],
+        *,
+        response_format: dict[str, Any] | None = None,
+        reasoning: bool | None = None,
+    ) -> ChatResponse:
         body: dict[str, Any] = {"model": self.model, "messages": messages, "stream": False}
         if tools:
             body["tools"] = tools
+        if response_format is not None:
+            body["response_format"] = response_format
+        if reasoning is False:
+            body["reasoning_effort"] = "none"
         try:
             response = await self._http.post(self._url, json=body, headers=self._headers)
         except httpx.HTTPError as exc:

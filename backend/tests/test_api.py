@@ -10,7 +10,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from agent_lab.api import create_app
 from agent_lab.llm.base import ChatResponse, Message
-from agent_lab.llm.fake import FakeLLM
+from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 
 BASE = "http://127.0.0.1:8000"
@@ -21,13 +21,22 @@ ORIGIN = "http://127.0.0.1:3000"
 class GatedLLM(FakeLLM):
     """Blocks every model call until the test opens the gate, so the run is observably live."""
 
-    def __init__(self, script: list[ChatResponse | Exception], gate: threading.Event) -> None:
+    def __init__(self, script: list[ScriptItem], gate: threading.Event) -> None:
         super().__init__(script)
         self.gate = gate
 
-    async def chat(self, messages: list[Message], tools: list[dict[str, Any]]) -> ChatResponse:
+    async def chat(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]],
+        *,
+        response_format: dict[str, Any] | None = None,
+        reasoning: bool | None = None,
+    ) -> ChatResponse:
         await anyio.to_thread.run_sync(self.gate.wait)
-        return await super().chat(messages, tools)
+        return await super().chat(
+            messages, tools, response_format=response_format, reasoning=reasoning
+        )
 
 
 def read_until_run_ended(ws: Any) -> list[dict[str, Any]]:

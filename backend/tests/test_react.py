@@ -1,7 +1,8 @@
 import pytest
-from helpers import answer, ended, make_agent, tool_call
+from helpers import answer, assert_trace_valid, ended, make_agent, taken_edges, tool_call
 
-from agent_lab.agents.react import ReActAgent, ReActConfig, config_version
+from agent_lab.agents.react import ReActAgent, ReActConfig
+from agent_lab.agents.steps import config_version
 from agent_lab.llm.base import LLMError
 from agent_lab.llm.fake import FakeLLM
 from agent_lab.tools.base import Tool
@@ -113,6 +114,10 @@ async def test_unknown_tool_and_bad_args() -> None:
     assert errors[1].startswith("arguments are not valid JSON")
     assert errors[2].startswith("invalid arguments")
     assert all(s.node_id in agent.graph.node_ids() for s in ended(events))
+    # The unknown tool records no edge; the next turn continues on the llm node.
+    assert_trace_valid(agent.graph, ended(events))
+    iteration_2 = next(s for s in ended(events) if s.name == "iteration 2")
+    assert "lab.came_from" not in iteration_2.attributes
 
 
 @pytest.mark.anyio
@@ -168,3 +173,36 @@ async def test_reasoning_traced_not_resent() -> None:
     assert first_llm.output["reasoning"] == "I should use the calculator."
     # The model's history holds the assistant message without the reasoning.
     assert all("reasoning" not in m for m in llm.calls[1])
+
+
+@pytest.mark.anyio
+async def test_reasoning_on_by_default() -> None:
+    llm = FakeLLM([answer("hi")])
+    agent, _ = make_agent(llm)
+    await agent.run("hi")
+    assert agent.config.reasoning is True
+    assert llm.requests[0]["reasoning"] is True
+
+
+@pytest.mark.anyio
+async def test_react_came_from_edges() -> None:
+    llm = FakeLLM(
+        [
+            tool_call("calculator", '{"expression": "1+1"}', "c1"),
+            tool_call("get_weather", '{"city": "Rome"}', "c2"),
+            answer("done"),
+        ]
+    )
+    agent, events = make_agent(llm)
+    await agent.run("go")
+
+    spans = ended(events)
+    assert_trace_valid(agent.graph, spans)
+    assert taken_edges(spans) == {
+        ("start", "llm"),
+        ("llm", "tool:calculator"),
+        ("tool:calculator", "llm"),
+        ("llm", "tool:get_weather"),
+        ("tool:get_weather", "llm"),
+        ("llm", "end"),
+    }

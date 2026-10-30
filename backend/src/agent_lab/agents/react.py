@@ -1,16 +1,15 @@
 """ReAct: the model reasons, calls tools, sees their results, and repeats until it answers."""
 
-import hashlib
-import json
-from dataclasses import dataclass
-from typing import cast
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
+from agent_lab.agents import steps
+from agent_lab.agents.steps import StepContext
 from agent_lab.graph import Edge, Graph, Node
-from agent_lab.llm.base import ChatResponse, LLMClient, Message, ToolCall
+from agent_lab.llm.base import LLMClient, Message
 from agent_lab.store import RunStatus
-from agent_lab.tools.base import Tool, ToolError
+from agent_lab.tools.base import Tool
 from agent_lab.tracing.span import SpanKind
 from agent_lab.tracing.tracer import Tracer
 
@@ -29,10 +28,7 @@ class ReActConfig(BaseModel):
     system_prompt: str = SYSTEM_PROMPT
     tools: list[str]
     max_iterations: int = 6
-
-
-def config_version(config: ReActConfig) -> str:
-    return hashlib.sha256(config.model_dump_json().encode()).hexdigest()[:12]
+    reasoning: bool = True
 
 
 def build_graph(tool_names: list[str]) -> Graph:
@@ -57,6 +53,8 @@ class ReActState:
     done: bool = False
     status: RunStatus = "running"
     answer: str | None = None
+    # Node(s) the next visit comes from: start, then the tools of the previous turn.
+    came_from: list[str] = field(default_factory=lambda: ["start"])
 
 
 class ReActAgent:
@@ -75,19 +73,14 @@ class ReActAgent:
             if not tool.scopes <= granted_scopes:
                 missing = sorted(tool.scopes - granted_scopes)
                 raise ValueError(f"tool {tool.name!r} needs ungranted scopes {missing}")
-        self.llm = llm
         self.tools = {t.name: t for t in tools}
         self.config = config
         self.tracer = tracer
+        self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
         self.graph = build_graph(list(self.tools))
 
     def start(self, prompt: str) -> ReActState:
-        return ReActState(
-            messages=[
-                {"role": "system", "content": self.config.system_prompt},
-                {"role": "user", "content": prompt},
-            ]
-        )
+        return ReActState(messages=steps.messages(self.config.system_prompt, prompt))
 
     async def run(self, prompt: str) -> ReActState:
         """Loop `step` until the model answers or the iteration cap is hit.
@@ -104,7 +97,13 @@ class ReActAgent:
         ) as root:
             while not state.done and state.iteration < self.config.max_iterations:
                 await self.step(state)
-            async with self.tracer.span(SpanKind.STEP, "final answer", node_id="end") as end:
+            async with self.tracer.span(
+                SpanKind.STEP,
+                "final answer",
+                node_id="end",
+                # The answer and the iteration cap are both decided at the llm node.
+                attributes=steps.came_from(["llm"]),
+            ) as end:
                 if state.done:
                     end.output = state.answer
                 else:
@@ -117,83 +116,28 @@ class ReActAgent:
     async def step(self, state: ReActState) -> ReActState:
         """One iteration: a model call, then every tool call it requested."""
         state.iteration += 1
-        async with self.tracer.span(SpanKind.STEP, f"iteration {state.iteration}", node_id="llm"):
-            response = await self._chat(state.messages)
+        async with self.tracer.span(
+            SpanKind.STEP,
+            f"iteration {state.iteration}",
+            node_id="llm",
+            attributes=steps.came_from(state.came_from),
+        ):
+            response = await steps.chat(
+                self.ctx, "llm", state.messages, tools=list(self.tools.values())
+            )
             state.messages.append(response.as_message())
             if not response.tool_calls:
                 state.done = True
                 state.status = "completed"
                 state.answer = response.content or ""
                 return state
+            # Unknown tools have no node, so they never become an edge.
+            state.came_from = [
+                f"tool:{c.name}" for c in response.tool_calls if c.name in self.tools
+            ]
             for call in response.tool_calls:
-                result = await self._call_tool(call)
+                result = await steps.call_tool(
+                    self.ctx, self.tools, call, caller="llm", came_from=["llm"]
+                )
                 state.messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
         return state
-
-    async def _chat(self, messages: list[Message]) -> ChatResponse:
-        model = self.llm.model
-        async with self.tracer.span(
-            SpanKind.LLM,
-            f"chat {model}",
-            node_id="llm",
-            input=list(messages),
-            attributes={
-                "gen_ai.operation.name": "chat",
-                "gen_ai.provider.name": self.llm.provider,
-                "gen_ai.request.model": model,
-            },
-        ) as span:
-            response = await self.llm.chat(messages, [t.schema() for t in self.tools.values()])
-            span.output = response.as_message()
-            if response.reasoning:
-                span.output["reasoning"] = response.reasoning
-            span.model = response.model or model
-            span.tokens_in = response.tokens_in
-            span.tokens_out = response.tokens_out
-            span.attributes |= {
-                "gen_ai.response.model": span.model,
-                "gen_ai.usage.input_tokens": response.tokens_in,
-                "gen_ai.usage.output_tokens": response.tokens_out,
-            }
-        return response
-
-    async def _call_tool(self, call: ToolCall) -> str:
-        tool = self.tools.get(call.name)
-        async with self.tracer.span(
-            SpanKind.TOOL,
-            f"execute_tool {call.name}",
-            # An unknown tool has no node; attribute the span to the node that requested it.
-            node_id=f"tool:{call.name}" if tool else "llm",
-            input=call.arguments,
-            attributes={
-                "gen_ai.operation.name": "execute_tool",
-                "gen_ai.tool.name": call.name,
-                "gen_ai.tool.call.id": call.id,
-            },
-        ) as span:
-            try:
-                if tool is None:
-                    raise ToolError(f"unknown tool {call.name!r}")
-                result = tool.fn(**_parse_arguments(tool, call.arguments))
-            except ToolError as exc:
-                # Fed back to the model as the tool result, so it can recover.
-                span.error = str(exc)
-                result = f"error: {exc}"
-            span.output = result
-        return result
-
-
-def _parse_arguments(tool: Tool, raw: str) -> dict[str, object]:
-    try:
-        args = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ToolError(f"arguments are not valid JSON: {exc.msg}") from exc
-    if not isinstance(args, dict):
-        raise ToolError("arguments must be a JSON object")
-    args = cast(dict[str, object], args)  # JSON object keys are always strings
-    expected: set[str] = set(tool.parameters.get("properties", {}))
-    missing: set[str] = set(tool.parameters.get("required", [])) - args.keys()
-    extra = args.keys() - expected
-    if missing or extra:
-        raise ToolError(f"invalid arguments: missing {sorted(missing)}, unexpected {sorted(extra)}")
-    return args

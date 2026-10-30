@@ -46,4 +46,16 @@ class LLMClient(Protocol):
     provider: str
     model: str
 
-    async def chat(self, messages: list[Message], tools: list[dict[str, Any]]) -> ChatResponse: ...
+    async def chat(
+        self,
+        messages: list[Message],
+        tools: list[dict[str, Any]],
+        *,
+        response_format: dict[str, Any] | None = None,
+        reasoning: bool | None = None,
+    ) -> ChatResponse:
+        """`response_format`: OpenAI-style structured output request, passed through.
+
+        `reasoning`: False turns model thinking off; None or True keeps the provider default.
+        """
+        ...
