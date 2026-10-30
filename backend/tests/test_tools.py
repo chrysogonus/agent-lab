@@ -66,3 +66,12 @@ def test_weather_rejects_bad_city() -> None:
 def test_m1_tools_have_no_scopes() -> None:
     assert CALCULATOR.scopes == frozenset()
     assert WEATHER.scopes == frozenset()
+
+
+@pytest.mark.parametrize("value", [5, None, ["1+1"], {"x": 1}])
+def test_tools_reject_non_string_arguments(value: object) -> None:
+    # Model JSON can carry any type; the isinstance checks are the validation.
+    with pytest.raises(ToolError):
+        calculate(value)
+    with pytest.raises(ToolError):
+        get_weather(value)
