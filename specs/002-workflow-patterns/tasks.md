@@ -223,7 +223,7 @@ Real model `qwen3:8b` on local Ollama, backend on a scratch database:
 | chain (sample) | completed | 3 / 0 | 1.9 s | gate passed, 5 bullet lines |
 | routing (sample, "What is 2**10?") | completed | 3 / 1 | 1.3 s, 1.0 s | route `math`, calculator used (US2-1) |
 | routing ("weather in Oslo") | completed | 3 / 1 | 1.2 s | route `weather` |
-| parallel (sample) | completed | 4 / 0 | 2.2 s | 3 branches overlap; wall 2.2 s < branch sum 2.75 s (SC-003) |
+| parallel (sample) | completed | 4 / 0 | 2.2 s | 3 branches overlap (SC-003); wall 2.2 s, branch sum 2.75 s |
 | orchestrator (sample) | completed | 6 / 0 | 5.3 s | plan of 4 subtasks, 4 overlapping workers; wall 5.3 s < sum 6.2 s |
 | evaluator (sample) | completed | 2 / 0 | 1.1 s | approved in round 1 (loop edge covered by test_approved_round_two) |
 

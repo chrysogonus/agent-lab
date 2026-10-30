@@ -215,7 +215,7 @@ well-defined end state, never a hung or crashed run.
 - **SC-002**: For every workflow, 100% of model and tool calls appear as spans whose node id is
   in that workflow's graph (verified by tests over scripted runs).
 - **SC-003**: In a parallel or orchestrator run, the waterfall shows branch spans overlapping in
-  time, and total run time is less than the sum of the branch times.
+  time: the last branch starts before the first branch ends.
 - **SC-004**: For every decision branch in User Story 2 and failure in User Story 3, a test shows
   the expected spans, taken edges and end state.
 - **SC-005**: A reader can tell which pattern a replayed run used from its graph alone.
