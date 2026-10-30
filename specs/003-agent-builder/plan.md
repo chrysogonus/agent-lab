@@ -82,21 +82,24 @@ digits and hyphens, up to 30 characters, unique, not `start`, `end`, `gate`, `ro
 computed: items in a column 110 px apart, the decision/merge node centred. For routing, a
 route's tool node `tool:{name}` is placed under the first route that uses it; a tool shared by
 two routes is one node with edges to both. Golden tests assert the six template graphs equal the
-M2 graphs (node ids, kinds, positions, edge set).
+M2 graphs (node ids, kinds, positions, edge set) and that scripted template runs send exactly
+the M2 requests (see research, "Template behavior after the refactor").
 
 ### Workflow changes
 
 - **Chain**: loop over `steps`; the first step gets the input; a later step gets the previous
-  output under its step name, plus the input when `include_input` is on; the gate (when on) runs
-  after the first step with `gate_min_bullets`. Answer = last step's output.
-- **Routing**: router system prompt = `router_prompt` + one line per route
-  (`- name: description`); decision model `Route{label: <enum of route names>}` built per config;
+  output as is, or, when `include_input` is on, `{input_label}: {input}` plus the previous output
+  under its capitalised step name; the gate (when on) runs after the first step with
+  `gate_min_bullets`. Answer = last step's output.
+- **Routing**: router system prompt = `router_prompt` + ` {name}: {description}.` per route,
+  fallback last; decision model `Route{label: <enum of route names>}` built per config;
   invalid label → fallback route. A route with a tool runs the M2 tool handler, without one
   answers in one call.
 - **Parallel**: `{aspect}`/`{focus}` filled by `str.replace` (a custom prompt containing other
   braces no longer raises).
 - **Orchestrator**: `Plan.subtasks` max length = `max_subtasks` (model built per config);
-  `{max_subtasks}` in the orchestrator prompt filled by `str.replace`.
+  `{min_subtasks}` (min(2, max)) and `{max_subtasks}` in the orchestrator prompt filled by
+  `str.replace`.
 - **All**: the root span is named `invoke_agent {run agent id}` (unchanged for templates).
 
 ### Custom agents and runs (`store.py`, `agents/registry.py`, `runs.py`)
@@ -171,7 +174,7 @@ backend/src/agent_lab/
 ├── store.py                                          # agents table, run columns, migration
 ├── runs.py, api.py                                   # resolve custom agents, new endpoints
 backend/tests/
-├── golden/template_graphs.json                       # M2 graphs, captured before the refactor
+├── golden/                                           # M2 graphs and requests, captured before the refactor
 ├── test_templates.py, test_agents_api.py             # new
 ├── test_workflow_*.py, test_store.py, test_api.py    # extended
 frontend/src/

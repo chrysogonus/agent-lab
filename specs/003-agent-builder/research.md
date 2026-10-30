@@ -21,16 +21,23 @@
   ReAct reasoning change in M2.
 
 ## Template behavior after the refactor (SC-006)
-- Decision: templates keep node ids, graph, decisions, spans per node, taken edges and end
-  states. Two composed messages change wording:
-  - Chain draft step: the user message was `Product: {input}\n\nOutline:\n{outline}`; it becomes
-    `Input: {input}\n\nOutline:\n{outline}` (the generic "include the original input" form).
-  - Router: the route descriptions move from the router prompt into one generated line per
-    route (`- math: arithmetic or a calculation`); the label set and schema are unchanged.
-- Rationale: the generic forms must work for any step or route; reproducing the old wording
-  would need template-only special cases. M2 tests do not assert on these texts.
-- Verification: golden graphs (captured before the refactor) plus the unchanged M2 workflow
-  tests (only `build_graph()` → `build_graph(config)` call sites change).
+- Decision: the generic message rules reproduce every M2 request byte for byte:
+  - Chain: a step with `include_input` off gets the previous output unwrapped (M2 polish); with
+    it on, `{input_label}: {input}\n\n{Previous step name, capitalised}:\n{previous output}`.
+    The template's `input_label` is `Product`, so the draft message stays
+    `Product: {input}\n\nOutline:\n{outline}`.
+  - Router: system prompt = `router_prompt` followed by ` {name}: {description}.` per route,
+    non-fallback routes in list order and the fallback last (trailing periods of descriptions
+    stripped). Template: `Classify the user's question.` + math, weather, general gives the M2
+    text exactly, while the routes list keeps the M2 graph order (math, general, weather).
+  - Orchestrator: see placeholders below. Parallel, evaluator and ReAct messages are unchanged.
+- Rationale: FR-001 and FR-008 require unchanged template behavior; matching requests exactly is
+  cheap with these rules and needs no template-only special cases.
+- Verification: before the refactor, scripted `FakeLLM` runs of all six templates record every
+  request (messages, tools, response format) and the graphs into `tests/golden/`; after the
+  refactor the same runs must produce identical requests, graphs, taken edges and end states.
+- Not identical by design: the chain, routing and orchestrator configs change shape (same
+  values), so their `config_version` changes once; old runs keep theirs.
 
 ## Decision models that depend on config
 - Decision: `route_model(names)` and `plan_model(max_subtasks)` build the decision model per
@@ -48,9 +55,11 @@
   `str.replace`; no `str.format`.
 - Rationale: custom prompts are free text; `str.format` raises on any other brace (e.g. a JSON
   example) and turns a prompt edit into a run crash. The template output is identical.
-- Orchestrator: the template prompt becomes `... into 2 to {max_subtasks} independent
-  subtasks ...`, rendering exactly the M2 text at the default of 4 and following the limit when
-  it changes (resolves the deferred clarify point).
+- Orchestrator: placeholders `{min_subtasks}` (= min(2, max_subtasks)) and `{max_subtasks}`.
+  The template prompt becomes `... into {min_subtasks} to {max_subtasks} independent
+  subtasks ...`: exactly the M2 text at the default of 4, `1 to 1` at the minimum and `2 to 6`
+  at the maximum, always consistent with the plan schema (resolves the deferred clarify point).
+  Tests check the rendered prompt and the schema's `maxItems` at limits 1, 4 and 6.
 
 ## Graph preview before saving
 - Decision: `POST /graph {template_id, config}` validates the config and returns the derived
