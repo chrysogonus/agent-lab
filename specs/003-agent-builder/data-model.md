@@ -8,7 +8,7 @@ M2 entities (Run, Span, Graph, decisions) are unchanged except where noted. No n
 | Prompt | string, 1–4000 characters after trimming |
 | Item name (chain step, route, aspect) | `^[a-z0-9-]{1,30}$`, unique within the list, not `start`, `end`, `gate`, `router`, `merge`; used as the node id |
 | Short text (route description, aspect focus) | 1–300 characters after trimming |
-| Tool name | a key of `TOOLS` (`calculator`, `get_weather`) |
+| Tool name | a key of `TOOLS` in `tools/catalog.py` (`calculator`, `get_weather`) |
 
 ## Template configs (pydantic; defaults = the template; hashed into `config_version`)
 Every config also has `model: str` (injected by the server, never stored with a custom agent)

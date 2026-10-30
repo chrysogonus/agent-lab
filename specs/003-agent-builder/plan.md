@@ -65,7 +65,7 @@ Each `Config` class is the single source of the editable shape and its limits (p
 
 | Template | Change | Template `config_version` |
 |---|---|---|
-| ReAct | limits only (`tools` ⊆ known tools, unique; `max_iterations` 1–10); tools resolved from config names instead of the fixed list | unchanged |
+| ReAct | limits only (`tools` ⊆ known tools, unique; `max_iterations` 1–10); tools resolved from config names instead of the fixed list. `test_ungranted_scope_rejected` builds its config with `model_construct`, since its `read_file` tool is not a known tool; the scope check stays in `ReActAgent` | unchanged |
 | Chain | `outline/draft/polish_prompt` → `steps: list[ChainStep]` (name, prompt, `include_input`), `gate: bool`, `gate_min_bullets` | changes once |
 | Routing | four prompt fields → `router_prompt` + `routes: list[RouteSpec]` (name, description, prompt, tool) + `fallback` | changes once |
 | Parallel | `aspects` dict keeps its shape; limits and name rules added | unchanged |
@@ -102,7 +102,9 @@ M2 graphs (node ids, kinds, positions, edge set).
 ### Custom agents and runs (`store.py`, `agents/registry.py`, `runs.py`)
 
 - `AgentSpec` gains `config_model` (the template's `Config` class); `create` builds tools from
-  config names. `TOOLS: dict[str, Tool]` lists `calculator` and `get_weather`.
+  config names. `TOOLS: dict[str, Tool]` (`calculator`, `get_weather`) lives in the new
+  `tools/catalog.py`, so the configs' validators can import it without an import cycle through
+  the registry.
 - Store: `create_agent`, `update_agent`, `delete_agent`, `get_agent`, `list_agents`; name
   uniqueness via a `name_key` column (`lower(trim(name))`, UNIQUE).
 - `resolve(agent_id)`: a template → `(spec, spec.make_config(llm), spec.name)`; a custom agent
@@ -163,7 +165,8 @@ backend/src/agent_lab/
 ├── workflows/chain.py, routing.py, orchestrator.py   # list-based configs, graphs from config
 ├── workflows/parallel.py, evaluator.py               # limits, safe placeholder fill
 ├── agents/react.py                                   # limits; tools from config
-├── agents/registry.py                                # config_model, TOOLS, resolve
+├── agents/registry.py                                # config_model, resolve
+├── tools/catalog.py                                  # TOOLS by name
 ├── agents/steps.py                                   # root span name from the run's agent id
 ├── store.py                                          # agents table, run columns, migration
 ├── runs.py, api.py                                   # resolve custom agents, new endpoints
