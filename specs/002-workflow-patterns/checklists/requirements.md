@@ -36,4 +36,5 @@
 - Validation pass 1: one vague edge case ("exceeds no time limit") reworded; all items pass.
 - Decisions with real design impact left for `/speckit-clarify`: how structured decisions are
   obtained from the model, fallback behaviors, graph shape for dynamic workers.
-- Ready for `/speckit-clarify`.
+- Clarify session 2026-10-30: structured output, reasoning setting and run totals resolved
+  (FR-006, FR-019, FR-020, SC-006). Ready for `/speckit-plan`.

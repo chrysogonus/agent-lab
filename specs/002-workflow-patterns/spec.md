@@ -32,6 +32,18 @@ the M1 model client; tests use the scripted fake model.
 | **Orchestrator-workers** | Write a short trip note: an orchestrator splits the request into 2–4 subtasks at run time, workers handle them, a synthesizer combines the results | Number of worker calls is decided by the model, not by the graph |
 | **Evaluator-optimizer** | Write a slogan under 12 words that mentions a given product; an evaluator approves or returns feedback, and the generator revises | Feedback loop bounded by a round cap |
 
+## Clarifications
+
+### Session 2026-10-30
+
+- Q: How should the workflows get the route label, the orchestrator's plan and the evaluator's
+  verdict from the model? → A: JSON-schema structured output (`response_format` with a schema
+  per decision); code still validates the result.
+- Q: Should qwen3's thinking be on or off in the workflows? → A: A reasoning setting in each
+  workflow's configuration, default off; the ReAct agent keeps thinking on as in M1.
+- Q: Should each run show totals (model calls, tool calls, tokens in/out, wall time)? → A: Yes,
+  in the run header and in the past-runs list.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is the project owner, a senior engineer studying agent behavior on a local machine.
@@ -141,9 +153,10 @@ well-defined end state, never a hung or crashed run.
 - **FR-005**: The system MUST provide an evaluator-optimizer workflow that alternates generator
   and evaluator calls until the evaluator approves or 3 rounds have run; each round after the
   first MUST pass the previous feedback to the generator.
-- **FR-006**: Model outputs that drive control flow (route label, plan, verdict) MUST be parsed
-  and validated by code; invalid output MUST be recorded as a span error and handled as stated
-  in User Story 3.
+- **FR-006**: Model outputs that drive control flow (route label, plan, verdict) MUST be
+  requested as JSON-schema structured output, one schema per decision, and MUST still be
+  validated by code; invalid output MUST be recorded as a span error and handled as stated in
+  User Story 3. The schema sent MUST be visible in the decision span's input.
 - **FR-007**: Each workflow MUST be its own module, readable in one sitting, built only on the
   M1 model client, tools and tracer.
 
@@ -158,6 +171,9 @@ well-defined end state, never a hung or crashed run.
   under the step that launched them, with overlapping start/end times.
 - **FR-011**: Every run MUST record the workflow's `agent_id` and a `config_version` derived from
   the workflow's configuration.
+- **FR-019**: Each workflow's configuration MUST include a reasoning setting (model thinking on or
+  off), default off for the five workflows and on for the M1 ReAct agent; the setting MUST be
+  part of `config_version` and visible in the run's stored configuration.
 
 **API and UI**
 
@@ -170,6 +186,8 @@ well-defined end state, never a hung or crashed run.
   parallel work) and mark every edge taken, including fan-out, fan-in and loop edges.
 - **FR-015**: The past-runs list MUST show which agent or workflow each run used.
 - **FR-016**: Runs stored by M1 MUST still list and replay.
+- **FR-020**: The run header and the past-runs list MUST show per-run totals: model calls, tool
+  calls, tokens in, tokens out and wall time, computed from the run's spans.
 
 **Quality**
 
@@ -181,7 +199,7 @@ well-defined end state, never a hung or crashed run.
 ### Key Entities
 
 - **Workflow**: a runnable unit with id (`agent_id`), name, one-line description, sample prompt,
-  configuration (prompts, model, caps) and static graph. The M1 ReAct agent is listed alongside
+  configuration (prompts, model, caps, reasoning on/off) and static graph. The M1 ReAct agent is listed alongside
   the five workflows.
 - **Decision**: a validated control-flow result produced from model output: route label, gate
   result, plan (list of subtasks), verdict (approve or feedback). Recorded as a span's output.
@@ -201,6 +219,8 @@ well-defined end state, never a hung or crashed run.
 - **SC-004**: For every decision branch in User Story 2 and failure in User Story 3, a test shows
   the expected spans, taken edges and end state.
 - **SC-005**: A reader can tell which pattern a replayed run used from its graph alone.
+- **SC-006**: The owner can compare any two runs by model calls, tokens and wall time from the
+  past-runs list, without opening either run.
 
 ## Future Scope (not planned in M2)
 
@@ -223,4 +243,7 @@ well-defined end state, never a hung or crashed run.
   end the run, since no safe default plan exists.
 - A failed parallel branch does not cancel the others; the merge works with what succeeded and
   the run ends `error` only if every branch failed.
-- Comparing runs side by side and editing prompts in the UI are out of scope (Phase 2).
+- Comparing runs side by side and editing prompts in the UI are out of scope (Phase 2); the
+  per-run totals (FR-020) are the M2 comparison aid.
+- With reasoning off, decision and worker calls take seconds; turning it on is a config change
+  that yields a new `config_version`, so before/after runs stay distinguishable.
