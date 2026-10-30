@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+@theme {
+  --color-paper: #eef1f4;
+  --color-panel: #f9fafb;
+  --color-ink: #1b2430;
+  --color-muted: #5b6878;
+  --color-rule: #c9d2dc;
+  --color-llm: #3a5bd9;
+  --color-tool: #0f7f81;
+  --color-step: #8492a6;
+  --color-signal: #e8b600;
+  --color-signal-ink: #8a6a00;
+  --color-fault: #c81e4a;
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+/* The active graph node is the one loud thing on the page: a signal lamp. */
+.lab-node--active {
+  border-color: var(--color-signal) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-signal) 35%, transparent);
+  animation: lab-lamp 1.1s ease-in-out infinite;
+}
+
+.lab-running {
+  animation: lab-lamp 1.1s ease-in-out infinite;
+}
+
+@keyframes lab-lamp {
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-signal) 15%, transparent);
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-node--active,
+  .lab-running {
+    animation: none;
+  }
+}

@@ -36,17 +36,17 @@ contracts/, quickstart.md)
 
 **Independent test**: scripted FakeLLM run over the WebSocket delivers every span with valid node ids.
 
-- [ ] T013 [P] [US1] Tool base (`Tool`, `ToolError`, scopes) and calculator parser in backend/src/agent_lab/tools/base.py, backend/src/agent_lab/tools/calculator.py
-- [ ] T014 [P] [US1] Deterministic get_weather in backend/src/agent_lab/tools/weather.py
-- [ ] T015 [P] [US1] Tests for calculator and weather in backend/tests/test_tools.py
-- [ ] T016 [P] [US1] OpenAI-compatible client in backend/src/agent_lab/llm/openai_compat.py; tests with httpx.MockTransport in backend/tests/test_llm_client.py
-- [ ] T017 [US1] ReActAgent (config, config_version, graph, start/step, run_to_completion) in backend/src/agent_lab/agents/react.py
-- [ ] T018 [US1] Test multi-step tool run (span tree, node ids, tokens, config_version) in backend/tests/test_react.py
-- [ ] T019 [US1] execute_run (tracer → store + bus, run_ended) in backend/src/agent_lab/runs.py
-- [ ] T020 [US1] API: POST /runs, WS /runs/{id}/stream, CORS, trusted hosts, WS origin check in backend/src/agent_lab/api.py, backend/src/agent_lab/main.py
-- [ ] T021 [US1] API tests: POST + live WS stream, origin/host rejection in backend/tests/test_api.py
-- [ ] T022 [P] [US1] Frontend types and fetch/ws helpers in frontend/src/lib/api.ts; span upsert/route/active node in frontend/src/lib/run-state.ts
-- [ ] T023 [US1] Page with PromptForm, GraphView, Waterfall, SpanDetail in frontend/src/app/page.tsx and frontend/src/components/
+- [X] T013 [P] [US1] Tool base (`Tool`, `ToolError`, scopes) and calculator parser in backend/src/agent_lab/tools/base.py, backend/src/agent_lab/tools/calculator.py
+- [X] T014 [P] [US1] Deterministic get_weather in backend/src/agent_lab/tools/weather.py
+- [X] T015 [P] [US1] Tests for calculator and weather in backend/tests/test_tools.py
+- [X] T016 [P] [US1] OpenAI-compatible client in backend/src/agent_lab/llm/openai_compat.py; tests with httpx.MockTransport in backend/tests/test_llm_client.py
+- [X] T017 [US1] ReActAgent (config, config_version, graph, start/step, run_to_completion) in backend/src/agent_lab/agents/react.py
+- [X] T018 [US1] Test multi-step tool run (span tree, node ids, tokens, config_version) in backend/tests/test_react.py
+- [X] T019 [US1] execute_run (tracer → store + bus, run_ended) in backend/src/agent_lab/runs.py
+- [X] T020 [US1] API: POST /runs, WS /runs/{id}/stream, CORS, trusted hosts, WS origin check in backend/src/agent_lab/api.py, backend/src/agent_lab/main.py
+- [X] T021 [US1] API tests: POST + live WS stream, origin/host rejection in backend/tests/test_api.py
+- [X] T022 [P] [US1] Frontend types and fetch/ws helpers in frontend/src/lib/api.ts; span upsert/route/active node in frontend/src/lib/run-state.ts
+- [X] T023 [US1] Page with PromptForm, GraphView, Waterfall, SpanDetail in frontend/src/app/page.tsx and frontend/src/components/
 
 ## Phase 4: User Story 2 — Replay a past run (P2)
 

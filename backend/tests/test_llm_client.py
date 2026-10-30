@@ -1,0 +1,103 @@
+import json
+
+import httpx
+import pytest
+
+from agent_lab.llm.base import LLMError
+from agent_lab.llm.openai_compat import OpenAICompatClient
+
+TOOLS = [{"type": "function", "function": {"name": "calculator", "parameters": {}}}]
+
+
+def client_with(handler: httpx.MockTransport, api_key: str = "") -> OpenAICompatClient:
+    return OpenAICompatClient(
+        base_url="http://llm.test/v1/",
+        model="m1",
+        api_key=api_key,
+        http=httpx.AsyncClient(transport=handler),
+    )
+
+
+@pytest.mark.anyio
+async def test_request_and_tool_call_parsing() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "model": "m1-served",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "calculator",
+                                        "arguments": '{"expression": "1+1"}',
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+            },
+        )
+
+    client = client_with(httpx.MockTransport(handler), api_key="sk-test")
+    messages = [{"role": "user", "content": "1+1?"}]
+    result = await client.chat(messages, TOOLS)
+
+    request = seen[0]
+    assert str(request.url) == "http://llm.test/v1/chat/completions"
+    assert request.headers["authorization"] == "Bearer sk-test"
+    assert json.loads(request.content) == {
+        "model": "m1",
+        "messages": messages,
+        "stream": False,
+        "tools": TOOLS,
+    }
+    assert result.tool_calls[0].name == "calculator"
+    assert result.tool_calls[0].arguments == '{"expression": "1+1"}'
+    assert (result.tokens_in, result.tokens_out, result.model) == (11, 7, "m1-served")
+
+
+@pytest.mark.anyio
+async def test_no_auth_header_without_key() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "hi"}}]})
+
+    result = await client_with(httpx.MockTransport(handler)).chat([], [])
+    assert "authorization" not in seen[0].headers
+    assert "tools" not in json.loads(seen[0].content)
+    assert result.content == "hi"
+    assert result.tool_calls == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "response",
+    [httpx.Response(500, text="boom"), httpx.Response(200, json={"nope": 1})],
+)
+async def test_errors_become_llm_error(response: httpx.Response) -> None:
+    client = client_with(httpx.MockTransport(lambda _: response))
+    with pytest.raises(LLMError):
+        await client.chat([], [])
+
+
+@pytest.mark.anyio
+async def test_transport_error_becomes_llm_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    with pytest.raises(LLMError):
+        await client_with(httpx.MockTransport(handler)).chat([], [])
