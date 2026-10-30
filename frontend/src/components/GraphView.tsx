@@ -70,9 +70,10 @@ const NODE_WIDTH = 150;
 const NODE_HEIGHT = 44;
 
 function handlesFor(source: GraphNode, target: GraphNode, back: boolean) {
-  if (back) return { sourceHandle: "b-out", targetHandle: "b-in" }; // loop drawn below
+  // Tools sit below their caller, possibly to either side: vertical handles regardless of x.
   if (source.kind === "llm" && target.kind === "tool") return { sourceHandle: "b-out", targetHandle: "t-in" };
   if (source.kind === "tool" && target.kind === "llm") return { sourceHandle: "t-out", targetHandle: "b-in" };
+  if (back) return { sourceHandle: "b-out", targetHandle: "b-in" }; // loop drawn below
   return { sourceHandle: "r", targetHandle: "l" };
 }
 
