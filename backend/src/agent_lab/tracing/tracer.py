@@ -1,7 +1,7 @@
 """Span creation. Every LLM and tool call in an agent goes through `Tracer.span`."""
 
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from secrets import token_hex
@@ -42,7 +42,7 @@ class Tracer:
         node_id: str,
         input: Any = None,
         attributes: dict[str, Any] | None = None,
-    ) -> AsyncIterator[Span]:
+    ) -> AsyncGenerator[Span, None]:
         """Open a child of the current span. Set `output`, `error`, tokens on the yielded span.
 
         An exception escaping the block is recorded as the span's error and re-raised.

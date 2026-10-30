@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
 REDACTED = "[REDACTED]"
 
@@ -40,12 +40,14 @@ def redact(value: Any, secrets: Iterable[str] = ()) -> Any:
 
 def _redact(value: Any, secrets: list[str]) -> Any:
     if isinstance(value, dict):
+        mapping = cast(dict[Any, Any], value)
         return {
             k: REDACTED if isinstance(k, str) and _is_sensitive(k) else _redact(v, secrets)
-            for k, v in value.items()
+            for k, v in mapping.items()
         }
     if isinstance(value, list | tuple):
-        return [_redact(v, secrets) for v in value]
+        items = cast(list[Any] | tuple[Any, ...], value)
+        return [_redact(v, secrets) for v in items]
     if isinstance(value, str):
         for secret in secrets:
             value = value.replace(secret, REDACTED)

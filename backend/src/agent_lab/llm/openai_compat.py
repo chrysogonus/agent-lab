@@ -44,8 +44,9 @@ class OpenAICompatClient:
 
 
 def _parse(data: dict[str, Any]) -> ChatResponse:
-    message = data["choices"][0]["message"]
-    usage = data.get("usage") or {}
+    message: dict[str, Any] = data["choices"][0]["message"]
+    usage: dict[str, Any] = data.get("usage") or {}
+    calls: list[dict[str, Any]] = message.get("tool_calls") or []
     return ChatResponse(
         content=message.get("content"),
         # Ollama names it "reasoning"; vLLM and DeepSeek use "reasoning_content".
@@ -56,7 +57,7 @@ def _parse(data: dict[str, Any]) -> ChatResponse:
                 name=call["function"]["name"],
                 arguments=call["function"].get("arguments") or "{}",
             )
-            for call in message.get("tool_calls") or []
+            for call in calls
         ],
         tokens_in=usage.get("prompt_tokens"),
         tokens_out=usage.get("completion_tokens"),

@@ -74,6 +74,7 @@ contracts/, quickstart.md)
 - [X] T032 [US1] Mark every edge for tools called in one model turn in frontend/src/lib/run-state.ts
 - [X] T033 [US1] Keep graph edges visible while a live run re-renders the graph (pass `measured` with node size) in frontend/src/components/GraphView.tsx
 - [X] T034 [US1] Add vitest and tests for frontend/src/lib/run-state.ts in frontend/src/lib/run-state.test.ts; run them in `make check`
+- [X] T035 Switch pyright to strict and fix findings across backend/src and backend/tests; add httpx2 (dev) for Starlette's test client in backend/pyproject.toml
 
 ## Manual check results (T030, 2026-10-30)
 

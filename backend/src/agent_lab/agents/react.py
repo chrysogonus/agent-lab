@@ -3,6 +3,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import cast
 
 from pydantic import BaseModel
 
@@ -189,8 +190,9 @@ def _parse_arguments(tool: Tool, raw: str) -> dict[str, object]:
         raise ToolError(f"arguments are not valid JSON: {exc.msg}") from exc
     if not isinstance(args, dict):
         raise ToolError("arguments must be a JSON object")
-    expected = set(tool.parameters.get("properties", {}))
-    missing = set(tool.parameters.get("required", [])) - args.keys()
+    args = cast(dict[str, object], args)  # JSON object keys are always strings
+    expected: set[str] = set(tool.parameters.get("properties", {}))
+    missing: set[str] = set(tool.parameters.get("required", [])) - args.keys()
     extra = args.keys() - expected
     if missing or extra:
         raise ToolError(f"invalid arguments: missing {sorted(missing)}, unexpected {sorted(extra)}")

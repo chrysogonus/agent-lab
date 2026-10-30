@@ -14,7 +14,7 @@ make dev-frontend   # Next.js on 127.0.0.1:3000
 cd backend && uv run pytest tests/test_react.py -k max_iterations   # one test
 ```
 
-Gates in `make check`: backend `ruff check`, `ruff format --check`, `pyright`, `pytest`;
+Gates in `make check`: backend `ruff check`, `ruff format --check`, `pyright` (strict), `pytest`;
 frontend `eslint`, `next typegen && tsc --noEmit`, `vitest run`. When a gate keeps failing, stop and
 report; keep every gate at its current strictness.
 

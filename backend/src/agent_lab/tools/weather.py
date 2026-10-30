@@ -8,7 +8,7 @@ from agent_lab.tools.base import Tool, ToolError
 _CONDITIONS = ["sunny", "cloudy", "rain", "snow", "fog", "windy"]
 
 
-def get_weather(city: str) -> str:
+def get_weather(city: object) -> str:  # object: arguments come from model JSON
     if not isinstance(city, str) or not city.strip() or len(city) > 100:
         raise ToolError("city must be a non-empty string of at most 100 characters")
     name = city.strip()

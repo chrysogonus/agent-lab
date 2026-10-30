@@ -19,6 +19,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.16.0",
     "pyright>=1.1.414",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
@@ -35,7 +36,7 @@ ignore = ["S101"]  # assert is fine in tests
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.12"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
 

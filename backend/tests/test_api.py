@@ -31,7 +31,7 @@ class GatedLLM(FakeLLM):
 
 
 def read_until_run_ended(ws: Any) -> list[dict[str, Any]]:
-    events = []
+    events: list[dict[str, Any]] = []
     while True:
         event = ws.receive_json()
         events.append(event)

@@ -134,7 +134,7 @@ class Store:
             rows = self._db.execute(
                 "SELECT * FROM spans WHERE run_id=? ORDER BY started_at, rowid", (run_id,)
             ).fetchall()
-        spans = []
+        spans: list[Span] = []
         for r in rows:
             data = dict(r)
             for key in _SPAN_JSON:

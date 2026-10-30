@@ -41,9 +41,12 @@
   services are reachable via DNS rebinding.
 
 ## Type checking
-- Decision: pyright `standard` mode over `src` and `tests`.
-- Rationale: strict mode mostly flags sqlite/JSON `Any`s; standard catches real errors without
-  noise. Can be raised later.
+- Decision: pyright `strict` mode over `src` and `tests` (raised from `standard` on 2026-10-30,
+  owner's call).
+- Rationale: cheaper to adopt while the codebase is small. JSON from the model and SQLite rows
+  get explicit types at the boundary (`cast` only where the JSON spec guarantees the shape).
+  Tool functions take `object` because model arguments are untrusted; their `isinstance` checks
+  are the validation.
 
 ## Frontend tests
 - Decision: vitest (approved by the owner on 2026-10-30) over the pure view logic in

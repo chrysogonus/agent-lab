@@ -18,7 +18,8 @@ and the route taken from span `node_id`s.
 **Language/Version**: Python 3.12 (backend), TypeScript / Next.js App Router (frontend)
 
 **Primary Dependencies**: FastAPI, uvicorn[standard], pydantic, httpx; Next.js, React,
-Tailwind, @xyflow/react. Dev: ruff, pyright, pytest (+ anyio plugin shipped with anyio), eslint, vitest.
+Tailwind, @xyflow/react. Dev: ruff, pyright (strict), pytest (+ anyio plugin shipped with anyio), httpx2 (for
+Starlette's test client), eslint, vitest.
 
 **Storage**: SQLite via stdlib `sqlite3`, one file (`AGENT_LAB_DB`, default `backend/data/agent_lab.db`)
 

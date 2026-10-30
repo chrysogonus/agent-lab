@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -6,7 +7,9 @@ import pytest
 from agent_lab.llm.base import LLMError
 from agent_lab.llm.openai_compat import OpenAICompatClient
 
-TOOLS = [{"type": "function", "function": {"name": "calculator", "parameters": {}}}]
+TOOLS: list[dict[str, Any]] = [
+    {"type": "function", "function": {"name": "calculator", "parameters": {}}}
+]
 
 
 def client_with(handler: httpx.MockTransport, api_key: str = "") -> OpenAICompatClient:

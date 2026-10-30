@@ -16,7 +16,7 @@ class Tool:
     parameters: dict[str, Any]  # JSON Schema of the arguments object
     fn: Callable[..., str]
     # Access a tool needs beyond pure computation, e.g. {"net:api.example.com"}.
-    scopes: frozenset[str] = field(default_factory=frozenset)
+    scopes: frozenset[str] = field(default_factory=frozenset[str])
 
     def schema(self) -> dict[str, Any]:
         """OpenAI-style function tool declaration."""

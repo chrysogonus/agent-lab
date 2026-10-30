@@ -104,7 +104,7 @@ class _Parser:
         raise ToolError(f"unexpected token {text!r}")
 
 
-def calculate(expression: str) -> str:
+def calculate(expression: object) -> str:  # object: arguments come from model JSON
     if not isinstance(expression, str) or not expression.strip():
         raise ToolError("expression must be a non-empty string")
     if len(expression) > MAX_LENGTH:

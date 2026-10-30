@@ -44,7 +44,7 @@ Rationale: seeing every step is the point of the lab.
 ### V. Quality Gates and Traceability
 
 - One command, `make check`, runs every gate:
-  backend `ruff check`, `ruff format --check`, `pyright`, `pytest`;
+  backend `ruff check`, `ruff format --check`, `pyright` (strict), `pytest`;
   frontend `eslint`, `tsc --noEmit`, `vitest run`.
 - A gate MUST pass before any task is marked done. Gates MUST NOT be weakened to make a change
   pass; a persistently failing gate is reported to the owner instead.
@@ -57,7 +57,8 @@ Rationale: seeing every step is the point of the lab.
 ## Technology Constraints
 
 - Backend: Python 3.12, FastAPI (served by uvicorn), uv, pydantic, sqlite3 (stdlib), httpx.
-  Dev: ruff, pyright, pytest (async tests via the anyio pytest plugin).
+  Dev: ruff, pyright, pytest (async tests via the anyio pytest plugin), httpx2 (Starlette
+  test client).
 - Frontend: Next.js (TypeScript, App Router), Tailwind, pnpm, @xyflow/react. Dev: eslint,
   vitest. PixiJS is
   reserved for Phase 2.
@@ -86,4 +87,4 @@ Rationale: seeing every step is the point of the lab.
 - Reviews verify gate results, span coverage of new LLM/tool calls, and requirement → test
   mapping.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
+**Version**: 1.2.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
