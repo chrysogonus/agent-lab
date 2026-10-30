@@ -22,15 +22,15 @@ contracts/, quickstart.md)
 
 ## Phase 2: Foundational (blocks all stories)
 
-- [ ] T004 [P] Span model and SpanKind (`llm | tool | route | retrieve | rerank | memory | step`; `ended_at` null while running) in backend/src/agent_lab/tracing/span.py
-- [ ] T005 [P] Redaction (sensitive keys, `Bearer …`, `sk-…`, known secret values) in backend/src/agent_lab/tracing/redact.py
-- [ ] T006 Tracer async context manager with contextvar parenting, redaction before sink, error capture in backend/src/agent_lab/tracing/tracer.py
-- [ ] T007 [P] Graph/Node/Edge models in backend/src/agent_lab/graph.py
-- [ ] T008 [P] SQLite store (`runs`, `spans`, upsert span, `prompt` 1..4000 chars, status `running | completed | max_iterations | error`) in backend/src/agent_lab/store.py
-- [ ] T009 [P] Per-run pub/sub in backend/src/agent_lab/bus.py
-- [ ] T010 [P] LLMClient protocol, ChatResponse, ToolCall, LLMError in backend/src/agent_lab/llm/base.py; FakeLLM in backend/src/agent_lab/llm/fake.py
-- [ ] T011 [P] Settings from env in backend/src/agent_lab/config.py
-- [ ] T012 Tests: tracer nesting/error capture and redaction units in backend/tests/test_tracing.py
+- [X] T004 [P] Span model and SpanKind (`llm | tool | route | retrieve | rerank | memory | step`; `ended_at` null while running) in backend/src/agent_lab/tracing/span.py
+- [X] T005 [P] Redaction (sensitive keys, `Bearer …`, `sk-…`, known secret values) in backend/src/agent_lab/tracing/redact.py
+- [X] T006 Tracer async context manager with contextvar parenting, redaction before sink, error capture in backend/src/agent_lab/tracing/tracer.py
+- [X] T007 [P] Graph/Node/Edge models in backend/src/agent_lab/graph.py
+- [X] T008 [P] SQLite store (`runs`, `spans`, upsert span, `prompt` 1..4000 chars, status `running | completed | max_iterations | error`) in backend/src/agent_lab/store.py
+- [X] T009 [P] Per-run pub/sub in backend/src/agent_lab/bus.py
+- [X] T010 [P] LLMClient protocol, ChatResponse, ToolCall, LLMError in backend/src/agent_lab/llm/base.py; FakeLLM in backend/src/agent_lab/llm/fake.py
+- [X] T011 [P] Settings from env in backend/src/agent_lab/config.py
+- [X] T012 Tests: tracer nesting/error capture and redaction units in backend/tests/test_tracing.py
 
 ## Phase 3: User Story 1 — Run the agent and watch it live (P1) 🎯 MVP
 
