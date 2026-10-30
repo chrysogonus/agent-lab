@@ -68,3 +68,9 @@ export async function startRun(prompt: string): Promise<Run> {
   if (!response.ok) throw new Error(`Starting the run failed (HTTP ${response.status}).`);
   return response.json();
 }
+
+export async function listRuns(): Promise<Run[]> {
+  const response = await fetch(`${API_URL}/runs`);
+  if (!response.ok) throw new Error(`Loading past runs failed (HTTP ${response.status}).`);
+  return response.json();
+}

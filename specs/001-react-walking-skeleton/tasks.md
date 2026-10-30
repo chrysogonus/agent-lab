@@ -52,9 +52,9 @@ contracts/, quickstart.md)
 
 **Independent test**: after a completed run and a store reopen, GET and WS return identical spans.
 
-- [ ] T024 [US2] GET /runs and GET /runs/{id} in backend/src/agent_lab/api.py
-- [ ] T025 [US2] Tests: persistence across store reopen in backend/tests/test_store.py; replay via GET and WS equals live in backend/tests/test_api.py
-- [ ] T026 [US2] RunList component and replay wiring in frontend/src/components/RunList.tsx, frontend/src/app/page.tsx
+- [X] T024 [US2] GET /runs and GET /runs/{id} in backend/src/agent_lab/api.py
+- [X] T025 [US2] Tests: persistence across store reopen in backend/tests/test_store.py; replay via GET and WS equals live in backend/tests/test_api.py
+- [X] T026 [US2] RunList component and replay wiring in frontend/src/components/RunList.tsx, frontend/src/app/page.tsx
 
 ## Phase 5: User Story 3 — Failure paths (P3)
 

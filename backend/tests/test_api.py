@@ -112,3 +112,32 @@ def test_cors(store: Store) -> None:
         assert ok.headers["access-control-allow-origin"] == ORIGIN
         bad = client.options("/runs", headers={"origin": "https://evil.test", **preflight})
         assert "access-control-allow-origin" not in bad.headers
+
+
+def test_replay_matches_live(tmp_path: Path) -> None:
+    path = tmp_path / "lab.db"
+    llm = FakeLLM([tool_call("get_weather", '{"city": "Oslo"}'), answer("cold")])
+    with TestClient(create_app(store=Store(path), llm=llm), base_url=BASE) as client:
+        run_id = client.post("/runs", json={"prompt": "Oslo?"}).json()["run_id"]
+        with client.websocket_connect(f"{WS_BASE}/runs/{run_id}/stream") as ws:
+            live = final_spans(read_until_run_ended(ws))
+
+    # A fresh store on the same file stands in for a backend restart.
+    with TestClient(create_app(store=Store(path), llm=FakeLLM([])), base_url=BASE) as client:
+        detail = client.get(f"/runs/{run_id}").json()
+        assert detail["run"]["status"] == "completed"
+        assert {s["span_id"]: s for s in detail["spans"]} == live
+        with client.websocket_connect(f"{WS_BASE}/runs/{run_id}/stream") as ws:
+            replay = read_until_run_ended(ws)
+        assert final_spans(replay) == live
+        assert replay[-1]["run"]["answer"] == "cold"
+        assert client.get("/runs/nope").status_code == 404
+
+
+def test_list_runs(store: Store) -> None:
+    llm = FakeLLM([answer("a"), answer("b")])
+    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+        first = client.post("/runs", json={"prompt": "one"}).json()["run_id"]
+        second = client.post("/runs", json={"prompt": "two"}).json()["run_id"]
+        listed = [r["run_id"] for r in client.get("/runs").json()]
+        assert listed == [second, first]

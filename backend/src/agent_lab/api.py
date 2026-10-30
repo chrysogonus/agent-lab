@@ -2,7 +2,7 @@
 
 import asyncio
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field
@@ -57,6 +57,17 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
         tasks.add(task)
         task.add_done_callback(tasks.discard)
         return run
+
+    @app.get("/runs")
+    async def list_runs() -> list[Run]:
+        return store.list_runs()
+
+    @app.get("/runs/{run_id}")
+    async def get_run(run_id: str) -> RunDetail:
+        run = store.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="unknown run")
+        return RunDetail(run=run, spans=store.get_spans(run_id))
 
     @app.websocket("/runs/{run_id}/stream")
     async def stream_run(ws: WebSocket, run_id: str) -> None:
