@@ -17,6 +17,7 @@ check-backend:
 check-frontend:
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
+	cd frontend && pnpm test
 
 dev-backend:
 	cd backend && uv run $(ENV_FILE) uvicorn agent_lab.main:app --host 127.0.0.1 --port 8000 --reload

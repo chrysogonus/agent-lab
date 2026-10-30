@@ -73,6 +73,7 @@ contracts/, quickstart.md)
 - [X] T031 [US1] Trace the model's reasoning text (`reasoning` / `reasoning_content`) on llm spans, never resend it, in backend/src/agent_lab/llm/openai_compat.py and backend/src/agent_lab/agents/react.py
 - [X] T032 [US1] Mark every edge for tools called in one model turn in frontend/src/lib/run-state.ts
 - [X] T033 [US1] Keep graph edges visible while a live run re-renders the graph (pass `measured` with node size) in frontend/src/components/GraphView.tsx
+- [X] T034 [US1] Add vitest and tests for frontend/src/lib/run-state.ts in frontend/src/lib/run-state.test.ts; run them in `make check`
 
 ## Manual check results (T030, 2026-10-30)
 
@@ -114,6 +115,8 @@ T002 ∥ T001; T004, T005, T007–T011 in parallel; T013–T016 and T022 in para
 | FR-017 | test_api.py::test_replay_matches_live, test_list_runs |
 | FR-018 | test_api.py::test_live_stream, test_replay_matches_live, test_unknown_run_ws |
 | FR-019 | test_api.py::test_rejects_foreign_origin_ws, test_rejects_foreign_host, test_cors; Makefile binds 127.0.0.1 (quickstart step 7) |
-| FR-020–FR-024 | quickstart.md manual steps 1–5 (no JS test runner approved in M1) |
-| FR-025 | `make check` |
+| FR-020, FR-022, FR-023 | quickstart.md manual steps 1, 3, 4 |
+| FR-021 | run-state.test.ts (activeNode, takenEdges incl. parallel tool calls); quickstart step 2 |
+| FR-024 | run-state.test.ts (applyEvent idempotent upserts for snapshot + live); quickstart step 5 |
+| FR-025 | `make check` (backend gates + eslint, tsc, vitest) |
 | FR-026 | files present (T029) |

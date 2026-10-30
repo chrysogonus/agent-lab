@@ -46,6 +46,8 @@
   noise. Can be raised later.
 
 ## Frontend tests
-- Decision: no JS test runner in M1 (not in the approved dependency list); UI requirements are
-  covered by manual checks in `quickstart.md`, and UI-relevant logic (route, active node) is
-  kept in `lib/run-state.ts` as pure functions so a runner can be added later.
+- Decision: vitest (approved by the owner on 2026-10-30) over the pure view logic in
+  `lib/run-state.ts`: event upserts, span tree, active node, taken edges. Rendering is checked
+  manually (quickstart) since it depends on React Flow layout in a real browser.
+- Rationale: the bugs found so far (path for parallel tool calls) live in that logic; no DOM
+  test environment (jsdom) needed.

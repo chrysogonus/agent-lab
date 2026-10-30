@@ -45,9 +45,11 @@ Rationale: seeing every step is the point of the lab.
 
 - One command, `make check`, runs every gate:
   backend `ruff check`, `ruff format --check`, `pyright`, `pytest`;
-  frontend `eslint`, `tsc --noEmit`.
+  frontend `eslint`, `tsc --noEmit`, `vitest run`.
 - A gate MUST pass before any task is marked done. Gates MUST NOT be weakened to make a change
   pass; a persistently failing gate is reported to the owner instead.
+- Frontend view logic (state reduction, graph highlighting) lives in pure modules covered by
+  vitest; components stay thin.
 - Tests MUST NOT require a real model; they use a `FakeLLM` that replays scripted responses.
 - Each functional requirement in a spec MUST map to at least one test, referenced in
   `tasks.md`.
@@ -56,7 +58,8 @@ Rationale: seeing every step is the point of the lab.
 
 - Backend: Python 3.12, FastAPI (served by uvicorn), uv, pydantic, sqlite3 (stdlib), httpx.
   Dev: ruff, pyright, pytest (async tests via the anyio pytest plugin).
-- Frontend: Next.js (TypeScript, App Router), Tailwind, pnpm, @xyflow/react. PixiJS is
+- Frontend: Next.js (TypeScript, App Router), Tailwind, pnpm, @xyflow/react. Dev: eslint,
+  vitest. PixiJS is
   reserved for Phase 2.
 - LLM access: a thin own client over the OpenAI-compatible `/v1/chat/completions` API with
   native tool calling. Provider, base URL and model come from the environment. Default target:
@@ -83,4 +86,4 @@ Rationale: seeing every step is the point of the lab.
 - Reviews verify gate results, span coverage of new LLM/tool calls, and requirement → test
   mapping.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
+**Version**: 1.1.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30

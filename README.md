@@ -30,7 +30,7 @@ Any OpenAI-compatible endpoint works: set `LLM_BASE_URL`, `LLM_MODEL` and `LLM_A
 ## Check
 
 ```bash
-make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc
+make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
 ```
 
 ## API

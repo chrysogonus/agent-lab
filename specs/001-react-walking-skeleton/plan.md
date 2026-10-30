@@ -18,12 +18,12 @@ and the route taken from span `node_id`s.
 **Language/Version**: Python 3.12 (backend), TypeScript / Next.js App Router (frontend)
 
 **Primary Dependencies**: FastAPI, uvicorn[standard], pydantic, httpx; Next.js, React,
-Tailwind, @xyflow/react. Dev: ruff, pyright, pytest (+ anyio plugin shipped with anyio), eslint.
+Tailwind, @xyflow/react. Dev: ruff, pyright, pytest (+ anyio plugin shipped with anyio), eslint, vitest.
 
 **Storage**: SQLite via stdlib `sqlite3`, one file (`AGENT_LAB_DB`, default `backend/data/agent_lab.db`)
 
 **Testing**: pytest with `FakeLLM`; FastAPI `TestClient` for HTTP and WebSocket;
-`httpx.MockTransport` for the model client
+`httpx.MockTransport` for the model client; vitest for `frontend/src/lib/run-state.ts`
 
 **Target Platform**: local Linux/WSL, loopback only
 

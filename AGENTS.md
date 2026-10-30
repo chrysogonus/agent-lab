@@ -15,7 +15,7 @@ cd backend && uv run pytest tests/test_react.py -k max_iterations   # one test
 ```
 
 Gates in `make check`: backend `ruff check`, `ruff format --check`, `pyright`, `pytest`;
-frontend `eslint`, `next typegen && tsc --noEmit`. When a gate keeps failing, stop and
+frontend `eslint`, `next typegen && tsc --noEmit`, `vitest run`. When a gate keeps failing, stop and
 report; keep every gate at its current strictness.
 
 ## Layout
@@ -24,7 +24,7 @@ report; keep every gate at its current strictness.
   `tracing/` (span, tracer, redaction), `store.py` (SQLite), `bus.py`, `runs.py`, `api.py`.
 - `backend/tests/`: pytest; `helpers.py` builds scripted runs.
 - `frontend/src/`: `app/page.tsx` (the one page), `components/`, `lib/run-state.ts` (pure view
-  logic). Next.js 16 differs from older versions: read `frontend/AGENTS.md` before editing.
+  logic, tested in `lib/run-state.test.ts`; keep testable logic there, not in components). Next.js 16 differs from older versions: read `frontend/AGENTS.md` before editing.
 
 ## Contracts
 

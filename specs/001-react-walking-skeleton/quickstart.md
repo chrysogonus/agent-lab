@@ -6,7 +6,7 @@ Prerequisites: uv, Python 3.12, Node 22 + pnpm, make. Optional: Ollama with `qwe
 
 ```bash
 make install   # uv sync + pnpm install
-make check     # ruff, ruff format --check, pyright, pytest, eslint, tsc --noEmit
+make check     # ruff, ruff format --check, pyright, pytest, eslint, tsc --noEmit, vitest
 ```
 
 Expected: all gates pass; pytest uses only `FakeLLM` / mocked HTTP.
