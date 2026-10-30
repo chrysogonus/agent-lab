@@ -35,6 +35,17 @@ they are more technical than a typical spec.
    redacted before spans are stored. Tools get no filesystem or network access unless
    explicitly scoped.
 
+## Clarifications
+
+### Session 2026-10-30
+
+- Q: Should the UI show model output token-by-token while an LLM span is running, or only when
+  the span ends? → A: Span-level only; model calls are non-streaming.
+- Q: What should an LLM span's input contain? → A: The full message list sent to the model
+  (after redaction).
+- Q: Should a running run be cancellable from the UI in M1? → A: No; the iteration cap bounds
+  every run, cancellation comes with the M4 harness.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is the project owner, a senior engineer studying agent behavior on a local machine.
@@ -149,8 +160,9 @@ is a basic safety budget.
 
 - **FR-010**: Every agent iteration, model call and tool call MUST produce a span with all
   fields of core contract 1, nested via `parent_span_id` (iteration → model/tool calls).
-- **FR-011**: Model spans MUST record the model name and input/output token counts reported by
-  the provider.
+- **FR-011**: Model spans MUST record the model name, the full message list sent (as input),
+  the response (as output) and input/output token counts reported by the provider. Model calls
+  are non-streaming; spans update only on start and end.
 - **FR-012**: The agent MUST declare its static graph (nodes and edges) as data, and every
   span MUST reference a node id from that graph.
 - **FR-013**: Each run MUST record `agent_id` and a `config_version` derived deterministically
@@ -232,6 +244,7 @@ is a basic safety budget.
   errors end the run.
 - Default model for manual runs is `qwen3:8b` on local Ollama; it must be pulled separately.
 - Run history is kept indefinitely in a local database file; no retention policy in M1.
+- Runs cannot be cancelled in M1; the iteration cap bounds them.
 - Multiple runs may execute concurrently; each streams independently.
 - The ReAct graph has one node per tool so the route taken is visible:
   `start → llm → {calculator, get_weather} → llm → end`.
