@@ -5,9 +5,11 @@ import asyncio
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from agent_lab.agents.registry import AGENTS
 from agent_lab.bus import Bus
+from agent_lab.graph import Graph
 from agent_lab.llm.base import LLMClient
 from agent_lab.runs import execute_run, new_run
 from agent_lab.store import Run, Store
@@ -19,6 +21,22 @@ ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 class RunRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
+    agent_id: str = "react"
+
+    @field_validator("agent_id")
+    @classmethod
+    def known_agent(cls, agent_id: str) -> str:
+        if agent_id not in AGENTS:
+            raise ValueError(f"unknown agent {agent_id!r}")
+        return agent_id
+
+
+class AgentInfo(BaseModel):
+    id: str
+    name: str
+    description: str
+    sample_prompt: str
+    graph: Graph
 
 
 class RunDetail(BaseModel):
@@ -39,9 +57,22 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
     bus = Bus()
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
+    @app.get("/agents")
+    async def list_agents() -> list[AgentInfo]:
+        return [
+            AgentInfo(
+                id=spec.id,
+                name=spec.name,
+                description=spec.description,
+                sample_prompt=spec.sample_prompt,
+                graph=spec.graph(spec.make_config(llm)),
+            )
+            for spec in AGENTS.values()
+        ]
+
     @app.post("/runs", status_code=status.HTTP_202_ACCEPTED)
     async def start_run(body: RunRequest) -> Run:
-        run, config = new_run(body.prompt, llm, secrets)
+        run, config = new_run(body.prompt, body.agent_id, llm, secrets)
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(

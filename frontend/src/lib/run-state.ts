@@ -1,5 +1,5 @@
 // Pure view logic shared by live runs and replays: both are built from the same stream events.
-import type { Graph, Run, Span, StreamEvent } from "./api";
+import type { AgentInfo, Graph, Run, Span, StreamEvent } from "./api";
 
 export type RunView = { run: Run | null; spans: Record<string, Span>; error: string | null };
 
@@ -43,10 +43,11 @@ export function spanRows(spans: Record<string, Span>): { span: Span; depth: numb
   return rows;
 }
 
-/** The node of the most recently started span that is still running. */
-export function activeNode(spans: Record<string, Span>): string | null {
-  const running = byStart(spans).filter((s) => s.ended_at == null);
-  return running.at(-1)?.node_id ?? null;
+/** Nodes of running spans with no running child: several while branches run in parallel. */
+export function activeNodes(spans: Record<string, Span>): Set<string> {
+  const running = Object.values(spans).filter((s) => s.ended_at == null);
+  const parents = new Set(running.map((s) => s.parent_span_id));
+  return new Set(running.filter((s) => !parents.has(s.span_id)).map((s) => s.node_id));
 }
 
 /**
@@ -83,4 +84,14 @@ export function edgeKey(source: string, target: string): string {
 
 export function durationMs(span: Span, now: number): number {
   return Math.round(((span.ended_at ?? now) - span.started_at) * 1000);
+}
+
+/** The agent to describe and preview before a run, or null if it is not listed. */
+export function agentPreview(agents: AgentInfo[], id: string): AgentInfo | null {
+  return agents.find((a) => a.id === id) ?? null;
+}
+
+/** Display name for a run's agent; the raw id when the agent is not (or no longer) listed. */
+export function agentName(agents: AgentInfo[], id: string): string {
+  return agentPreview(agents, id)?.name ?? id;
 }

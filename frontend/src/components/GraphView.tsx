@@ -21,6 +21,7 @@ const KIND_COLOR: Record<GraphNode["kind"], string> = {
   end: "var(--color-step)",
   llm: "var(--color-llm)",
   tool: "var(--color-tool)",
+  code: "var(--color-step)",
 };
 
 // Hidden handles: left/right for the main line, top/bottom pairs for the llm <-> tool loop.
@@ -42,6 +43,7 @@ function LabNode({ data }: NodeProps<Node<LabNodeData>>) {
       }`}
       style={{
         borderColor: data.state === "idle" ? "var(--color-rule)" : color,
+        borderStyle: data.kind === "code" ? "dashed" : undefined, // code step, no model call
         boxShadow: data.state === "visited" ? `inset 4px 0 0 ${color}` : undefined,
       }}
     >
@@ -80,7 +82,7 @@ export function GraphView({
   taken,
 }: {
   graph: Graph;
-  active: string | null;
+  active: Set<string>;
   visited: Set<string>;
   taken: Set<string>;
 }) {
@@ -95,7 +97,7 @@ export function GraphView({
     data: {
       label: n.label,
       kind: n.kind,
-      state: n.id === active ? "active" : visited.has(n.id) ? "visited" : "idle",
+      state: active.has(n.id) ? "active" : visited.has(n.id) ? "visited" : "idle",
     },
   }));
   const edges: Edge[] = graph.edges.map((e) => {

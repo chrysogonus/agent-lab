@@ -1,4 +1,4 @@
-// Types mirror backend/src/agent_lab (Span, Run, Graph). See specs/001-react-walking-skeleton/contracts.
+// Types mirror backend/src/agent_lab (Span, Run, Graph). See specs/00*/contracts.
 
 export type SpanKind = "llm" | "tool" | "route" | "retrieve" | "rerank" | "memory" | "step";
 
@@ -26,7 +26,7 @@ export type Span = {
 export type GraphNode = {
   id: string;
   label: string;
-  kind: "start" | "llm" | "tool" | "end";
+  kind: "start" | "llm" | "tool" | "code" | "end";
   x: number;
   y: number;
 };
@@ -48,6 +48,14 @@ export type Run = {
   ended_at: number | null;
 };
 
+export type AgentInfo = {
+  id: string;
+  name: string;
+  description: string;
+  sample_prompt: string;
+  graph: Graph;
+};
+
 export type StreamEvent =
   | { type: "span_started" | "span_ended"; span: Span }
   | { type: "run_ended"; run: Run }
@@ -59,11 +67,11 @@ export function streamUrl(runId: string): string {
   return `${API_URL.replace(/^http/, "ws")}/runs/${runId}/stream`;
 }
 
-export async function startRun(prompt: string): Promise<Run> {
+export async function startRun(prompt: string, agentId: string): Promise<Run> {
   const response = await fetch(`${API_URL}/runs`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, agent_id: agentId }),
   });
   if (!response.ok) throw new Error(`Starting the run failed (HTTP ${response.status}).`);
   return response.json();
@@ -72,5 +80,11 @@ export async function startRun(prompt: string): Promise<Run> {
 export async function listRuns(): Promise<Run[]> {
   const response = await fetch(`${API_URL}/runs`);
   if (!response.ok) throw new Error(`Loading past runs failed (HTTP ${response.status}).`);
+  return response.json();
+}
+
+export async function listAgents(): Promise<AgentInfo[]> {
+  const response = await fetch(`${API_URL}/agents`);
+  if (!response.ok) throw new Error(`Loading agents failed (HTTP ${response.status}).`);
   return response.json();
 }

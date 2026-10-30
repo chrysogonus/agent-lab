@@ -4,31 +4,32 @@ import logging
 import time
 import uuid
 
-from agent_lab.agents.react import AGENT_ID, ReActAgent, ReActConfig, build_graph
+from pydantic import BaseModel
+
+from agent_lab.agents.registry import AGENTS
 from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
 from agent_lab.llm.base import LLMClient
 from agent_lab.store import Run, RunStatus, Store
-from agent_lab.tools.calculator import CALCULATOR
-from agent_lab.tools.weather import WEATHER
 from agent_lab.tracing.redact import redact
 from agent_lab.tracing.span import Span
 from agent_lab.tracing.tracer import Tracer
 
 log = logging.getLogger(__name__)
 
-TOOLS = [CALCULATOR, WEATHER]
 
-
-def new_run(prompt: str, llm: LLMClient, secrets: tuple[str, ...] = ()) -> tuple[Run, ReActConfig]:
-    config = ReActConfig(model=llm.model, tools=[t.name for t in TOOLS])
+def new_run(
+    prompt: str, agent_id: str, llm: LLMClient, secrets: tuple[str, ...] = ()
+) -> tuple[Run, BaseModel]:
+    spec = AGENTS[agent_id]
+    config = spec.make_config(llm)
     run = Run(
         run_id=uuid.uuid4().hex,
-        agent_id=AGENT_ID,
+        agent_id=agent_id,
         config_version=config_version(config),
         prompt=redact(prompt, secrets),
         status="running",
-        graph=build_graph(config.tools),
+        graph=spec.graph(config),
         config=config.model_dump(),
         started_at=time.time(),
     )
@@ -39,7 +40,7 @@ async def execute_run(
     *,
     run: Run,
     prompt: str,
-    config: ReActConfig,
+    config: BaseModel,
     llm: LLMClient,
     store: Store,
     bus: Bus,
@@ -56,12 +57,12 @@ async def execute_run(
         sink=sink,
         secrets=secrets,
     )
-    agent = ReActAgent(llm=llm, tools=TOOLS, config=config, tracer=tracer)
+    agent = AGENTS[run.agent_id].create(llm, config, tracer)
     status: RunStatus = "error"
     answer: str | None = None
     try:
-        state = await agent.run(prompt)
-        status, answer = state.status, state.answer
+        result = await agent.run(prompt)
+        status, answer = result.status, result.answer
     except Exception:
         # Already recorded on the open spans; keep the server alive for the next run.
         log.exception("run %s failed", run.run_id)

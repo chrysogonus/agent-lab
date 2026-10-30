@@ -5,7 +5,7 @@ from typing import Any
 import anyio
 import pytest
 from fastapi.testclient import TestClient
-from helpers import answer, tool_call
+from helpers import answer, json_answer, tool_call
 from starlette.websockets import WebSocketDisconnect
 
 from agent_lab.api import create_app
@@ -150,3 +150,51 @@ def test_list_runs(store: Store) -> None:
         second = client.post("/runs", json={"prompt": "two"}).json()["run_id"]
         listed = [r["run_id"] for r in client.get("/runs").json()]
         assert listed == [second, first]
+
+
+def test_list_agents(store: Store) -> None:
+    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+        agents = client.get("/agents").json()
+    assert [a["id"] for a in agents] == [
+        "react",
+        "chain",
+        "routing",
+        "parallel",
+        "orchestrator",
+        "evaluator",
+    ]
+    for agent in agents:
+        assert agent["name"] and agent["description"] and agent["sample_prompt"]
+        assert {"start", "end"} <= {n["id"] for n in agent["graph"]["nodes"]}
+
+
+def test_post_run_defaults_to_react(store: Store) -> None:
+    with TestClient(create_app(store=store, llm=FakeLLM([answer("hi")])), base_url=BASE) as client:
+        run = client.post("/runs", json={"prompt": "hi"}).json()
+    assert run["agent_id"] == "react"
+    assert run["config"]["reasoning"] is True
+
+
+def test_unknown_agent_id_422(store: Store) -> None:
+    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+        response = client.post("/runs", json={"prompt": "hi", "agent_id": "nope"})
+    assert response.status_code == 422
+
+
+def test_workflow_run_streams(store: Store) -> None:
+    llm = FakeLLM([json_answer({"label": "general"}), answer("Paris")])
+    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+        run = client.post("/runs", json={"prompt": "Capital of France?", "agent_id": "routing"})
+        run = run.json()
+        with client.websocket_connect(f"{WS_BASE}/runs/{run['run_id']}/stream") as ws:
+            events = read_until_run_ended(ws)
+
+    ended_run = events[-1]["run"]
+    assert (ended_run["status"], ended_run["answer"]) == ("completed", "Paris")
+    assert (run["agent_id"], run["config"]["reasoning"]) == ("routing", False)
+    nodes = {n["id"] for n in run["graph"]["nodes"]}
+    spans = final_spans(events).values()
+    assert {s["node_id"] for s in spans} <= nodes
+    assert {(s["agent_id"], s["config_version"]) for s in spans} == {
+        ("routing", run["config_version"])
+    }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { Graph, Run, Span, SpanKind } from "./api";
+import type { AgentInfo, Graph, Run, Span, SpanKind } from "./api";
 import {
-  activeNode,
+  activeNodes,
+  agentName,
+  agentPreview,
   applyEvent,
   durationMs,
   edgeKey,
@@ -114,18 +116,54 @@ describe("spanRows", () => {
   });
 });
 
-describe("activeNode", () => {
-  it("is the node of the most recently started running span", () => {
+describe("activeNodes", () => {
+  it("is the node of the innermost running span", () => {
     const spans = bySpanId(
       span("root", "start", 0, null),
       span("it1", "llm", 1, null, "root"),
       span("tool", "tool:calculator", 2, null, "it1", "tool"),
     );
-    expect(activeNode(spans)).toBe("tool:calculator");
+    expect(activeNodes(spans)).toEqual(new Set(["tool:calculator"]));
   });
 
-  it("is null once everything has ended", () => {
-    expect(activeNode(bySpanId(span("root", "start", 0, 1)))).toBeNull();
+  it("holds every branch running in parallel", () => {
+    const spans = bySpanId(
+      span("root", "start", 0, null),
+      span("sections", "start", 1, null, "root"),
+      span("a", "clarity", 2, null, "sections", "llm"),
+      span("b", "tone", 2, null, "sections", "llm"),
+      span("c", "claims", 2, null, "sections", "llm"),
+    );
+    expect(activeNodes(spans)).toEqual(new Set(["clarity", "tone", "claims"]));
+  });
+
+  it("drops a branch once it ends", () => {
+    const spans = bySpanId(
+      span("root", "start", 0, null),
+      span("a", "clarity", 1, 2, "root", "llm"),
+      span("b", "tone", 1, null, "root", "llm"),
+    );
+    expect(activeNodes(spans)).toEqual(new Set(["tone"]));
+  });
+
+  it("is empty once everything has ended", () => {
+    expect(activeNodes(bySpanId(span("root", "start", 0, 1))).size).toBe(0);
+  });
+});
+
+describe("agentPreview and agentName", () => {
+  const agents: AgentInfo[] = [
+    { id: "react", name: "ReAct agent", description: "loop", sample_prompt: "2+2?", graph },
+  ];
+
+  it("finds a listed agent", () => {
+    expect(agentPreview(agents, "react")?.sample_prompt).toBe("2+2?");
+    expect(agentName(agents, "react")).toBe("ReAct agent");
+  });
+
+  it("falls back for an unknown agent", () => {
+    expect(agentPreview(agents, "gone")).toBeNull();
+    expect(agentName(agents, "gone")).toBe("gone");
   });
 });
 

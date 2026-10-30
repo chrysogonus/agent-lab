@@ -3,8 +3,17 @@
 import { useState } from "react";
 import { API_URL, startRun, type Run } from "@/lib/api";
 
-export function PromptForm({ onStarted }: { onStarted: (run: Run) => void }) {
-  const [prompt, setPrompt] = useState("What is 17*23 plus the current temperature in Berlin?");
+/** Mount with key={agentId} so switching agents resets the prompt to the new sample. */
+export function PromptForm({
+  agentId,
+  samplePrompt,
+  onStarted,
+}: {
+  agentId: string;
+  samplePrompt: string;
+  onStarted: (run: Run) => void;
+}) {
+  const [prompt, setPrompt] = useState(samplePrompt);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -13,7 +22,7 @@ export function PromptForm({ onStarted }: { onStarted: (run: Run) => void }) {
     setPending(true);
     setError(null);
     try {
-      onStarted(await startRun(prompt.trim()));
+      onStarted(await startRun(prompt.trim(), agentId));
     } catch (e) {
       setError(
         e instanceof TypeError
@@ -46,7 +55,7 @@ export function PromptForm({ onStarted }: { onStarted: (run: Run) => void }) {
         disabled={pending || !prompt.trim()}
         className="rounded-md bg-ink px-5 py-2 text-sm font-semibold text-panel hover:bg-llm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-llm disabled:opacity-50"
       >
-        {pending ? "Starting…" : "Run agent"}
+        {pending ? "Starting…" : "Run"}
       </button>
       {error && (
         <p role="alert" className="text-sm text-fault sm:basis-full">

@@ -1,4 +1,5 @@
-import type { Run } from "@/lib/api";
+import type { AgentInfo, Run } from "@/lib/api";
+import { agentName } from "@/lib/run-state";
 
 const STATUS_DOT: Record<Run["status"], string> = {
   running: "bg-signal",
@@ -18,10 +19,12 @@ function when(epochSeconds: number): string {
 
 export function RunList({
   runs,
+  agents,
   current,
   onOpen,
 }: {
   runs: Run[];
+  agents: AgentInfo[];
   current: string | null;
   onOpen: (run: Run) => void;
 }) {
@@ -40,6 +43,7 @@ export function RunList({
               run.run_id === current ? "bg-paper" : ""
             }`}
           >
+            <span className="text-xs font-semibold text-muted">{agentName(agents, run.agent_id)}</span>
             <span className="line-clamp-2 text-sm text-ink">{run.prompt}</span>
             <span className="flex items-center gap-2 text-xs text-muted">
               <span className={`size-2 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />

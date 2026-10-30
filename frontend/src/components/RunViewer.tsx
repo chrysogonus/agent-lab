@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Run } from "@/lib/api";
-import { activeNode, takenEdges } from "@/lib/run-state";
+import { activeNodes, takenEdges } from "@/lib/run-state";
 import { useRunStream } from "@/lib/use-run-stream";
 import { GraphView } from "./GraphView";
 import { SpanDetail } from "./SpanDetail";
@@ -44,7 +44,7 @@ export function RunViewer({ initial, onEnded }: { initial: Run; onEnded: (run: R
         <section className="h-72 rounded-lg border border-rule bg-panel" aria-label="Agent graph">
           <GraphView
             graph={run.graph}
-            active={activeNode(view.spans)}
+            active={activeNodes(view.spans)}
             visited={visited}
             taken={takenEdges(run.graph, view.spans)}
           />
