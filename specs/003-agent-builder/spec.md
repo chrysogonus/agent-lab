@@ -50,7 +50,7 @@ Every agent also has a name, a one-line description, a sample prompt and the rea
   same area with a way back to editing; the past-runs list stays visible.
 - Q: Are the size limits right (steps, routes, aspects, subtasks 6; rounds 5; iterations 10;
   prompts 4000 characters)? → A: Yes, as drafted; branches beyond what the model server runs at
-  once wait for a free slot, and the waterfall shows it.
+  once queue inside the server, and their spans include that wait.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -156,8 +156,9 @@ the list still names the agent.
 - Two custom agents with the same name → rejected; names are unique, ignoring case and
   surrounding spaces.
 - More parallel aspects or orchestrator subtasks than the model server serves at once (4 with
-  the default setup) → all branches still run; the extra ones start when a slot frees up, which
-  the waterfall shows as later start times.
+  the default setup) → all branches still run and their spans start together; the extra
+  requests queue inside the model server, so their spans last longer by the wait. Telling queue
+  time from model time apart is out of scope.
 - An M1/M2 database → existing runs still list and replay; the six templates behave exactly as
   before.
 
