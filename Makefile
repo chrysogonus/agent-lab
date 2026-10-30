@@ -1,4 +1,4 @@
-.PHONY: install check check-backend check-frontend dev-llm dev-backend dev-frontend
+.PHONY: install check check-backend check-frontend dev dev-llm stop-llm dev-backend dev-frontend
 
 ENV_FILE := $(if $(wildcard .env),--env-file ../.env,)
 
@@ -25,8 +25,10 @@ check-frontend:
 # vLLM on 127.0.0.1:8001, serving the model as "qwen3.5-9b". Weights come from the Hugging Face
 # cache; compile caches persist in ~/.cache/agent-lab-vllm (the container's home). The GPU share
 # leaves room for other programs (~3-4 GiB on the dev machine); 4 sequences = the widest fan-out.
+# Runs detached and restarts with Docker; an existing container is started again as it was.
 dev-llm:
-	docker run --rm --name agent-lab-vllm --gpus all --ipc=host \
+	@docker start agent-lab-vllm 2>/dev/null || docker run -d --restart unless-stopped \
+		--name agent-lab-vllm --gpus all --ipc=host \
 		--user $$(id -u):$$(id -g) -e HOME=/home/lab -e HF_HOME=/hf \
 		-v $(HOME)/.cache/huggingface:/hf -v $(HOME)/.cache/agent-lab-vllm:/home/lab \
 		-p 127.0.0.1:8001:8000 $(VLLM_IMAGE) \
@@ -34,6 +36,15 @@ dev-llm:
 		--max-model-len 8192 --gpu-memory-utilization 0.78 --max-num-seqs 4 \
 		--max-num-batched-tokens 2048 \
 		--reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder
+	@echo "vLLM starting on 127.0.0.1:8001 (1-2 min); logs: docker logs -f agent-lab-vllm"
+
+# Removes the container, so the next dev-llm picks up changed flags.
+stop-llm:
+	docker rm -f agent-lab-vllm
+
+# Backend and frontend in one terminal; Ctrl-C stops both.
+dev:
+	$(MAKE) -j2 dev-backend dev-frontend
 
 dev-backend:
 	cd backend && uv run $(ENV_FILE) uvicorn agent_lab.main:app --host 127.0.0.1 --port 8000 --reload

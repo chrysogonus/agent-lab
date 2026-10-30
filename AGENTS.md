@@ -10,7 +10,9 @@ memory, RAG later) with a live trace view. Rules for every change:
 ```bash
 make install        # uv sync + pnpm install
 make check          # all gates; must pass before a task is marked done
-make dev-llm        # vLLM (Docker) on 127.0.0.1:8001, model "qwen3.5-9b"; needs the GPU
+make dev-llm        # vLLM (Docker, detached) on 127.0.0.1:8001, model "qwen3.5-9b"; needs the GPU
+make stop-llm       # remove the vLLM container (next dev-llm recreates it with current flags)
+make dev            # dev-backend and dev-frontend together; Ctrl-C stops both
 make dev-backend    # FastAPI on 127.0.0.1:8000 (reads ./.env if present)
 make dev-frontend   # Next.js on 127.0.0.1:3000
 cd backend && uv run pytest tests/test_react.py -k max_iterations   # one test

@@ -19,9 +19,8 @@ evaluator-optimizer.
 ```bash
 make install
 cp .env.example .env      # point LLM_BASE_URL / LLM_MODEL elsewhere if you like
-make dev-llm              # terminal 1: vLLM on http://127.0.0.1:8001 (first start downloads ~11 GB)
-make dev-backend          # terminal 2: http://127.0.0.1:8000
-make dev-frontend         # terminal 3: http://127.0.0.1:3000
+make dev-llm              # vLLM on http://127.0.0.1:8001, detached (first start downloads ~11 GB)
+make dev                  # backend on http://127.0.0.1:8000 and frontend on http://127.0.0.1:3000
 ```
 
 Open http://127.0.0.1:3000, pick the ReAct agent or a workflow (its graph, description and a
@@ -30,6 +29,9 @@ The run header and the past-runs list show model calls, tool calls, tokens and w
 runs replay from the database (`backend/data/agent_lab.db`).
 
 `make dev-llm` serves `RedHatAI/Qwen3.5-9B-quantized.w4a16` (4-bit Qwen3.5 9B) as `qwen3.5-9b`.
+It keeps running in the background and comes back with Docker; follow it with
+`docker logs -f agent-lab-vllm`, remove it with `make stop-llm`. `make dev-backend` and
+`make dev-frontend` start the two servers separately.
 vLLM batches concurrent requests, so parallel branches and workers really run at the same
 time. Any OpenAI-compatible endpoint works instead (Ollama: `LLM_BASE_URL=http://localhost:11434/v1`,
 `LLM_MODEL=qwen3:8b`): set `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`.
