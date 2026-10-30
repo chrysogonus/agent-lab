@@ -1,8 +1,9 @@
 # AGENTS.md
 
-Agent Lab: hand-built agent fundamentals (ReAct now; workflows, MCP, harness, memory, RAG
-later) with a live trace view. Rules for every change: `.specify/memory/constitution.md`.
-Current feature spec, plan and tasks: `specs/001-react-walking-skeleton/`.
+Agent Lab: hand-built agent fundamentals (ReAct and five workflow patterns now; MCP, harness,
+memory, RAG later) with a live trace view. Rules for every change:
+`.specify/memory/constitution.md`. Current feature spec, plan and tasks:
+`specs/002-workflow-patterns/` (M1: `specs/001-react-walking-skeleton/`).
 
 ## Commands
 
@@ -20,19 +21,25 @@ report; keep every gate at its current strictness.
 
 ## Layout
 
-- `backend/src/agent_lab/`: `agents/` (agent loops), `tools/`, `llm/` (client seam + `FakeLLM`),
-  `tracing/` (span, tracer, redaction), `store.py` (SQLite), `bus.py`, `runs.py`, `api.py`.
-- `backend/tests/`: pytest; `helpers.py` builds scripted runs.
+- `backend/src/agent_lab/`: `agents/` (`react.py`; `steps.py`: traced `chat`, `call_tool`,
+  `decide`; `registry.py`: every runnable agent by id), `workflows/` (chain, routing, parallel,
+  orchestrator, evaluator), `tools/`, `llm/` (client seam + `FakeLLM`), `tracing/` (span,
+  tracer, redaction), `store.py` (SQLite), `bus.py`, `runs.py`, `api.py`.
+- `backend/tests/`: pytest; `helpers.py` builds scripted runs and `assert_trace_valid`.
 - `frontend/src/`: `app/page.tsx` (the one page), `components/`, `lib/run-state.ts` (pure view
   logic, tested in `lib/run-state.test.ts`; keep testable logic there, not in components). Next.js 16 differs from older versions: read `frontend/AGENTS.md` before editing.
 
 ## Contracts
 
-1. **Every LLM and tool call runs inside `Tracer.span(...)`.** Span fields are fixed by
+1. **Every LLM and tool call runs inside `Tracer.span(...)`**, reached only through
+   `agents/steps.py` (`chat`, `call_tool`, `decide`). Span fields are fixed by
    `tracing/span.py`; extra metadata goes in `attributes` under OpenTelemetry GenAI names
-   (`gen_ai.request.model`, `gen_ai.usage.input_tokens`, ...).
-2. **Agents declare a static graph** (`graph.py`: nodes with x/y, edges). Every span's
-   `node_id` is a node of that graph; the UI derives the active node and route from it.
+   (`gen_ai.request.model`, `gen_ai.usage.input_tokens`, ...) or `lab.*`.
+2. **Agents and workflows declare a static graph** (`graph.py`: nodes with x/y, edges). Every
+   span's `node_id` is a node of that graph. The first span of each node visit records
+   `lab.came_from` (the node ids control came from); every such pair must be a declared edge,
+   including error exits. The UI marks taken edges from it
+   (`specs/002-workflow-patterns/contracts/trace-conventions.md`).
 3. **Spans are upserted to SQLite on start and end and published on the bus.** The UI reads
    only `WS /runs/{id}/stream` (stored spans, then live), so live view and replay share one path.
 4. **Security.** Bind to 127.0.0.1. The tracer redacts before any sink sees a span. Tools get

@@ -84,7 +84,14 @@ export default function Home() {
                 <p className="text-sm text-muted">{preview.description}</p>
               </div>
               <div className="min-h-0 flex-1">
-                <GraphView graph={preview.graph} active={NOTHING} visited={NOTHING} taken={NOTHING} />
+                {/* key: React Flow fits the view only on mount */}
+                <GraphView
+                  key={preview.id}
+                  graph={preview.graph}
+                  active={NOTHING}
+                  visited={NOTHING}
+                  taken={NOTHING}
+                />
               </div>
             </section>
           ) : (

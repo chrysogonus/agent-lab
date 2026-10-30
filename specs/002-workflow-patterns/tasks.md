@@ -142,9 +142,9 @@ documented status; no run hangs.
 
 ## Phase 6: Polish
 
-- [ ] T043 [P] Update AGENTS.md: current feature `specs/002-workflow-patterns/`; layout adds `agents/steps.py`, `agents/registry.py`, `workflows/`; contract 2 notes `lab.came_from` and the steps helpers as the only path to model/tools; mention README.md run instructions for picking a workflow
-- [ ] T044 Run quickstart.md manual checks with `qwen3:8b` and record results under "Manual check results" in this file; SC-001 needs the real model, so if it is unavailable run the rest as a FakeLLM smoke and record SC-001 as not verified
-- [ ] T045 Final `make check`; fill in any missing rows of the Traceability table below
+- [X] T043 [P] Update AGENTS.md: current feature `specs/002-workflow-patterns/`; layout adds `agents/steps.py`, `agents/registry.py`, `workflows/`; contract 2 notes `lab.came_from` and the steps helpers as the only path to model/tools; mention README.md run instructions for picking a workflow
+- [X] T044 Run quickstart.md manual checks with `qwen3:8b` and record results under "Manual check results" in this file; SC-001 needs the real model, so if it is unavailable run the rest as a FakeLLM smoke and record SC-001 as not verified
+- [X] T045 Final `make check`; fill in any missing rows of the Traceability table below
 
 ---
 
@@ -213,6 +213,25 @@ Task: "Evaluator-optimizer in backend/src/agent_lab/workflows/evaluator.py"
 | SC-005 | quickstart steps 3–6 (distinct graphs per pattern) |
 | SC-006 | quickstart step 7 (totals in past-runs list) |
 
-## Manual check results (T044)
+## Manual check results (T044, 2026-10-30)
 
-_Pending._
+Real model `qwen3:8b` on local Ollama, backend on a scratch database:
+
+| Run | Status | Model / tool calls | Wall time | Notes |
+|---|---|---|---|---|
+| react (sample) | completed | 2 / 2 | 7.5 s | reasoning on |
+| chain (sample) | completed | 3 / 0 | 1.9 s | gate passed, 5 bullet lines |
+| routing (sample, "What is 2**10?") | completed | 3 / 1 | 1.3 s, 1.0 s | route `math`, calculator used (US2-1) |
+| routing ("weather in Oslo") | completed | 3 / 1 | 1.2 s | route `weather` |
+| parallel (sample) | completed | 4 / 0 | 2.2 s | 3 branches overlap; wall 2.2 s < branch sum 2.75 s (SC-003) |
+| orchestrator (sample) | completed | 6 / 0 | 5.3 s | plan of 4 subtasks, 4 overlapping workers; wall 5.3 s < sum 6.2 s |
+| evaluator (sample) | completed | 2 / 0 | 1.1 s | approved in round 1 (loop edge covered by test_approved_round_two) |
+
+Every span's node was in its graph and every `lab.came_from` pair was a declared edge (SC-001,
+SC-002). UI checked headless (Chromium) against the running dev servers, read-only: the picker
+lists all six; selecting one shows its description, sample prompt and graph preview, with the
+gate dashed and the evaluator loop edge drawn below (steps 1, 6); past runs show agent name and
+totals, and an M1 run replays with its graph (step 7, FR-016). Found and fixed: the preview kept
+the previous agent's viewport (React Flow fits only on mount), now keyed by agent id. Not
+checked visually: live highlighting of several nodes at once (step 4); covered by the
+`activeNodes` tests.
