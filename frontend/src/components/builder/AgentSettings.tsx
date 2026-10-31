@@ -1,5 +1,7 @@
-import type { Path } from "@/lib/builder";
+import type { ToolInfo } from "@/lib/api";
+import type { Path, Section } from "@/lib/builder";
 import { NumberField, TextField, Toggle, type Form } from "./fields";
+import { ItemList, ToolPicker } from "./ItemList";
 
 // The limits each template lets the owner change; the server checks the allowed range.
 const LIMITS: Record<string, [Path, string][]> = {
@@ -8,7 +10,15 @@ const LIMITS: Record<string, [Path, string][]> = {
   evaluator: [[["config", "max_rounds"], "Max rounds"]],
 };
 
-export function AgentSettings({ form }: { form: Form }) {
+export function AgentSettings({
+  form,
+  tools,
+  onOpen,
+}: {
+  form: Form;
+  tools: ToolInfo[];
+  onOpen: (section: Section) => void;
+}) {
   const { templateId } = form.draft;
   return (
     <div className="flex flex-col gap-4">
@@ -21,6 +31,16 @@ export function AgentSettings({ form }: { form: Form }) {
         label="Model thinking"
         hint="Slower, and the reasoning shows up in the spans."
       />
+      {templateId === "react" && <ToolPicker form={form} tools={tools} />}
+      {templateId === "chain" && <ItemList form={form} kind="steps" onOpen={onOpen} />}
+      {templateId === "routing" && <ItemList form={form} kind="routes" onOpen={onOpen} />}
+      {templateId === "parallel" && <ItemList form={form} kind="aspects" onOpen={onOpen} />}
+      {templateId === "chain" && (
+        <>
+          <Toggle form={form} path={["config", "gate"]} label="Check the first step's output" hint="A code gate: the chain stops unless that output has enough bullet lines." />
+          <NumberField form={form} path={["config", "gate_min_bullets"]} label="Minimum bullet lines" />
+        </>
+      )}
       {(LIMITS[templateId] ?? []).map(([path, label]) => (
         <NumberField key={label} form={form} path={path} label={label} />
       ))}

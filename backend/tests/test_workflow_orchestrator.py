@@ -7,10 +7,13 @@ from agent_lab.tracing.span import Span
 from agent_lab.workflows.orchestrator import AGENT_ID, Config, OrchestratorWorkflow, build_graph
 
 
-async def run(script: list[ScriptItem], delay: float = 0) -> tuple[Outcome, list[Span], FakeLLM]:
+async def run(
+    script: list[ScriptItem], delay: float = 0, config: Config | None = None
+) -> tuple[Outcome, list[Span], FakeLLM]:
     llm = FakeLLM(script, delay=delay)
     tracer, events = make_tracer(AGENT_ID)
-    workflow = OrchestratorWorkflow(llm=llm, config=Config(model=llm.model), tracer=tracer)
+    config = config or Config(model=llm.model)
+    workflow = OrchestratorWorkflow(llm=llm, config=config, tracer=tracer)
     outcome = await workflow.run("Porto weekend")
     return outcome, ended(events), llm
 
@@ -74,3 +77,49 @@ async def test_invalid_plan_ends_run(content: str) -> None:
     assert (end.node_id, end.error) == ("end", plan_span.error)
     assert end.attributes["lab.came_from"] == ["orchestrator"]
     assert_trace_valid(build_graph(), spans)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("limit", "rendered"),
+    [
+        (1, "into 1 to 1 independent"),
+        (4, "into 2 to 4 independent"),
+        (6, "into 2 to 6 independent"),
+    ],
+)
+async def test_subtask_limit_renders_prompt_and_schema(limit: int, rendered: str) -> None:
+    plan = json_answer({"subtasks": ["one"]})
+    _, _, llm = await run(
+        [plan, answer("part"), answer("note")], config=Config(model="m", max_subtasks=limit)
+    )
+
+    assert rendered in (llm.calls[0][0]["content"] or "")
+    response_format = llm.requests[0]["response_format"]
+    assert response_format is not None
+    schema = response_format["json_schema"]["schema"]
+    assert schema["properties"]["subtasks"]["maxItems"] == limit
+    assert schema["title"] == "Plan"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("count", [1, 6])
+async def test_one_and_six_workers(count: int) -> None:
+    subtasks = [f"part {i}" for i in range(count)]
+    script: list[ScriptItem] = [json_answer({"subtasks": subtasks})]
+    script += [answer("done")] * count + [answer("note")]
+    outcome, spans, _ = await run(script, config=Config(model="m", max_subtasks=count))
+
+    assert (outcome.status, outcome.answer) == ("completed", "note")
+    workers = [s for s in spans if s.node_id == "worker" and s.kind == "step"]
+    assert sorted(s.attributes["lab.worker.index"] for s in workers) == list(range(count))
+    assert_trace_valid(build_graph(), spans)
+
+
+@pytest.mark.anyio
+async def test_plan_above_limit_invalid() -> None:
+    plan = json_answer({"subtasks": ["a", "b", "c"]})
+    outcome, spans, _ = await run([plan], config=Config(model="m", max_subtasks=2))
+
+    assert outcome.status == "error"
+    assert not [s for s in spans if s.node_id == "worker"]

@@ -1,9 +1,10 @@
-import { getField, pathKey, type Draft, type Path } from "@/lib/builder";
+import { getField, pathKey, renameItem, type Draft, type ListKind, type Path } from "@/lib/builder";
 
 /** What every builder field needs: the draft, how to change it, and its errors. */
 export type Form = {
   draft: Draft;
   set: (path: Path, value: unknown) => void;
+  update: (edit: (draft: Draft) => Draft) => void; // structural edits from lib/builder
   readOnly: boolean; // templates: settings are shown, not edited
   errors: Record<string, string>;
 };
@@ -119,6 +120,44 @@ export function Toggle({
         {label}
       </label>
       {hint && <p className="pl-6 text-sm text-muted">{hint}</p>}
+    </div>
+  );
+}
+
+/** A list item's name: also its graph node id, so renames go through `renameItem`. */
+export function NameField({
+  form,
+  kind,
+  index,
+  name,
+  hint,
+}: {
+  form: Form;
+  kind: ListKind;
+  index: number;
+  name: string;
+  hint: string;
+}) {
+  const id = `field-${kind}-${index}-name`;
+  // Aspect names are dict keys: pydantic reports them at "<name>.[key]".
+  const key = kind === "aspects" ? `config.aspects.${name}.[key]` : `config.${kind}.${index}.name`;
+  const error = form.errors[key];
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium text-ink">
+        Name
+      </label>
+      <input
+        id={id}
+        value={name}
+        readOnly={form.readOnly}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onChange={(e) => form.update((d) => renameItem(d, kind, index, e.target.value))}
+        className={INPUT}
+      />
+      <p className="text-sm text-muted">{hint}</p>
+      <FieldError id={`${id}-error`} message={error} />
     </div>
   );
 }

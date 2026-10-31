@@ -74,13 +74,17 @@ export function AgentBuilder({
   onSave: () => void;
   onDiscard: () => void;
 }) {
-  const [section, setSection] = useState<Section>({ kind: "agent" });
+  const [opened, setSection] = useState<Section>({ kind: "agent" });
   const preview = useGraphPreview(agent.template_id, draft?.config ?? null);
   const shown = draft ?? draftFromAgent(agent);
+  // A removed list item leaves its section without a node: show the agent settings instead.
+  const section: Section =
+    opened.kind !== "agent" && sectionNode(opened, shown.config) == null ? { kind: "agent" } : opened;
   const graph = preview.graph ?? agent.graph;
   const form: Form = {
     draft: shown,
     set: (path: Path, value: unknown) => draft && onChange(setField(draft, path, value)),
+    update: (edit) => draft && onChange(edit(draft)),
     readOnly: draft == null,
     errors: { ...preview.errors, ...saveErrors },
   };
@@ -161,7 +165,7 @@ export function AgentBuilder({
             )}
           </div>
           {section.kind === "agent" ? (
-            <AgentSettings form={form} />
+            <AgentSettings form={form} tools={tools} onOpen={setSection} />
           ) : (
             <NodeSettings form={form} section={section} tools={tools} />
           )}

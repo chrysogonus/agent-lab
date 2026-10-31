@@ -1,6 +1,6 @@
 import type { ToolInfo } from "@/lib/api";
 import { getField, pathKey, type Section } from "@/lib/builder";
-import { NumberField, TextField, Toggle, type Form } from "./fields";
+import { NameField, NumberField, TextField, Toggle, type Form } from "./fields";
 
 function ToolSelect({ form, index, tools }: { form: Form; index: number; tools: ToolInfo[] }) {
   const path = ["config", "routes", index, "tool"];
@@ -61,7 +61,13 @@ export function NodeSettings({
       const at = ["config", "steps", section.index];
       return (
         <div className="flex flex-col gap-4">
-          <TextField form={form} path={[...at, "name"]} label="Name" hint="Lowercase letters, digits and hyphens." />
+          <NameField
+            form={form}
+            kind="steps"
+            index={section.index}
+            name={String(getField(form.draft, [...at, "name"]) ?? "")}
+            hint="Lowercase letters, digits and hyphens; also the node's name."
+          />
           <TextField form={form} path={[...at, "prompt"]} label="Prompt" multiline mono />
           {section.index > 0 && (
             <Toggle
@@ -78,22 +84,40 @@ export function NodeSettings({
       const at = ["config", "routes", section.index];
       return (
         <div className="flex flex-col gap-4">
-          <TextField form={form} path={[...at, "name"]} label="Name" hint="The label the router answers with." />
+          <NameField
+            form={form}
+            kind="routes"
+            index={section.index}
+            name={String(getField(form.draft, [...at, "name"]) ?? "")}
+            hint="The label the router answers with: lowercase letters, digits and hyphens."
+          />
           <TextField form={form} path={[...at, "description"]} label="When to use it" hint="The router reads this." />
           <TextField form={form} path={[...at, "prompt"]} label="Handler prompt" multiline mono />
           <ToolSelect form={form} index={section.index} tools={tools} />
         </div>
       );
     }
-    case "aspect":
+    case "aspect": {
+      const name = Object.keys(form.draft.config.aspects as Record<string, string>)[section.index];
       return (
-        <TextField
-          form={form}
-          path={["config", "aspects", section.name]}
-          label={`What the ${section.name} reviewer looks for`}
-          multiline
-        />
+        <div className="flex flex-col gap-4">
+          <NameField
+            form={form}
+            kind="aspects"
+            index={section.index}
+            name={name}
+            hint="Lowercase letters, digits and hyphens; fills in {aspect}."
+          />
+          <TextField
+            form={form}
+            path={["config", "aspects", name]}
+            label="What this reviewer looks for"
+            hint="Fills in {focus} in the review prompt."
+            multiline
+          />
+        </div>
       );
+    }
     case "gate":
       return (
         <div className="flex flex-col gap-4">

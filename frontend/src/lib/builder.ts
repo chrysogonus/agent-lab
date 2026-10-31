@@ -21,7 +21,7 @@ export type Section =
   | { kind: "prompt"; path: Path; title: string }
   | { kind: "step"; index: number }
   | { kind: "route"; index: number }
-  | { kind: "aspect"; name: string }
+  | { kind: "aspect"; index: number }
   | { kind: "gate" }
   | { kind: "tool"; name: string };
 
@@ -107,8 +107,9 @@ export function nodeSettings(templateId: string, config: AgentConfig, nodeId: st
     const index = (config.routes as Named[]).findIndex((r) => r.name === nodeId);
     if (index >= 0) return { kind: "route", index };
   }
-  if (templateId === "parallel" && nodeId in (config.aspects as Record<string, string>)) {
-    return { kind: "aspect", name: nodeId };
+  if (templateId === "parallel") {
+    const index = Object.keys(config.aspects as Record<string, string>).indexOf(nodeId);
+    if (index >= 0) return { kind: "aspect", index };
   }
   // router, merge, orchestrator, worker, synthesizer, generator, evaluator: "<node>_prompt".
   const field = `${nodeId}_prompt`;
@@ -146,10 +147,98 @@ export function sectionNode(section: Section, config: AgentConfig): string | nul
     case "route":
       return (config.routes as Named[])[section.index]?.name ?? null;
     case "aspect":
-      return section.name;
+      return Object.keys(config.aspects as Record<string, string>)[section.index] ?? null;
     case "gate":
       return "gate";
     case "tool":
       return `tool:${section.name}`;
   }
+}
+
+/** The lists a template lets the owner change. */
+export type ListKind = "steps" | "routes" | "aspects";
+
+type Item = Record<string, unknown> & Named;
+
+function items(draft: Draft, kind: ListKind): Item[] {
+  const value = draft.config[kind];
+  if (kind !== "aspects") return value as Item[];
+  return Object.entries(value as Record<string, string>).map(([name, focus]) => ({ name, focus }));
+}
+
+function withItems(draft: Draft, kind: ListKind, list: Item[]): Draft {
+  const value =
+    kind === "aspects" ? Object.fromEntries(list.map((i) => [i.name, i.focus as string])) : list;
+  return setField(draft, ["config", kind], value);
+}
+
+const NEW_ITEM: Record<ListKind, (name: string) => Item> = {
+  steps: (name) => ({ name, prompt: "Describe what this step does.", include_input: false }),
+  routes: (name) => ({
+    name,
+    description: "Describe when the router should pick this route.",
+    prompt: "Answer the question briefly.",
+    tool: null,
+  }),
+  aspects: (name) => ({ name, focus: "Describe what this reviewer looks for." }),
+};
+
+const PREFIX: Record<ListKind, string> = { steps: "step", routes: "route", aspects: "aspect" };
+
+/** Appends an item named "<kind>-N" with the first free N, and placeholder text to replace. */
+export function addItem(draft: Draft, kind: ListKind): Draft {
+  const list = items(draft, kind);
+  let n = 1;
+  while (list.some((i) => i.name === `${PREFIX[kind]}-${n}`)) n += 1;
+  return withItems(draft, kind, [...list, NEW_ITEM[kind](`${PREFIX[kind]}-${n}`)]);
+}
+
+/** Whether removing keeps the agent valid: one step or aspect, two routes, and the fallback. */
+export function canRemove(draft: Draft, kind: ListKind, index: number): boolean {
+  const list = items(draft, kind);
+  if (kind === "routes") return list.length > 2 && list[index]?.name !== draft.config.fallback;
+  return list.length > 1;
+}
+
+export function removeItem(draft: Draft, kind: ListKind, index: number): Draft {
+  return withItems(
+    draft,
+    kind,
+    items(draft, kind).filter((_, i) => i !== index),
+  );
+}
+
+/** Moves a chain step up (-1) or down (+1); order is the chain's order. */
+export function moveItem(draft: Draft, index: number, delta: -1 | 1): Draft {
+  const list = [...items(draft, "steps")];
+  const to = index + delta;
+  if (to < 0 || to >= list.length) return draft;
+  [list[index], list[to]] = [list[to], list[index]];
+  return withItems(draft, "steps", list);
+}
+
+/** Renames an item; the fallback follows its route. */
+export function renameItem(draft: Draft, kind: ListKind, index: number, name: string): Draft {
+  const list = items(draft, kind);
+  const old = list[index].name;
+  // shortcut: aspects are keyed by name, so a name another aspect has is not applied yet.
+  if (kind === "aspects" && list.some((i, j) => j !== index && i.name === name)) return draft;
+  const next = withItems(
+    draft,
+    kind,
+    list.map((item, i) => (i === index ? { ...item, name } : item)),
+  );
+  return kind === "routes" && draft.config.fallback === old
+    ? setField(next, ["config", "fallback"], name)
+    : next;
+}
+
+/** Gives the ReAct agent a tool, or takes it away. */
+export function toggleTool(draft: Draft, name: string): Draft {
+  const tools = draft.config.tools as string[];
+  return setField(
+    draft,
+    ["config", "tools"],
+    tools.includes(name) ? tools.filter((t) => t !== name) : [...tools, name],
+  );
 }

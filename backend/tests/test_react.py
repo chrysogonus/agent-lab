@@ -1,12 +1,21 @@
 import pytest
-from helpers import answer, assert_trace_valid, ended, make_agent, taken_edges, tool_call
+from helpers import (
+    answer,
+    assert_trace_valid,
+    ended,
+    make_agent,
+    make_tracer,
+    taken_edges,
+    tool_call,
+)
 
-from agent_lab.agents.react import ReActAgent, ReActConfig
+from agent_lab.agents.react import ReActAgent, ReActConfig, ReActState, build_graph
 from agent_lab.agents.steps import config_version
 from agent_lab.llm.base import LLMError
 from agent_lab.llm.fake import FakeLLM
 from agent_lab.tools.base import Tool
-from agent_lab.tracing.span import SpanKind
+from agent_lab.tools.catalog import TOOLS
+from agent_lab.tracing.span import Span, SpanKind
 from agent_lab.tracing.tracer import Tracer
 
 
@@ -207,3 +216,55 @@ async def test_react_came_from_edges() -> None:
         ("tool:get_weather", "llm"),
         ("llm", "end"),
     }
+
+
+async def run_with(
+    config: ReActConfig, llm: FakeLLM, prompt: str = "q"
+) -> tuple[ReActState, list[Span]]:
+    """Runs the agent as the registry builds it: tools come from the config's names."""
+    tracer, events = make_tracer("react")
+    agent = ReActAgent(
+        llm=llm, tools=[TOOLS[t] for t in config.tools], config=config, tracer=tracer
+    )
+    return await agent.run(prompt), ended(events)
+
+
+@pytest.mark.anyio
+async def test_no_tools() -> None:
+    config = ReActConfig(model="m", tools=[])
+    llm = FakeLLM([answer("hi")])
+    state, spans = await run_with(config, llm)
+
+    assert state.status == "completed"
+    assert build_graph(config.tools).node_ids() == {"start", "llm", "end"}
+    assert llm.requests[0]["tools"] == []
+    assert_trace_valid(build_graph(config.tools), spans)
+
+
+@pytest.mark.anyio
+async def test_calculator_only() -> None:
+    config = ReActConfig(model="m", tools=["calculator"])
+    llm = FakeLLM([tool_call("calculator", '{"expression": "2+2"}'), answer("4")])
+    state, spans = await run_with(config, llm)
+
+    assert state.answer == "4"
+    assert [t["function"]["name"] for t in llm.requests[0]["tools"]] == ["calculator"]
+    assert "tool:get_weather" not in build_graph(config.tools).node_ids()
+    assert_trace_valid(build_graph(config.tools), spans)
+
+
+@pytest.mark.anyio
+async def test_iteration_limits() -> None:
+    calc = tool_call("calculator", '{"expression": "1+1"}')
+    direct, _ = await run_with(ReActConfig(model="m", max_iterations=1), FakeLLM([answer("ok")]))
+    capped, spans = await run_with(ReActConfig(model="m", max_iterations=1), FakeLLM([calc]))
+    longest, long_spans = await run_with(
+        ReActConfig(model="m", max_iterations=10), FakeLLM([*[calc] * 9, answer("done")])
+    )
+
+    assert direct.status == "completed"
+    assert capped.status == "max_iterations"
+    assert (longest.status, longest.iteration) == ("completed", 10)
+    graph = build_graph(["calculator", "get_weather"])
+    assert_trace_valid(graph, spans)
+    assert_trace_valid(graph, long_spans)

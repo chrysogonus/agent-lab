@@ -19,10 +19,13 @@ def review(messages: list[Message]) -> ChatResponse:
     return answer(f"{aspect_of(messages)} review")
 
 
-async def run(script: list[ScriptItem], delay: float = 0) -> tuple[Outcome, list[Span], FakeLLM]:
+async def run(
+    script: list[ScriptItem], delay: float = 0, config: Config | None = None
+) -> tuple[Outcome, list[Span], FakeLLM]:
     llm = FakeLLM(script, delay=delay)
     tracer, events = make_tracer(AGENT_ID)
-    workflow = ParallelWorkflow(llm=llm, config=Config(model=llm.model), tracer=tracer)
+    config = config or Config(model=llm.model)
+    workflow = ParallelWorkflow(llm=llm, config=config, tracer=tracer)
     outcome = await workflow.run("Best app ever!!!")
     return outcome, ended(events), llm
 
@@ -93,3 +96,64 @@ async def test_all_branches_fail() -> None:
     assert end.error == "all 3 reviews failed"
     assert set(end.attributes["lab.came_from"]) == set(ASPECTS)
     assert_trace_valid(build_graph(Config(model="m")), spans)
+
+
+def echo_aspect(messages: list[Message]) -> ChatResponse:
+    """Answers with the aspect name from a custom review prompt `Review for <name>.`."""
+    return answer((messages[0]["content"] or "").removeprefix("Review for ").rstrip("."))
+
+
+def aspects_config(*names: str) -> Config:
+    return Config(
+        model="m",
+        aspects={n: f"focus on {n}" for n in names},
+        review_prompt="Review for {aspect}.",
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("names", [("solo",), ("a", "b", "c", "d", "e", "f")])
+async def test_one_and_six_aspects(names: tuple[str, ...]) -> None:
+    config = aspects_config(*names)
+    outcome, spans, llm = await run([*[echo_aspect] * len(names), answer("merged")], 0.02, config)
+
+    assert (outcome.status, outcome.answer) == ("completed", "merged")
+    graph = build_graph(config)
+    assert graph.node_ids() == {"start", *names, "merge", "end"}
+    reviews = [s for s in spans if s.node_id in names]
+    assert sorted(s.node_id for s in reviews) == sorted(names)
+    assert max(s.started_at for s in reviews) < min(s.ended_at or 0 for s in reviews)
+    merge = next(s for s in spans if s.node_id == "merge")
+    assert sorted(merge.attributes["lab.came_from"]) == sorted(names)
+    assert all(f"{n} review:\n{n}" in (llm.calls[-1][-1]["content"] or "") for n in names)
+    assert_trace_valid(graph, spans)
+
+
+@pytest.mark.anyio
+async def test_replaced_aspect() -> None:
+    base = Config(model="m")
+    aspects = {k: v for k, v in base.aspects.items() if k != "tone"} | {"length": "Is it short?"}
+    config = base.model_copy(update={"aspects": aspects})
+    outcome, spans, _ = await run(
+        [review_any, review_any, review_any, answer("merged")], config=config
+    )
+
+    assert outcome.status == "completed"
+    assert {s.node_id for s in spans} == {"start", "clarity", "claims", "length", "merge", "end"}
+    assert_trace_valid(build_graph(config), spans)
+
+
+def review_any(messages: list[Message]) -> ChatResponse:
+    return answer("a review")
+
+
+@pytest.mark.anyio
+async def test_review_prompt_with_braces() -> None:
+    config = Config(model="m", review_prompt='Review {aspect}. Answer like {"ok": true}.')
+    outcome, _, llm = await run(
+        [review_any, review_any, review_any, answer("merged")], config=config
+    )
+
+    assert outcome.status == "completed"
+    systems = sorted(call[0]["content"] or "" for call in llm.calls[:3])
+    assert systems[0] == 'Review claims. Answer like {"ok": true}.'

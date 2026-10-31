@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { AgentInfo, Graph } from "./api";
 import {
+  addItem,
+  canRemove,
   copyName,
   draftFields,
   draftFrom,
   draftFromAgent,
   fieldErrors,
   getField,
+  moveItem,
   nodeSettings,
+  removeItem,
+  renameItem,
   sectionNode,
   setField,
+  toggleTool,
+  type Draft,
 } from "./builder";
 
 const graph: Graph = { nodes: [], edges: [] };
@@ -105,7 +112,7 @@ describe("nodeSettings", () => {
     expect(nodeSettings("chain", chain, "draft")).toEqual({ kind: "step", index: 1 });
     expect(nodeSettings("chain", chain, "gate")).toEqual({ kind: "gate" });
     const parallel = { aspects: { tone: "t" }, merge_prompt: "m" };
-    expect(nodeSettings("parallel", parallel, "tone")).toEqual({ kind: "aspect", name: "tone" });
+    expect(nodeSettings("parallel", parallel, "tone")).toEqual({ kind: "aspect", index: 0 });
     expect(nodeSettings("parallel", parallel, "merge")).toMatchObject({
       path: ["config", "merge_prompt"],
     });
@@ -145,5 +152,71 @@ describe("sectionNode", () => {
   it("follows a renamed route", () => {
     const draft = setField(draftFromAgent(agent({})), ["config", "routes", 0, "name"], "sums");
     expect(sectionNode({ kind: "route", index: 0 }, draft.config)).toBe("sums");
+  });
+});
+
+describe("structural edits", () => {
+  const routing = () => draftFromAgent(agent({ kind: "custom" }));
+  const chain = (): Draft => ({
+    ...routing(),
+    templateId: "chain",
+    config: { steps: [{ name: "a" }, { name: "b" }, { name: "c" }], gate: true },
+  });
+  const parallel = (): Draft => ({
+    ...routing(),
+    templateId: "parallel",
+    config: { aspects: { clarity: "c", tone: "t" } },
+  });
+
+  it("adds items under the first free name, with placeholder text", () => {
+    const once = addItem(routing(), "routes");
+    expect(getField(once, ["config", "routes", 2, "name"])).toBe("route-1");
+    expect(getField(addItem(once, "routes"), ["config", "routes", 3, "name"])).toBe("route-2");
+    expect(getField(addItem(chain(), "steps"), ["config", "steps", 3])).toMatchObject({
+      name: "step-1",
+      include_input: false,
+    });
+    expect(addItem(parallel(), "aspects").config.aspects).toEqual({
+      clarity: "c",
+      tone: "t",
+      "aspect-1": "Describe what this reviewer looks for.",
+    });
+    expect(addItem(routing(), "routes").dirty).toBe(true);
+  });
+
+  it("guards removals that would leave an invalid agent", () => {
+    const two = routing();
+    expect(canRemove(two, "routes", 0)).toBe(false); // routing needs two routes
+    const three = addItem(two, "routes");
+    expect(canRemove(three, "routes", 0)).toBe(true);
+    expect(canRemove(three, "routes", 1)).toBe(false); // the fallback
+    expect(canRemove(chain(), "steps", 0)).toBe(true);
+    expect(canRemove(removeItem(removeItem(chain(), "steps", 0), "steps", 0), "steps", 0)).toBe(false);
+    expect(canRemove(removeItem(parallel(), "aspects", 1), "aspects", 0)).toBe(false);
+  });
+
+  it("removes and moves items in order", () => {
+    const names = (d: Draft) => (d.config.steps as { name: string }[]).map((s) => s.name);
+    expect(names(removeItem(chain(), "steps", 1))).toEqual(["a", "c"]);
+    expect(names(moveItem(chain(), 2, -1))).toEqual(["a", "c", "b"]);
+    expect(names(moveItem(chain(), 0, -1))).toEqual(["a", "b", "c"]);
+    expect(removeItem(parallel(), "aspects", 0).config.aspects).toEqual({ tone: "t" });
+  });
+
+  it("renames items; the fallback follows its route, aspects keep their order", () => {
+    const renamed = renameItem(routing(), "routes", 1, "other");
+    expect(renamed.config.fallback).toBe("other");
+    expect(renameItem(routing(), "routes", 0, "sums").config.fallback).toBe("general");
+    expect(Object.keys(renameItem(parallel(), "aspects", 0, "length").config.aspects as object)).toEqual([
+      "length",
+      "tone",
+    ]);
+    expect(renameItem(parallel(), "aspects", 0, "tone").config.aspects).toEqual({ clarity: "c", tone: "t" });
+  });
+
+  it("toggles ReAct tools", () => {
+    const react: Draft = { ...routing(), templateId: "react", config: { tools: ["calculator"] } };
+    expect(toggleTool(react, "calculator").config.tools).toEqual([]);
+    expect(toggleTool(react, "get_weather").config.tools).toEqual(["calculator", "get_weather"]);
   });
 });
