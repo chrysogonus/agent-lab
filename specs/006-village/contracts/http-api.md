@@ -24,5 +24,5 @@ VillageState = {
 Turn = Run + {village_tick, villager, village_action}  # the action applied and any wait reason
 
 Rules: same Host, CORS and WebSocket Origin checks as the rest of the API; `Run` gains
-`village_tick`, `villager` and `village_action` (null for non-village runs). Templates, custom agents and block agents are
-unchanged.
+`village_tick`, `villager` and `village_action` (null for non-village runs). Templates, custom
+agents and block agents are unchanged.
