@@ -1,4 +1,5 @@
 import type { AgentInfo, Run } from "@/lib/api";
+import { runModel } from "@/lib/models";
 import { formatTotals, runAgentLabel } from "@/lib/run-state";
 
 const STATUS_DOT: Record<Run["status"], string> = {
@@ -56,7 +57,11 @@ export function RunList({
               <span className={`size-2 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />
               {run.status.replace("_", " ")}, {when(run.started_at)}
             </span>
-            {run.totals && <span className="text-xs text-muted">{formatTotals(run.totals)}</span>}
+            {(runModel(run) || run.totals) && (
+              <span className="text-xs text-muted">
+                {[runModel(run), run.totals && formatTotals(run.totals)].filter(Boolean).join(", ")}
+              </span>
+            )}
           </button>
         </li>
         );

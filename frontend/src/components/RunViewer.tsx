@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Run } from "@/lib/api";
+import { runModel } from "@/lib/models";
 import { activeNodes, formatTotals, runTotals, takenEdges } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import { useRunStream } from "@/lib/use-run-stream";
@@ -47,6 +48,7 @@ export function RunViewer({
             <span className={`text-sm ${run.status === "running" ? "text-signal-ink" : run.status === "completed" ? "text-tool" : "text-fault"}`}>
               {STATUS_TEXT[run.status]}
             </span>
+            {runModel(run) && <span className="text-sm text-ink">{runModel(run)}</span>}
             <span className="text-sm text-muted">{formatTotals(runTotals(view.spans, run, now))}</span>
             {onEdit && (
               <button

@@ -1,4 +1,6 @@
+import type { ModelInfo } from "@/lib/api";
 import { getField, pathKey, renameItem, type Draft, type ListKind, type Path } from "@/lib/builder";
+import { modelOptions, refFromValue, refValue, sameRef } from "@/lib/models";
 
 /** What every builder field needs: the draft, how to change it, and its errors. */
 export type Form = {
@@ -157,6 +159,48 @@ export function NameField({
         className={INPUT}
       />
       <p className="text-sm text-muted">{hint}</p>
+      <FieldError id={`${id}-error`} message={error} />
+    </div>
+  );
+}
+
+/** The agent's model: Default (follows the configured default) or a pinned model. */
+export function ModelSelect({ form, models }: { form: Form; models: ModelInfo[] }) {
+  const id = "field-model";
+  const current = form.draft.model;
+  const options = modelOptions(models, current);
+  const error = form.errors["model"] ?? form.errors["model.model"] ?? form.errors["model.provider"];
+  const runsOn = current ? models.find((m) => sameRef(m, current)) : models.find((m) => m.default);
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium text-ink">
+        Model
+      </label>
+      <select
+        id={id}
+        value={refValue(current)}
+        disabled={form.readOnly}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onChange={(e) => form.set(["model"], refFromValue(e.target.value))}
+        className={`${INPUT} disabled:bg-paper disabled:text-muted`}
+      >
+        <option value={options.default.value}>{options.default.label}</option>
+        {options.groups.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.options.map((o) => (
+              <option key={o.value} value={o.value} disabled={o.disabled}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {runsOn?.external && (
+        <p className="text-sm text-muted">
+          Prompts and tool results are sent to {runsOn.provider_label}.
+        </p>
+      )}
       <FieldError id={`${id}-error`} message={error} />
     </div>
   );

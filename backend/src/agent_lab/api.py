@@ -9,10 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
-from agent_lab.agents.registry import AGENTS, AgentSpec, editable, validate_config
+from agent_lab.agents.registry import AGENTS, AgentSpec, editable, pinned, validate_config
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
-from agent_lab.llm.models import Models
+from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tools.catalog import TOOLS
@@ -35,7 +35,18 @@ class AgentInfo(BaseModel):
     description: str
     sample_prompt: str
     config: dict[str, Any]  # the editable fields, without the model
+    model: ModelRef | None  # None: follows the default model (templates always)
     graph: Graph
+
+
+class ModelInfo(BaseModel):
+    provider: str
+    provider_label: str
+    model: str
+    external: bool
+    available: bool
+    unavailable_reason: str | None
+    default: bool
 
 
 class ToolInfo(BaseModel):
@@ -50,6 +61,7 @@ class AgentFields(BaseModel):
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)
     ]
     config: dict[str, Any]
+    model: ModelRef | None = None  # None: follow the default model
 
 
 class NewAgent(AgentFields):
@@ -88,8 +100,9 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         """The template's model validates the config; the client never sets model or graph."""
         if template_id not in AGENTS:
             raise field_error(("body", "template_id"), f"unknown template {template_id!r}")
-        if "model" in raw:
-            raise field_error(("body", "config", "model"), "the model is set by the server")
+        for key in ("model", "provider"):
+            if key in raw:
+                raise field_error(("body", "config", key), "set the model with the model field")
         try:
             return validate_config(template_id, raw, models.default)
         except ValidationError as exc:
@@ -98,6 +111,16 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
                 for e in exc.errors()
             ]
             raise RequestValidationError(errors) from None
+
+    def stored_config(config: BaseModel, model: ModelRef | None) -> dict[str, Any]:
+        """What a custom agent stores: its editable fields, plus its model only when pinned."""
+        if model is None:
+            return editable(config)
+        try:
+            models.client(model)
+        except UnavailableModel as exc:
+            raise field_error(("body", "model"), str(exc)) from None
+        return {**editable(config), "model": model.model, "provider": model.provider}
 
     def custom_info(agent: CustomAgent) -> AgentInfo:
         config = validate_config(agent.template_id, agent.config, models.default)
@@ -109,6 +132,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             description=agent.description,
             sample_prompt=agent.sample_prompt,
             config=editable(config),
+            model=pinned(agent.config),
             graph=AGENTS[agent.template_id].graph(config),
         )
 
@@ -127,6 +151,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             description=spec.description,
             sample_prompt=spec.sample_prompt,
             config=editable(config),
+            model=None,
             graph=spec.graph(config),
         )
 
@@ -134,6 +159,21 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
     async def list_agents() -> list[AgentInfo]:
         templates = [template_info(spec) for spec in AGENTS.values()]
         return templates + [custom_info(a) for a in store.list_agents()]
+
+    @app.get("/models")
+    async def list_models() -> list[ModelInfo]:
+        return [
+            ModelInfo(
+                provider=e.ref.provider,
+                provider_label=LABELS[e.ref.provider],
+                model=e.ref.model,
+                external=e.external,
+                available=e.unavailable is None,
+                unavailable_reason=e.unavailable,
+                default=e.ref == models.default,
+            )
+            for e in models.entries
+        ]
 
     @app.get("/tools")
     async def list_tools() -> list[ToolInfo]:
@@ -149,7 +189,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
                     name=body.name,
                     description=body.description,
                     sample_prompt=body.sample_prompt,
-                    config=editable(config),
+                    config=stored_config(config, body.model),
                 )
             )
         except NameInUse:
@@ -168,7 +208,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
                     name=body.name,
                     description=body.description,
                     sample_prompt=body.sample_prompt,
-                    config=editable(config),
+                    config=stored_config(config, body.model),
                 )
             )
         except NameInUse:
@@ -191,6 +231,8 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             run, config, spec, llm = new_run(body.prompt, body.agent_id, models, store, secrets)
         except UnknownAgent:
             raise field_error(("body", "agent_id"), f"unknown agent {body.agent_id!r}") from None
+        except UnavailableModel as exc:
+            raise field_error(("body", "agent_id"), str(exc)) from None
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(

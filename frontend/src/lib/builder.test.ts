@@ -37,6 +37,7 @@ function agent(overrides: Partial<AgentInfo>): AgentInfo {
       ],
       fallback: "general",
     },
+    model: null,
     graph,
     ...overrides,
   };
@@ -73,7 +74,19 @@ describe("drafts", () => {
       description: "routes",
       sample_prompt: "2**10?",
       config: draft.config,
+      model: null,
     });
+  });
+
+  it("carries the model setting: Default for templates, the pin for saved agents and copies", () => {
+    const luna = { provider: "openai" as const, model: "gpt-6-luna" };
+    const mine = agent({ id: "custom-1", kind: "custom", name: "Mine", model: luna });
+    expect(draftFrom(agent({}), []).model).toBeNull();
+    expect(draftFromAgent(mine).model).toEqual(luna);
+    expect(draftFrom(mine, [mine]).model).toEqual(luna);
+    const edited = setField(draftFromAgent(mine), ["model"], null);
+    expect(edited).toMatchObject({ model: null, dirty: true });
+    expect(draftFields(edited).model).toBeNull();
   });
 
   it("sets nested fields immutably and marks the draft changed", () => {

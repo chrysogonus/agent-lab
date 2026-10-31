@@ -11,12 +11,14 @@ import {
   deleteAgent,
   listAgents,
   listRuns,
+  listModels,
   listTools,
   startRun,
   updateAgent,
   ValidationError,
   type AgentInfo,
   type Run,
+  type ModelInfo,
   type ToolInfo,
 } from "@/lib/api";
 import { draftFields, draftFrom, draftFromAgent, fieldErrors, type Draft } from "@/lib/builder";
@@ -28,6 +30,7 @@ export default function Home() {
   const [listError, setListError] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [tools, setTools] = useState<ToolInfo[]>([]);
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const [agentId, setAgentId] = useState("react");
   // The custom agent being edited (or a fresh copy of a template); null shows the agent read-only.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -50,6 +53,7 @@ export default function Home() {
     // Without the backend there is nothing to pick; refresh() already reports that.
     listAgents().then(setAgents, () => {});
     listTools().then(setTools, () => {});
+    listModels().then(setModels, () => {});
   }, []);
   useEffect(() => {
     if (!draft?.dirty) return;
@@ -195,6 +199,7 @@ export default function Home() {
               agent={preview}
               draft={draft}
               tools={tools}
+              models={models}
               saveErrors={saveErrors}
               busy={saving}
               onChange={(d) => {

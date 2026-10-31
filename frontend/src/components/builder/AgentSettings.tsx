@@ -1,6 +1,6 @@
-import type { ToolInfo } from "@/lib/api";
+import type { ModelInfo, ToolInfo } from "@/lib/api";
 import type { Path, Section } from "@/lib/builder";
-import { NumberField, TextField, Toggle, type Form } from "./fields";
+import { ModelSelect, NumberField, TextField, Toggle, type Form } from "./fields";
 import { ItemList, ToolPicker } from "./ItemList";
 
 // The limits each template lets the owner change; the server checks the allowed range.
@@ -13,10 +13,12 @@ const LIMITS: Record<string, [Path, string][]> = {
 export function AgentSettings({
   form,
   tools,
+  models,
   onOpen,
 }: {
   form: Form;
   tools: ToolInfo[];
+  models: ModelInfo[];
   onOpen: (section: Section) => void;
 }) {
   const { templateId } = form.draft;
@@ -25,6 +27,7 @@ export function AgentSettings({
       <TextField form={form} path={["name"]} label="Name" />
       <TextField form={form} path={["description"]} label="Description" />
       <TextField form={form} path={["sample_prompt"]} label="Sample prompt" multiline />
+      <ModelSelect form={form} models={models} />
       <Toggle
         form={form}
         path={["config", "reasoning"]}

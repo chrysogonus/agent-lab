@@ -185,6 +185,7 @@ describe("agentPreview and agentName", () => {
       description: "loop",
       sample_prompt: "2+2?",
       config: {},
+      model: null,
       graph,
     },
   ];

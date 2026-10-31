@@ -22,6 +22,7 @@ export function SpanDetail({ span }: { span: Span | null }) {
     ["Kind", span.kind],
     ["Node", span.node_id],
     ["Latency", span.ended_at == null ? "running" : `${durationMs(span, span.ended_at)} ms`],
+    ["Provider", String(span.attributes["gen_ai.provider.name"] ?? "–")],
     ["Model", span.model ?? "–"],
     ["Tokens in / out", span.tokens_in == null ? "–" : `${span.tokens_in} / ${span.tokens_out ?? "–"}`],
     ["Config", span.config_version],

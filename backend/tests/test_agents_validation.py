@@ -121,6 +121,30 @@ CASES: list[tuple[str, str, Callable[[Body], None], list[str | int]]] = [
     ),
     ("unknown template", "react", lambda b: b.update(template_id="nope"), ["template_id"]),
     ("model key", "react", lambda b: config_of(b).update(model="other"), ["config", "model"]),
+    (
+        "provider key",
+        "react",
+        lambda b: config_of(b).update(provider="openai"),
+        ["config", "provider"],
+    ),
+    (
+        "unknown provider",
+        "react",
+        lambda b: b.update(model={"provider": "anthropic", "model": "x"}),
+        ["model", "provider"],
+    ),
+    (
+        "unconfigured model",
+        "react",
+        lambda b: b.update(model={"provider": "local", "model": "other"}),
+        ["model"],
+    ),
+    (
+        "empty model id",
+        "react",
+        lambda b: b.update(model={"provider": "local", "model": ""}),
+        ["model", "model"],
+    ),
 ]
 
 

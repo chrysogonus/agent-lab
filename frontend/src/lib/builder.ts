@@ -1,6 +1,6 @@
 // Builder state: a draft custom agent and the edits on it. Pure; components stay thin.
 // Field names match the API's, so a 422 `loc` is a path into the draft.
-import type { AgentConfig, AgentFields, AgentInfo, FieldErrorDetail } from "./api";
+import type { AgentConfig, AgentFields, AgentInfo, FieldErrorDetail, ModelRef } from "./api";
 
 export type Draft = {
   agentId: string | null; // null until the first save
@@ -9,6 +9,7 @@ export type Draft = {
   description: string;
   sample_prompt: string;
   config: AgentConfig;
+  model: ModelRef | null; // null: follows the default model
   dirty: boolean;
 };
 
@@ -45,6 +46,7 @@ export function draftFrom(source: AgentInfo, agents: AgentInfo[]): Draft {
     description: source.description,
     sample_prompt: source.sample_prompt,
     config: structuredClone(source.config),
+    model: source.model,
     dirty: true,
   };
 }
@@ -57,12 +59,13 @@ export function draftFromAgent(agent: AgentInfo): Draft {
     description: agent.description,
     sample_prompt: agent.sample_prompt,
     config: structuredClone(agent.config),
+    model: agent.model,
     dirty: false,
   };
 }
 
-export function draftFields({ name, description, sample_prompt, config }: Draft): AgentFields {
-  return { name, description, sample_prompt, config };
+export function draftFields({ name, description, sample_prompt, config, model }: Draft): AgentFields {
+  return { name, description, sample_prompt, config, model };
 }
 
 export function getField(draft: Draft, path: Path): unknown {

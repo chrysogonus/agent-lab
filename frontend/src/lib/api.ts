@@ -61,6 +61,17 @@ export type Run = {
 
 export type AgentConfig = Record<string, unknown>; // a template's editable fields
 
+/** A model is its provider and id together: the same id may exist on both providers. */
+export type ModelRef = { provider: "local" | "openai"; model: string };
+
+export type ModelInfo = ModelRef & {
+  provider_label: string;
+  external: boolean; // prompts and tool results leave this machine
+  available: boolean;
+  unavailable_reason: string | null;
+  default: boolean;
+};
+
 export type AgentInfo = {
   id: string;
   kind: "template" | "custom";
@@ -69,6 +80,7 @@ export type AgentInfo = {
   description: string;
   sample_prompt: string;
   config: AgentConfig;
+  model: ModelRef | null; // null: follows the default model (templates always)
   graph: Graph;
 };
 
@@ -80,6 +92,7 @@ export type AgentFields = {
   description: string;
   sample_prompt: string;
   config: AgentConfig;
+  model: ModelRef | null;
 };
 
 export type FieldErrorDetail = { loc: (string | number)[]; msg: string };
@@ -102,14 +115,9 @@ export function streamUrl(runId: string): string {
   return `${API_URL.replace(/^http/, "ws")}/runs/${runId}/stream`;
 }
 
-export async function startRun(prompt: string, agentId: string): Promise<Run> {
-  const response = await fetch(`${API_URL}/runs`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, agent_id: agentId }),
-  });
-  if (!response.ok) throw new Error(`Starting the run failed (HTTP ${response.status}).`);
-  return response.json();
+/** A 422 (e.g. the agent's model is no longer available) throws a `ValidationError`. */
+export function startRun(prompt: string, agentId: string): Promise<Run> {
+  return send("POST", "/runs", { prompt, agent_id: agentId });
 }
 
 export async function listRuns(): Promise<Run[]> {
@@ -127,6 +135,12 @@ export async function listAgents(): Promise<AgentInfo[]> {
 export async function listTools(): Promise<ToolInfo[]> {
   const response = await fetch(`${API_URL}/tools`);
   if (!response.ok) throw new Error(`Loading tools failed (HTTP ${response.status}).`);
+  return response.json();
+}
+
+export async function listModels(): Promise<ModelInfo[]> {
+  const response = await fetch(`${API_URL}/models`);
+  if (!response.ok) throw new Error(`Loading models failed (HTTP ${response.status}).`);
   return response.json();
 }
 

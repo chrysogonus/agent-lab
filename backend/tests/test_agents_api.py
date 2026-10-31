@@ -1,10 +1,12 @@
-"""Custom agents through the API: create, list, update, preview, run (US1, US3)."""
+"""Custom agents through the API: create, list, update, preview, run, model choice."""
 
+import json
 import threading
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from helpers import answer, fake_models
@@ -14,6 +16,8 @@ from test_templates import CASES
 from agent_lab.api import create_app
 from agent_lab.graph import Graph
 from agent_lab.llm.fake import FakeLLM, ScriptItem
+from agent_lab.llm.models import ModelEntry, ModelRef, Models
+from agent_lab.llm.openai_compat import OpenAICompatClient
 from agent_lab.store import Store
 
 # Which prompt each template's test changes, as (path into the config, request it must reach).
@@ -276,3 +280,182 @@ def test_duplicate_is_independent(store: Store) -> None:
     assert copy["id"] != original["id"]
     assert agents[original["id"]]["config"] == original["config"]
     assert agents[copy["id"]]["config"]["merge_prompt"] == "Only the top issue."
+
+
+# --- M4: model choice (US1) ---
+
+LUNA = {"provider": "openai", "model": "gpt-6-luna"}
+
+
+def two_models(
+    store: Store,
+    local_script: list[ScriptItem] | None = None,
+    openai_script: list[ScriptItem] | None = None,
+    **options: Any,
+) -> tuple[TestClient, FakeLLM, FakeLLM]:
+    local = FakeLLM(list(local_script or []))
+    openai = FakeLLM(list(openai_script or []), model="gpt-6-luna")
+    app = create_app(store=store, models=fake_models(local, openai, **options))
+    return TestClient(app, base_url=BASE), local, openai
+
+
+def llm_models(spans: list[Any]) -> set[tuple[str, str]]:
+    return {
+        (s["attributes"]["gen_ai.provider.name"], s["attributes"]["gen_ai.request.model"])
+        for s in spans
+        if s["kind"] == "llm"
+    }
+
+
+def test_models_list(store: Store) -> None:
+    client, _, _ = two_models(store)
+    with client:
+        models = client.get("/models").json()
+    assert models == [
+        {
+            "provider": "local",
+            "provider_label": "Local",
+            "model": "fake-model",
+            "external": False,
+            "available": True,
+            "unavailable_reason": None,
+            "default": True,
+        },
+        {
+            "provider": "openai",
+            "provider_label": "OpenAI",
+            "model": "gpt-6-luna",
+            "external": True,
+            "available": True,
+            "unavailable_reason": None,
+            "default": False,
+        },
+    ]
+
+
+def test_pin_openai_model(store: Store) -> None:
+    _, prompt, script = CASES["routing-general"]
+    client, local, openai = two_models(store, openai_script=script)
+    with client:
+        agent = new_agent(client, "routing", model=LUNA)
+        listed = template(client, agent["id"])
+        run, spans = run_to_end(client, agent["id"], prompt)
+    assert agent["model"] == listed["model"] == LUNA
+    assert "model" not in agent["config"] and "provider" not in agent["config"]
+    assert local.calls == [] and len(openai.calls) == 2
+    assert run["status"] == "completed"
+    assert (run["config"]["provider"], run["config"]["model"]) == ("openai", "gpt-6-luna")
+    assert llm_models(spans) == {("openai", "gpt-6-luna")}
+
+
+def test_m3_agent_is_default(store: Store) -> None:
+    client, local, _ = two_models(store, local_script=[answer("a"), answer("b")])
+    with client:
+        config = deepcopy(template(client, "react")["config"])
+        old = store.create_agent(  # stored as by M3: no model key
+            template_id="react", name="Old", description="", sample_prompt="hi", config=config
+        )
+        info = template(client, old.agent_id)
+        run, spans = run_to_end(client, old.agent_id, "hi")
+        template_run, _ = run_to_end(client, "react", "hi")
+    assert info["model"] is None
+    assert "provider" not in run["config"] and run["config"]["model"] == local.model
+    assert run["config_version"] == template_run["config_version"]  # same config, M3 hash
+    assert llm_models(spans) == {("local", "fake-model")}
+
+
+def test_default_agent_follows_default(store: Store) -> None:
+    client, _, _ = two_models(store, local_script=[answer("a")])
+    with client:
+        agent = new_agent(client, "react")
+        first, _ = run_to_end(client, agent["id"], "hi")
+    # The owner changes DEFAULT_MODEL and restarts: same database, new catalog.
+    luna = ModelRef.model_validate(LUNA)
+    restarted, _, _ = two_models(store, openai_script=[answer("b")], default=luna)
+    with restarted as client:
+        second, spans = run_to_end(client, agent["id"], "hi")
+    assert agent["model"] is None
+    assert (first["config"]["model"], second["config"]["model"]) == ("fake-model", "gpt-6-luna")
+    assert second["config"]["provider"] == "openai"
+    assert first["config_version"] != second["config_version"]
+    assert llm_models(spans) == {("openai", "gpt-6-luna")}
+
+
+def test_versions_differ_by_model(store: Store) -> None:
+    client, _, _ = two_models(store, local_script=[answer("a")], openai_script=[answer("b")])
+    with client:
+        default = new_agent(client, "react")
+        pinned = new_agent(client, "react", name="Pinned", model=LUNA)
+        a, _ = run_to_end(client, default["id"], "hi")
+        b, _ = run_to_end(client, pinned["id"], "hi")
+    assert default["config"] == pinned["config"]
+    assert a["config_version"] != b["config_version"]
+
+
+def test_template_runs_on_default(store: Store) -> None:
+    luna = ModelRef.model_validate(LUNA)
+    client, local, openai = two_models(store, openai_script=[answer("b")], default=luna)
+    with client:
+        info = template(client, "react")
+        run, spans = run_to_end(client, "react", "hi")
+    assert info["model"] is None
+    assert local.calls == [] and len(openai.calls) == 1
+    assert run["config"]["provider"] == "openai"
+    assert llm_models(spans) == {("openai", "gpt-6-luna")}
+
+
+def test_runs_on_two_providers_concurrently(store: Store) -> None:
+    local = FakeLLM([answer("a")], delay=0.3)
+    openai = FakeLLM([answer("b")], model="gpt-6-luna", delay=0.3)
+    app = create_app(store=store, models=fake_models(local, openai))
+    with TestClient(app, base_url=BASE) as client:
+        pinned = new_agent(client, "react", model=LUNA)
+        ids = [
+            client.post("/runs", json={"prompt": "hi", "agent_id": agent_id}).json()["run_id"]
+            for agent_id in ("react", pinned["id"])
+        ]
+        runs: list[dict[str, Any]] = []
+        for run_id in ids:
+            with client.websocket_connect(f"{WS_BASE}/runs/{run_id}/stream") as ws:
+                runs.append(read_until_run_ended(ws)[-1]["run"])
+    assert [r["status"] for r in runs] == ["completed", "completed"]
+    assert [r["answer"] for r in runs] == ["a", "b"]
+    first, second = runs
+    assert second["started_at"] < first["ended_at"]  # the two runs overlapped (FR-003)
+
+
+def test_openai_request_over_http(store: Store) -> None:
+    """A pinned agent's model calls go to the OpenAI endpoint with its key and model id."""
+    seen: list[httpx.Request] = []
+    replies = iter(['{"label": "general"}', "Paris"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": next(replies)}}]})
+
+    openai = OpenAICompatClient(
+        base_url="https://openai.test/v1",
+        model="gpt-6-luna",
+        api_key="sk-test-0123456789abcdef",
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        provider="openai",
+        reasoning_off={"reasoning_effort": "none"},
+    )
+    local = FakeLLM([], provider="local")
+    local_ref = ModelRef(provider="local", model=local.model)
+    models = Models(
+        [
+            ModelEntry(local_ref, False, None, local),
+            ModelEntry(ModelRef.model_validate(LUNA), True, None, openai),
+        ],
+        local_ref,
+    )
+    with TestClient(create_app(store=store, models=models), base_url=BASE) as client:
+        agent = new_agent(client, "routing", model=LUNA)
+        run, _ = run_to_end(client, agent["id"], "Capital of France?")
+    assert (run["status"], run["answer"]) == ("completed", "Paris")
+    assert len(seen) == 2
+    for request in seen:
+        assert str(request.url) == "https://openai.test/v1/chat/completions"
+        assert request.headers["authorization"] == "Bearer sk-test-0123456789abcdef"
+        assert json.loads(request.content)["model"] == "gpt-6-luna"

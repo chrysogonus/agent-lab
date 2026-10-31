@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { AgentInfo, GraphNode, ToolInfo } from "@/lib/api";
+import type { AgentInfo, GraphNode, ModelInfo, ToolInfo } from "@/lib/api";
 import {
   draftFromAgent,
   nodeSettings,
@@ -57,6 +57,7 @@ export function AgentBuilder({
   agent,
   draft,
   tools,
+  models,
   saveErrors,
   busy,
   onChange,
@@ -69,6 +70,7 @@ export function AgentBuilder({
   agent: AgentInfo;
   draft: Draft | null;
   tools: ToolInfo[];
+  models: ModelInfo[];
   saveErrors: Record<string, string>;
   busy: boolean;
   onChange: (draft: Draft) => void;
@@ -179,7 +181,7 @@ export function AgentBuilder({
             )}
           </div>
           {section.kind === "agent" ? (
-            <AgentSettings form={form} tools={tools} onOpen={setSection} />
+            <AgentSettings form={form} tools={tools} models={models} onOpen={setSection} />
           ) : (
             <NodeSettings form={form} section={section} tools={tools} />
           )}
