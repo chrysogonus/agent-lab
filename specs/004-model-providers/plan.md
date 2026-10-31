@@ -146,6 +146,7 @@ backend/tests/
 ├── helpers.py                            # catalog from FakeLLMs
 ├── test_models.py                        # new: settings → catalog, default rules
 ├── test_llm_client.py                    # per-provider bodies, strict rewrite, failures
+├── test_templates.py                     # make_config(default ref); golden file unchanged
 ├── test_agents_api.py, test_agents_validation.py, test_api.py, test_redaction.py  # extended
 frontend/src/
 ├── lib/api.ts, lib/models.ts (+ test), lib/builder.ts (+ test)
