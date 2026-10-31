@@ -84,9 +84,9 @@ and talk.
 **Independent test**: each villager's observation shows its persona inputs and last events; a
 move takes several ticks with an arrival event; every invalid answer becomes a recorded wait.
 
-- [ ] T014 [P] [US2] Tests in backend/tests/test_village_turn.py: each of the four agent bodies carries its own persona and the shared rules; the observation of a villager on the way shows "on the way to the market" and its step counts; the 11th event pushes out the oldest (only 10 shown)
-- [ ] T015 [P] [US2] Tests in backend/tests/test_village_runner.py: a move to a place 5 steps away takes 5 ticks and ends with one "arrived" event; each invalid answer (no answer, not JSON, unknown action, unknown place, empty text, unknown `to`, already there, failed run) leaves the villager in place with a "waited" event naming the reason, and the same reason in the turn's `village_action` (SC-004)
-- [ ] T016 [US2] Persona review in backend/src/agent_lab/village/world.py: the four persona texts and the shared rules read naturally, mention when each villager tends to be where, keep answers short, and ask for exactly one JSON object; checked by running quickstart step 3 on the real model (T024)
+- [X] T014 [P] [US2] Tests in backend/tests/test_village_turn.py: each of the four agent bodies carries its own persona and the shared rules; the observation of a villager on the way shows "on the way to the market" and its step counts; the 11th event pushes out the oldest (only 10 shown)
+- [X] T015 [P] [US2] Tests in backend/tests/test_village_runner.py: a move to a place 5 steps away takes 5 ticks and ends with one "arrived" event; each invalid answer (no answer, not JSON, unknown action, unknown place, empty text, unknown `to`, already there, failed run) leaves the villager in place with a "waited" event naming the reason, and the same reason in the turn's `village_action` (SC-004)
+- [X] T016 [US2] Persona review in backend/src/agent_lab/village/world.py: the four persona texts and the shared rules read naturally, mention when each villager tends to be where, keep answers short, and ask for exactly one JSON object; checked by running quickstart step 3 on the real model (T024)
 
 **Checkpoint**: villagers act in character within the action rules; every wait explains itself.
 

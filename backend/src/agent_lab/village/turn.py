@@ -114,11 +114,12 @@ RULES = (
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden. "
     "Every turn is 10 minutes of village time: you read what you see and hear, then choose one "
     "action. Reply with only one JSON object and nothing else:\n"
-    '{"action": "move", "place": "market"} to walk to a place (one step per turn),\n'
+    '{"action": "move", "place": "market"} to walk to a place (one step per turn until you '
+    "arrive; you keep walking while you talk or wait),\n"
     '{"action": "say", "text": "Good morning!", "to": "Jonas"} to speak; "to" is optional. '
     "Only villagers nearby hear you (in the same place, or within 3 steps outside places): to "
     "talk to someone who is not nearby, walk to them first,\n"
-    '{"action": "wait"} to stay where you are.\n'
+    '{"action": "wait"} to do nothing new this turn.\n'
     "Say short things, stay in character, and answer people who talk to you."
 )
 

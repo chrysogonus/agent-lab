@@ -14,7 +14,7 @@ from agent_lab.llm.base import ChatResponse, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 from agent_lab.village.runner import StepConflict, Village
-from agent_lab.village.world import PLACES, VILLAGERS, label_cell, place_at, walkable
+from agent_lab.village.world import PLACES, VILLAGERS, label_cell, place_at, steps_between, walkable
 
 WAIT = '{"action": "wait"}'
 
@@ -205,3 +205,46 @@ async def test_reset_waits_for_the_tick(tmp_path: Path) -> None:
     await step
     assert v.world["tick"] == 0  # the reset came after the tick, not in the middle of it
     assert villager(v, "Hilde")["destination"] is None
+
+
+@pytest.mark.anyio
+async def test_a_long_walk_ends_with_one_arrival(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Greta": [move("square")]}, 12)
+    v.ensure_agents()
+    greta = villager(v, "Greta")
+    steps = steps_between(greta["x"], greta["y"], "square")
+    for _ in range(steps):
+        await v.tick()
+    assert place_at(greta["x"], greta["y"]) == "square" and greta["destination"] is None
+    kinds = [e["kind"] for e in greta["events"]]
+    assert kinds.count("set_off") == 1 and kinds.count("arrived") == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("answer", "reason"),
+    [
+        ("no json here", "turn failed"),  # the agent's JSON check fails the run
+        ('{"action": "dance"}', "not a valid action"),
+        ('{"action": "move", "place": "harbour"}', "unknown place 'harbour'"),
+        ('{"action": "say", "text": " "}', "nothing to say"),
+        ('{"action": "say", "text": "Hi", "to": "Bob"}', "unknown villager 'Bob'"),
+        ('{"action": "move", "place": "pier"}', "already at the pier"),
+        (RuntimeError("model down"), "turn failed"),
+    ],
+)
+async def test_invalid_answers_wait_with_the_reason_recorded(
+    tmp_path: Path, answer: str | Exception, reason: str
+) -> None:
+    v, _ = village_for(tmp_path, {"Jonas": [answer]}, 1)
+    v.ensure_agents()
+    jonas = villager(v, "Jonas")
+    before = (jonas["x"], jonas["y"])
+    await v.tick()
+    assert (jonas["x"], jonas["y"]) == before
+    assert jonas["last_action"]["action"] == "wait" and jonas["last_action"]["reason"].startswith(
+        reason
+    )
+    assert jonas["events"][-1]["kind"] == "waited" and reason in jonas["events"][-1]["text"]
+    [turn] = v.store.list_turns("Jonas")
+    assert turn.village_action is not None and turn.village_action["reason"].startswith(reason)

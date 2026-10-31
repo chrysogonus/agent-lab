@@ -103,3 +103,18 @@ def test_villager_agents_are_valid_block_agents(name: str) -> None:
     assert check.kind == "check" and check.rule == "valid_json"
     assert body["name"] == VILLAGERS[name].title
     assert json.loads('{"action": "wait"}')  # the example in the rules is valid JSON
+
+
+def test_each_agent_has_its_own_persona_and_the_shared_rules() -> None:
+    systems = {n: villager_agent(n)["config"]["blocks"][0]["system"] for n in VILLAGERS}
+    for name, system in systems.items():
+        assert system.startswith(VILLAGERS[name].persona)
+        assert "Only villagers nearby hear you" in system
+        assert all(VILLAGERS[other].persona not in system for other in VILLAGERS if other != name)
+
+
+def test_observation_lists_only_the_last_ten_events() -> None:
+    events = [{"tick": t, "kind": "waited", "text": f"Event {t}."} for t in range(10)]
+    world = world_with(Lina={"events": events})
+    text = observation(world, "Lina")
+    assert text.count("Event ") == 10 and "Event 0." in text

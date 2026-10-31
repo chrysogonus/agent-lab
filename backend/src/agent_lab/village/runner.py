@@ -185,8 +185,7 @@ class Village:
                 if v["destination"] != action["place"]:
                     _event(v, tick, "set_off", f"You set off for the {label(action['place'])}.")
                 v["destination"] = action["place"]
-            elif action["action"] == "wait":
-                v["destination"] = None
+            elif action["action"] == "wait":  # a walk goes on until arrival (FR-009)
                 _event(v, tick, "waited", f"You waited: {reason}." if reason else "You waited.")
             else:
                 speeches.append((v, action))
