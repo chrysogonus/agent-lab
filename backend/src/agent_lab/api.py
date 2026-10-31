@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, StringConstraints, ValidationError
 from agent_lab.agents.registry import AGENTS, AgentSpec, editable, validate_config
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
-from agent_lab.llm.base import LLMClient
+from agent_lab.llm.models import Models
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tools.catalog import TOOLS
@@ -71,7 +71,7 @@ def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
     return RequestValidationError([{"loc": loc, "msg": msg, "type": "value_error"}])
 
 
-def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -> FastAPI:
+def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -> FastAPI:
     app = FastAPI(title="Agent Lab")
     # Rejects DNS-rebinding requests that reach the loopback port under a foreign Host.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
@@ -91,7 +91,7 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
         if "model" in raw:
             raise field_error(("body", "config", "model"), "the model is set by the server")
         try:
-            return validate_config(template_id, raw, llm.model)
+            return validate_config(template_id, raw, models.default)
         except ValidationError as exc:
             errors = [
                 {"loc": ("body", "config", *e["loc"]), "msg": e["msg"], "type": e["type"]}
@@ -100,7 +100,7 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
             raise RequestValidationError(errors) from None
 
     def custom_info(agent: CustomAgent) -> AgentInfo:
-        config = validate_config(agent.template_id, agent.config, llm.model)
+        config = validate_config(agent.template_id, agent.config, models.default)
         return AgentInfo(
             id=agent.agent_id,
             kind="custom",
@@ -118,7 +118,7 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
         return custom_info(agent)
 
     def template_info(spec: AgentSpec) -> AgentInfo:
-        config = spec.make_config(llm)
+        config = validate_config(spec.id, {}, models.default)
         return AgentInfo(
             id=spec.id,
             kind="template",
@@ -188,7 +188,7 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
     @app.post("/runs", status_code=status.HTTP_202_ACCEPTED)
     async def start_run(body: RunRequest) -> Run:
         try:
-            run, config, spec = new_run(body.prompt, body.agent_id, llm, store, secrets)
+            run, config, spec, llm = new_run(body.prompt, body.agent_id, models, store, secrets)
         except UnknownAgent:
             raise field_error(("body", "agent_id"), f"unknown agent {body.agent_id!r}") from None
         store.create_run(run)

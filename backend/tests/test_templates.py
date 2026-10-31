@@ -11,10 +11,11 @@ from typing import Any
 import pytest
 from helpers import answer, ended, json_answer, make_tracer, taken_edges, tool_call
 
-from agent_lab.agents.registry import AGENTS
+from agent_lab.agents.registry import AGENTS, validate_config
 from agent_lab.agents.steps import config_version
 from agent_lab.llm.base import ChatResponse, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
+from agent_lab.llm.models import ModelRef
 
 GOLDEN = Path(__file__).parent / "golden" / "templates.json"
 CONCURRENT = {"parallel", "orchestrator"}  # their requests arrive in no fixed order
@@ -92,7 +93,7 @@ async def run_template(case: str) -> dict[str, Any]:
     template_id, prompt, script = CASES[case]
     spec = AGENTS[template_id]
     llm = FakeLLM(list(script))
-    config = spec.make_config(llm)
+    config = validate_config(template_id, {}, ModelRef(provider="local", model=llm.model))
     tracer, events = make_tracer(template_id)
     result = await spec.create(llm, config, tracer).run(prompt)
     requests = [
@@ -139,3 +140,22 @@ async def test_config_versions() -> None:
     ]:
         actual = (await run_template(case))["config_version"]
         assert (actual == golden[case]["config_version"]) is same, case
+
+
+# M3 versions of the template configs on model "fake-model" (FR-009).
+M3_VERSIONS = {
+    "react": "68228ed54396",
+    "chain": "00c06dfc8c05",
+    "routing": "a0e74f7c0e02",
+    "parallel": "126b8e7e0cff",
+    "orchestrator": "a44081d7e009",
+    "evaluator": "5c409451dd19",
+}
+
+
+@pytest.mark.parametrize("template_id", M3_VERSIONS)
+def test_local_keeps_m3_version_openai_changes_it(template_id: str) -> None:
+    model = AGENTS[template_id].config_model
+    assert config_version(model(model="fake-model")) == M3_VERSIONS[template_id]
+    assert config_version(model(model="fake-model", provider="local")) == M3_VERSIONS[template_id]
+    assert config_version(model(model="fake-model", provider="openai")) != M3_VERSIONS[template_id]

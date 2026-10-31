@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from helpers import answer
+from helpers import answer, fake_models
 
 from agent_lab.api import create_app
 from agent_lab.llm.fake import FakeLLM
@@ -16,7 +16,7 @@ BEARER = "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig"
 def test_secrets_never_stored(tmp_path: Path) -> None:
     path = tmp_path / "lab.db"
     llm = FakeLLM([answer(f"echo: {BEARER} and {API_KEY}")])
-    app = create_app(store=Store(path), llm=llm, secrets=(API_KEY,))
+    app = create_app(store=Store(path), models=fake_models(llm), secrets=(API_KEY,))
     with TestClient(app, base_url="http://127.0.0.1:8000") as client:
         prompt = f"my header is Authorization: {BEARER}, key {API_KEY}"
         run_id = client.post("/runs", json={"prompt": prompt}).json()["run_id"]

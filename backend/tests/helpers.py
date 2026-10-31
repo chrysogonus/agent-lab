@@ -8,6 +8,7 @@ from agent_lab.agents.steps import StepContext, config_version
 from agent_lab.graph import Graph
 from agent_lab.llm.base import ChatResponse, ToolCall
 from agent_lab.llm.fake import FakeLLM
+from agent_lab.llm.models import ModelEntry, ModelRef, Models
 from agent_lab.tools.calculator import CALCULATOR
 from agent_lab.tools.weather import WEATHER
 from agent_lab.tracing.span import Span
@@ -81,3 +82,21 @@ def assert_trace_valid(graph: Graph, spans: list[Span]) -> None:
     assert {s.node_id for s in spans} <= nodes
     declared = {(e.source, e.target) for e in graph.edges}
     assert taken_edges(spans) <= declared, taken_edges(spans) - declared
+
+
+def fake_models(
+    local: FakeLLM,
+    openai: FakeLLM | None = None,
+    *,
+    openai_key: bool = True,
+    default: ModelRef | None = None,
+) -> Models:
+    """A catalog of fake models: `local` (the default unless given) and optionally `openai`."""
+    local.provider = "local"  # spans report the provider as in production
+    entries = [ModelEntry(ModelRef(provider="local", model=local.model), False, None, local)]
+    if openai is not None:
+        openai.provider = "openai"
+        unavailable = None if openai_key else "no API key"
+        ref = ModelRef(provider="openai", model=openai.model)
+        entries.append(ModelEntry(ref, True, unavailable, openai))
+    return Models(entries, default or entries[0].ref)

@@ -12,11 +12,14 @@ ScriptItem = ChatResponse | Exception | Callable[[list[Message]], ChatResponse |
 
 
 class FakeLLM:
-    provider = "fake"
-
     def __init__(
-        self, script: list[ScriptItem], model: str = "fake-model", delay: float = 0
+        self,
+        script: list[ScriptItem],
+        model: str = "fake-model",
+        delay: float = 0,
+        provider: str = "fake",
     ) -> None:
+        self.provider = provider
         self.model = model
         self.delay = delay  # seconds per call, so concurrent calls overlap measurably
         self._script = list(script)

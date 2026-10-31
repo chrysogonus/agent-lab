@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field, StringConstraints, create_model
 
 from agent_lab.agents import steps
-from agent_lab.agents.config_fields import Prompt, fill
+from agent_lab.agents.config_fields import LOCAL, Prompt, Provider, fill
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -22,6 +22,7 @@ SAMPLE_PROMPT = "A weekend trip note for Porto in autumn, travelling by train fr
 
 class Config(BaseModel):
     model: str
+    provider: Provider = LOCAL
     reasoning: bool = False
     max_subtasks: int = Field(default=4, ge=1, le=6)
     # {min_subtasks} and {max_subtasks} follow the limit, so the range always matches the schema.

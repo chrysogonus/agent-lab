@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from helpers import fake_models
 from test_api import BASE
 
 from agent_lab.api import create_app
@@ -125,7 +126,9 @@ CASES: list[tuple[str, str, Callable[[Body], None], list[str | int]]] = [
 
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
-    return TestClient(create_app(store=Store(tmp_path / "lab.db"), llm=FakeLLM([])), base_url=BASE)
+    return TestClient(
+        create_app(store=Store(tmp_path / "lab.db"), models=fake_models(FakeLLM([]))), base_url=BASE
+    )
 
 
 def valid_body(client: TestClient, template_id: str) -> Body:

@@ -12,13 +12,27 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
-def client_with(handler: httpx.MockTransport, api_key: str = "") -> OpenAICompatClient:
+def client_with(
+    handler: httpx.MockTransport, api_key: str = "", **settings: Any
+) -> OpenAICompatClient:
     return OpenAICompatClient(
         base_url="http://llm.test/v1/",
         model="m1",
         api_key=api_key,
         http=httpx.AsyncClient(transport=handler),
+        **settings,
     )
+
+
+def recording() -> tuple[httpx.MockTransport, list[dict[str, Any]]]:
+    """A transport that answers "{}" and records each request body."""
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    return httpx.MockTransport(handler), bodies
 
 
 @pytest.mark.anyio
@@ -139,3 +153,38 @@ async def test_response_format_and_reasoning_sent() -> None:
         assert "response_format" not in body
         assert "reasoning_effort" not in body
         assert "chat_template_kwargs" not in body
+
+
+@pytest.mark.anyio
+async def test_local_body_unchanged() -> None:
+    """The local provider sends exactly the M3 bodies (FR-009)."""
+    transport, bodies = recording()
+    client = client_with(transport)
+    messages = [{"role": "user", "content": "hi"}]
+    for reasoning in (False, True, None):
+        await client.chat(messages, TOOLS, reasoning=reasoning)
+
+    base = {"model": "m1", "messages": messages, "stream": False, "tools": TOOLS}
+    assert bodies == [
+        {
+            **base,
+            "reasoning_effort": "none",
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+        base,
+        base,
+    ]
+    assert client.provider == "local"
+
+
+@pytest.mark.anyio
+async def test_reasoning_off_fields_are_configurable() -> None:
+    transport, bodies = recording()
+    await client_with(transport, reasoning_off={}).chat([], [], reasoning=False)
+    await client_with(transport, reasoning_off={"reasoning_effort": "low"}).chat(
+        [], [], reasoning=False
+    )
+    assert bodies == [
+        {"model": "m1", "messages": [], "stream": False},
+        {"model": "m1", "messages": [], "stream": False, "reasoning_effort": "low"},
+    ]

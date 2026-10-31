@@ -6,10 +6,11 @@ import uuid
 
 from pydantic import BaseModel
 
-from agent_lab.agents.registry import AGENTS, AgentSpec, validate_config
+from agent_lab.agents.registry import AGENTS, AgentSpec, model_of, validate_config
 from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
 from agent_lab.llm.base import LLMClient
+from agent_lab.llm.models import Models
 from agent_lab.store import Run, RunStatus, Store
 from agent_lab.tracing.redact import redact
 from agent_lab.tracing.span import Span
@@ -22,22 +23,29 @@ class UnknownAgent(Exception):
     pass
 
 
-def resolve(agent_id: str, store: Store, llm: LLMClient) -> tuple[AgentSpec, BaseModel, str]:
-    """A template, or a custom agent as (its template, its validated config, its name)."""
+def resolve(
+    agent_id: str, store: Store, models: Models
+) -> tuple[AgentSpec, BaseModel, str, LLMClient]:
+    """(template, validated config, name, client of the config's model) for an agent id.
+
+    Raises `UnknownAgent`, or `UnavailableModel` for a pinned model that cannot be used.
+    """
     if agent_id in AGENTS:
-        spec = AGENTS[agent_id]
-        return spec, spec.make_config(llm), spec.name
-    agent = store.get_agent(agent_id)
-    if agent is None:
-        raise UnknownAgent(agent_id)
-    config = validate_config(agent.template_id, agent.config, llm.model)
-    return AGENTS[agent.template_id], config, agent.name
+        spec, stored, name = AGENTS[agent_id], {}, AGENTS[agent_id].name
+    else:
+        agent = store.get_agent(agent_id)
+        if agent is None:
+            raise UnknownAgent(agent_id)
+        spec, stored, name = AGENTS[agent.template_id], agent.config, agent.name
+    config = validate_config(spec.id, stored, models.default)
+    client = models.client(model_of(config))
+    return spec, config, name, client
 
 
 def new_run(
-    prompt: str, agent_id: str, llm: LLMClient, store: Store, secrets: tuple[str, ...] = ()
-) -> tuple[Run, BaseModel, AgentSpec]:
-    spec, config, name = resolve(agent_id, store, llm)
+    prompt: str, agent_id: str, models: Models, store: Store, secrets: tuple[str, ...] = ()
+) -> tuple[Run, BaseModel, AgentSpec, LLMClient]:
+    spec, config, name, client = resolve(agent_id, store, models)
     run = Run(
         run_id=uuid.uuid4().hex,
         agent_id=agent_id,
@@ -50,7 +58,7 @@ def new_run(
         agent_name=name,
         template_id=spec.id,
     )
-    return run, config, spec
+    return run, config, spec, client
 
 
 async def execute_run(

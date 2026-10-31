@@ -6,10 +6,15 @@ import httpx
 
 from agent_lab.llm.base import ChatResponse, LLMError, Message, ToolCall
 
+# Thinking off on the local server: Ollama reads reasoning_effort; vLLM passes
+# chat_template_kwargs to the Qwen template.
+LOCAL_REASONING_OFF: dict[str, Any] = {
+    "reasoning_effort": "none",
+    "chat_template_kwargs": {"enable_thinking": False},
+}
+
 
 class OpenAICompatClient:
-    provider = "openai_compat"
-
     def __init__(
         self,
         *,
@@ -18,8 +23,13 @@ class OpenAICompatClient:
         api_key: str = "",
         http: httpx.AsyncClient | None = None,
         timeout: float = 120.0,
+        provider: str = "local",
+        reasoning_off: dict[str, Any] | None = None,
     ) -> None:
+        self.provider = provider
         self.model = model
+        # Body fields that turn thinking off; each provider has its own (research.md §5).
+        self._reasoning_off = LOCAL_REASONING_OFF if reasoning_off is None else reasoning_off
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._http = http or httpx.AsyncClient(timeout=timeout)
@@ -41,9 +51,7 @@ class OpenAICompatClient:
         if response_format is not None:
             body["response_format"] = response_format
         if reasoning is False:
-            # Ollama reads reasoning_effort; vLLM passes chat_template_kwargs to the Qwen template.
-            body["reasoning_effort"] = "none"
-            body["chat_template_kwargs"] = {"enable_thinking": False}
+            body |= self._reasoning_off
         try:
             response = await self._http.post(self._url, json=body, headers=self._headers)
         except httpx.HTTPError as exc:

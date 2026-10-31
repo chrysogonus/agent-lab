@@ -5,7 +5,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from agent_lab.agents import steps
-from agent_lab.agents.config_fields import ItemName, Prompt, ShortText, fill
+from agent_lab.agents.config_fields import LOCAL, ItemName, Prompt, Provider, ShortText, fill
 from agent_lab.agents.steps import Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -23,6 +23,7 @@ SAMPLE_PROMPT = (
 
 class Config(BaseModel):
     model: str
+    provider: Provider = LOCAL
     reasoning: bool = False
     # aspect -> what its reviewer looks for; one graph node per aspect.
     aspects: dict[ItemName, ShortText] = Field(

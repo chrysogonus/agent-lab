@@ -1,13 +1,17 @@
 """Field rules shared by the template configs (data-model.md, "Shared field rules")."""
 
 from collections.abc import Iterable
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import AfterValidator, StringConstraints
+from pydantic import AfterValidator, Field, StringConstraints
 
 from agent_lab.tools.catalog import TOOLS
 
 RESERVED_NAMES = frozenset({"start", "end", "gate", "router", "merge"})
+
+LOCAL = "local"
+# Left out of the JSON when local, so local configs keep their M3 `config_version`.
+Provider = Annotated[Literal["local", "openai"], Field(exclude_if=lambda v: v == LOCAL)]
 
 Prompt = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]

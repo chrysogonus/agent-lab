@@ -7,7 +7,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from agent_lab.agents import steps
-from agent_lab.agents.config_fields import ItemName, Prompt, unique
+from agent_lab.agents.config_fields import LOCAL, ItemName, Prompt, Provider, unique
 from agent_lab.agents.steps import Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -31,6 +31,7 @@ class ChainStep(BaseModel):
 
 class Config(BaseModel):
     model: str
+    provider: Provider = LOCAL
     reasoning: bool = False
     steps: list[ChainStep] = Field(
         default=[

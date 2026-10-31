@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field, field_validator
 
 from agent_lab.agents import steps
-from agent_lab.agents.config_fields import Prompt, known_tool, unique
+from agent_lab.agents.config_fields import LOCAL, Prompt, Provider, known_tool, unique
 from agent_lab.agents.steps import StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient, Message
@@ -26,6 +26,7 @@ class ReActConfig(BaseModel):
     """Everything that changes behavior; hashed into `config_version`."""
 
     model: str
+    provider: Provider = LOCAL
     system_prompt: Prompt = SYSTEM_PROMPT
     tools: list[str] = ["calculator", "get_weather"]
     max_iterations: int = Field(default=6, ge=1, le=10)

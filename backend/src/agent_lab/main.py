@@ -2,17 +2,19 @@
 
 from agent_lab.api import create_app
 from agent_lab.config import Settings
-from agent_lab.llm.openai_compat import OpenAICompatClient
+from agent_lab.llm.models import models_from_settings
 from agent_lab.store import Store
 
 settings = Settings.from_env()
 if settings.llm_provider != "openai_compat":
     raise SystemExit(f"unsupported LLM_PROVIDER {settings.llm_provider!r} (only openai_compat)")
+try:
+    models = models_from_settings(settings)
+except ValueError as exc:
+    raise SystemExit(str(exc)) from None
 
 app = create_app(
     store=Store(settings.db_path),
-    llm=OpenAICompatClient(
-        base_url=settings.llm_base_url, model=settings.llm_model, api_key=settings.llm_api_key
-    ),
-    secrets=(settings.llm_api_key,),
+    models=models,
+    secrets=(settings.llm_api_key, settings.openai_api_key),
 )

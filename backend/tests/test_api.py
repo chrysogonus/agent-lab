@@ -5,7 +5,7 @@ from typing import Any
 import anyio
 import pytest
 from fastapi.testclient import TestClient
-from helpers import answer, json_answer, tool_call
+from helpers import answer, fake_models, json_answer, tool_call
 from starlette.websockets import WebSocketDisconnect
 
 from agent_lab.api import create_app
@@ -60,7 +60,7 @@ def store(tmp_path: Path) -> Store:
 def test_live_stream(store: Store) -> None:
     gate = threading.Event()
     llm = GatedLLM([tool_call("calculator", '{"expression": "2+2"}'), answer("4")], gate)
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         response = client.post("/runs", json={"prompt": "2+2?"})
         assert response.status_code == 202
         run = response.json()
@@ -83,12 +83,14 @@ def test_live_stream(store: Store) -> None:
 
 
 def test_rejects_empty_prompt(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         assert client.post("/runs", json={"prompt": ""}).status_code == 422
 
 
 def test_unknown_run_ws(store: Store) -> None:
-    client = TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE)
+    client = TestClient(create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE)
     with client.websocket_connect(f"{WS_BASE}/runs/nope/stream") as ws:
         assert ws.receive_json() == {"type": "error", "message": "unknown run"}
         with pytest.raises(WebSocketDisconnect) as exc:
@@ -97,7 +99,9 @@ def test_unknown_run_ws(store: Store) -> None:
 
 
 def test_rejects_foreign_origin_ws(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         with (
             pytest.raises(WebSocketDisconnect) as exc,
             client.websocket_connect(
@@ -109,13 +113,17 @@ def test_rejects_foreign_origin_ws(store: Store) -> None:
 
 
 def test_rejects_foreign_host(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         response = client.post("/runs", json={"prompt": "hi"}, headers={"host": "evil.test"})
         assert response.status_code == 400
 
 
 def test_cors(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         preflight = {"access-control-request-method": "POST"}
         ok = client.options("/runs", headers={"origin": ORIGIN, **preflight})
         assert ok.headers["access-control-allow-origin"] == ORIGIN
@@ -126,13 +134,17 @@ def test_cors(store: Store) -> None:
 def test_replay_matches_live(tmp_path: Path) -> None:
     path = tmp_path / "lab.db"
     llm = FakeLLM([tool_call("get_weather", '{"city": "Oslo"}'), answer("cold")])
-    with TestClient(create_app(store=Store(path), llm=llm), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=Store(path), models=fake_models(llm)), base_url=BASE
+    ) as client:
         run_id = client.post("/runs", json={"prompt": "Oslo?"}).json()["run_id"]
         with client.websocket_connect(f"{WS_BASE}/runs/{run_id}/stream") as ws:
             live = final_spans(read_until_run_ended(ws))
 
     # A fresh store on the same file stands in for a backend restart.
-    with TestClient(create_app(store=Store(path), llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=Store(path), models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         detail = client.get(f"/runs/{run_id}").json()
         assert detail["run"]["status"] == "completed"
         assert {s["span_id"]: s for s in detail["spans"]} == live
@@ -145,7 +157,7 @@ def test_replay_matches_live(tmp_path: Path) -> None:
 
 def test_list_runs(store: Store) -> None:
     llm = FakeLLM([answer("a"), answer("b")])
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         first = client.post("/runs", json={"prompt": "one"}).json()["run_id"]
         second = client.post("/runs", json={"prompt": "two"}).json()["run_id"]
         listed = [r["run_id"] for r in client.get("/runs").json()]
@@ -153,7 +165,9 @@ def test_list_runs(store: Store) -> None:
 
 
 def test_list_agents(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         agents = client.get("/agents").json()
     assert [a["id"] for a in agents] == [
         "react",
@@ -169,14 +183,18 @@ def test_list_agents(store: Store) -> None:
 
 
 def test_post_run_defaults_to_react(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([answer("hi")])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([answer("hi")]))), base_url=BASE
+    ) as client:
         run = client.post("/runs", json={"prompt": "hi"}).json()
     assert run["agent_id"] == "react"
     assert run["config"]["reasoning"] is True
 
 
 def test_unknown_agent_id_422(store: Store) -> None:
-    with TestClient(create_app(store=store, llm=FakeLLM([])), base_url=BASE) as client:
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
         response = client.post("/runs", json={"prompt": "hi", "agent_id": "nope"})
     assert response.status_code == 422
     assert response.json()["detail"][0]["loc"] == ["body", "agent_id"]
@@ -184,7 +202,7 @@ def test_unknown_agent_id_422(store: Store) -> None:
 
 def test_template_run_records_name_and_template(store: Store) -> None:
     llm = FakeLLM([json_answer({"label": "general"}), answer("Paris")])
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         run = client.post("/runs", json={"prompt": "Capital?", "agent_id": "routing"}).json()
         with client.websocket_connect(f"{WS_BASE}/runs/{run['run_id']}/stream") as ws:
             read_until_run_ended(ws)
@@ -194,7 +212,7 @@ def test_template_run_records_name_and_template(store: Store) -> None:
 
 def test_workflow_run_streams(store: Store) -> None:
     llm = FakeLLM([json_answer({"label": "general"}), answer("Paris")])
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         run = client.post("/runs", json={"prompt": "Capital of France?", "agent_id": "routing"})
         run = run.json()
         with client.websocket_connect(f"{WS_BASE}/runs/{run['run_id']}/stream") as ws:
@@ -213,7 +231,7 @@ def test_workflow_run_streams(store: Store) -> None:
 
 def test_workflow_llm_error_ends_run(store: Store) -> None:
     llm = FakeLLM([LLMError("HTTP 500: boom")])
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         run_id = client.post("/runs", json={"prompt": "bottle", "agent_id": "chain"}).json()
         with client.websocket_connect(f"{WS_BASE}/runs/{run_id['run_id']}/stream") as ws:
             events = read_until_run_ended(ws)
@@ -234,7 +252,7 @@ def respond(messages: list[Message]) -> ChatResponse:
 
 def test_two_workflow_runs_stream_independently(store: Store) -> None:
     llm = FakeLLM([respond] * 6, delay=0.02)  # routing: 2 calls, parallel: 3 reviews + merge
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         runs = [
             client.post("/runs", json={"prompt": "hi", "agent_id": agent}).json()
             for agent in ("routing", "parallel")

@@ -6,7 +6,7 @@ from typing import Self
 from pydantic import BaseModel, Field, model_validator
 
 from agent_lab.agents import steps
-from agent_lab.agents.config_fields import Prompt
+from agent_lab.agents.config_fields import LOCAL, Prompt, Provider
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -20,6 +20,7 @@ SAMPLE_PROMPT = "A solar-powered phone charger called SunSip"
 
 class Config(BaseModel):
     model: str
+    provider: Provider = LOCAL
     reasoning: bool = False
     max_rounds: int = Field(default=3, ge=1, le=5)
     generator_prompt: Prompt = (

@@ -5,7 +5,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, create_model, field_validator, model_validator
 
 from agent_lab.agents import steps
-from agent_lab.agents.config_fields import ItemName, Prompt, ShortText, known_tool, unique
+from agent_lab.agents.config_fields import (
+    LOCAL,
+    ItemName,
+    Prompt,
+    Provider,
+    ShortText,
+    known_tool,
+    unique,
+)
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
@@ -34,6 +42,7 @@ class RouteSpec(BaseModel):
 
 class Config(BaseModel):
     model: str
+    provider: Provider = LOCAL
     reasoning: bool = False
     router_prompt: Prompt = "Classify the user's question."
     routes: list[RouteSpec] = Field(

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from helpers import answer
+from helpers import answer, fake_models
 from test_api import BASE, ORIGIN, WS_BASE, GatedLLM, final_spans, read_until_run_ended
 from test_templates import CASES
 
@@ -42,7 +42,7 @@ def store(tmp_path: Path) -> Store:
 
 def client_for(store: Store, script: list[ScriptItem] | None = None) -> tuple[TestClient, FakeLLM]:
     llm = FakeLLM(list(script or []))
-    return TestClient(create_app(store=store, llm=llm), base_url=BASE), llm
+    return TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE), llm
 
 
 def template(client: TestClient, template_id: str) -> dict[str, Any]:
@@ -227,7 +227,7 @@ def test_delete_keeps_runs(store: Store) -> None:
 def test_delete_while_running(store: Store) -> None:
     gate = threading.Event()
     llm = GatedLLM([answer("late")], gate)
-    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         agent = new_agent(client, "react")
         run = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]}).json()
         assert client.delete(f"/agents/{agent['id']}").status_code == 204
