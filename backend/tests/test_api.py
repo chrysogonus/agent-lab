@@ -160,8 +160,13 @@ def test_list_runs(store: Store) -> None:
     with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
         first = client.post("/runs", json={"prompt": "one"}).json()["run_id"]
         second = client.post("/runs", json={"prompt": "two"}).json()["run_id"]
-        listed = [r["run_id"] for r in client.get("/runs").json()]
-        assert listed == [second, first]
+        runs = client.get("/runs").json()
+        assert [r["run_id"] for r in runs] == [second, first]
+        # Village fields (M6) are null on every other run.
+        assert all(
+            (r["village_tick"], r["villager"], r["village_action"]) == (None, None, None)
+            for r in runs
+        )
 
 
 def test_list_agents(store: Store) -> None:

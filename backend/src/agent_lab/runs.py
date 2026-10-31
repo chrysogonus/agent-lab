@@ -43,7 +43,14 @@ def resolve(
 
 
 def new_run(
-    prompt: str, agent_id: str, models: Models, store: Store, secrets: tuple[str, ...] = ()
+    prompt: str,
+    agent_id: str,
+    models: Models,
+    store: Store,
+    secrets: tuple[str, ...] = (),
+    *,
+    village_tick: int | None = None,
+    villager: str | None = None,
 ) -> tuple[Run, BaseModel, AgentSpec, LLMClient]:
     spec, config, name, client = resolve(agent_id, store, models)
     run = Run(
@@ -57,6 +64,8 @@ def new_run(
         started_at=time.time(),
         agent_name=name,
         template_id=spec.id,
+        village_tick=village_tick,
+        villager=villager,
     )
     return run, config, spec, client
 

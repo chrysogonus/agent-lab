@@ -62,10 +62,20 @@ CREATE TABLE IF NOT EXISTS spans (
     attributes TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS spans_by_run ON spans(run_id, started_at);
+CREATE TABLE IF NOT EXISTS village (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    state TEXT NOT NULL
+);
 """
 
 # Columns added after M2; older databases get them in place, their runs keep NULL.
-_RUN_COLUMNS_SINCE_M3 = ("agent_name", "template_id")
+_RUN_COLUMNS_SINCE_M3 = {
+    "agent_name": "TEXT",
+    "template_id": "TEXT",
+    "village_tick": "INTEGER",  # M6: a villager's turn belongs to this tick
+    "villager": "TEXT",
+    "village_action": "TEXT",  # JSON: the action applied for the turn, with any wait reason
+}
 
 _SPAN_JSON = ("input", "output", "attributes")
 
@@ -102,6 +112,9 @@ class Run(BaseModel):
     totals: RunTotals | None = None  # filled when read from the store
     agent_name: str | None = None  # the agent's name when the run started; None before M3
     template_id: str | None = None  # None before M3
+    village_tick: int | None = None  # set on a villager's turn (M6)
+    villager: str | None = None
+    village_action: dict[str, Any] | None = None
 
 
 class NameInUse(Exception):
@@ -129,9 +142,9 @@ class Store:
         self._lock = threading.Lock()
         self._db.executescript(_SCHEMA)
         columns = {r["name"] for r in self._db.execute("PRAGMA table_info(runs)")}
-        for column in _RUN_COLUMNS_SINCE_M3:
+        for column, kind in _RUN_COLUMNS_SINCE_M3.items():
             if column not in columns:
-                self._db.execute(f"ALTER TABLE runs ADD COLUMN {column} TEXT")
+                self._db.execute(f"ALTER TABLE runs ADD COLUMN {column} {kind}")
 
     def close(self) -> None:
         self._db.close()
@@ -140,8 +153,8 @@ class Store:
         with self._lock:
             self._db.execute(
                 "INSERT INTO runs (run_id, agent_id, config_version, prompt, status, answer, graph,"
-                " config, started_at, ended_at, agent_name, template_id)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                " config, started_at, ended_at, agent_name, template_id, village_tick, villager)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.run_id,
                     run.agent_id,
@@ -155,6 +168,8 @@ class Store:
                     run.ended_at,
                     run.agent_name,
                     run.template_id,
+                    run.village_tick,
+                    run.villager,
                 ),
             )
 
@@ -189,10 +204,41 @@ class Store:
     def list_runs(self, limit: int = 100) -> list[Run]:
         with self._lock:
             rows = self._db.execute(
-                _RUNS_WITH_TOTALS + "GROUP BY runs.run_id ORDER BY runs.started_at DESC LIMIT ?",
+                _RUNS_WITH_TOTALS
+                + "WHERE runs.village_tick IS NULL"  # turns are listed per villager
+                " GROUP BY runs.run_id ORDER BY runs.started_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [_run(r) for r in rows]
+
+    def list_turns(self, villager: str, limit: int = 200) -> list[Run]:
+        """A villager's turns, newest first, whichever agent played them."""
+        with self._lock:
+            rows = self._db.execute(
+                _RUNS_WITH_TOTALS + "WHERE runs.villager=?"
+                " GROUP BY runs.run_id ORDER BY runs.started_at DESC LIMIT ?",
+                (villager, limit),
+            ).fetchall()
+        return [_run(r) for r in rows]
+
+    def set_village_action(self, run_id: str, action: dict[str, Any]) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE runs SET village_action=? WHERE run_id=?", (json.dumps(action), run_id)
+            )
+
+    def load_village(self) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._db.execute("SELECT state FROM village WHERE id=1").fetchone()
+        return json.loads(row["state"]) if row else None
+
+    def save_village(self, state: dict[str, Any]) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO village (id, state) VALUES (1, ?)"
+                " ON CONFLICT(id) DO UPDATE SET state=excluded.state",
+                (json.dumps(state),),
+            )
 
     def get_spans(self, run_id: str) -> list[Span]:
         with self._lock:
@@ -309,6 +355,8 @@ def _run(row: sqlite3.Row) -> Run:
     data = dict(row)
     data["graph"] = Graph.model_validate_json(data["graph"])
     data["config"] = json.loads(data["config"])
+    if data.get("village_action") is not None:
+        data["village_action"] = json.loads(data["village_action"])
     ended = data["ended_at"]
     data["totals"] = RunTotals(
         llm_calls=data.pop("llm_calls"),

@@ -141,6 +141,7 @@ def test_migrates_m2_database(tmp_path: Path) -> None:
     store = Store(path)
     [old] = store.list_runs()
     assert (old.run_id, old.agent_name, old.template_id) == ("r1", None, None)
+    assert (old.village_tick, old.villager, old.village_action) == (None, None, None)
     new = make_run("r2", 3.0).model_copy(update={"agent_name": "Mine", "template_id": "react"})
     store.create_run(new)
     stored = store.get_run("r2")
@@ -188,3 +189,27 @@ def test_name_unique_ignoring_case_and_spaces(tmp_path: Path) -> None:
     with pytest.raises(NameInUse):
         rename(other, "mine")
     assert rename(first, "MINE") is not None  # its own name in another case is fine
+
+
+def test_village_turns_are_listed_per_villager(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_run(make_run("normal", 1.0))
+    turn = make_run("turn", 2.0).model_copy(update={"village_tick": 7, "villager": "Jonas"})
+    store.create_run(turn)
+    store.set_village_action("turn", {"action": "wait", "reason": "unknown place 'harbour'"})
+
+    assert [r.run_id for r in store.list_runs()] == ["normal"]  # turns stay out of the main list
+    [listed] = store.list_turns("Jonas")
+    assert (listed.village_tick, listed.villager) == (7, "Jonas")
+    assert listed.village_action == {"action": "wait", "reason": "unknown place 'harbour'"}
+    assert store.list_turns("Lina") == []
+    normal = store.get_run("normal")
+    assert normal is not None and normal.village_action is None
+
+
+def test_village_state_round_trips(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    assert store.load_village() is None
+    store.save_village({"tick": 1})
+    store.save_village({"tick": 2, "villagers": []})
+    assert Store(tmp_path / "lab.db").load_village() == {"tick": 2, "villagers": []}
