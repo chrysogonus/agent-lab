@@ -12,7 +12,12 @@
   --color-signal: #e8b600;
   --color-signal-ink: #8a6a00;
   --color-fault: #c81e4a;
+  --color-dusk: #2a2340;
+  --color-dusk-muted: #625b7e;
+  --color-dusk-rule: #cfc8e6;
+  --color-parchment: #fffaf0;
   --font-sans: var(--font-instrument), system-ui, sans-serif;
+  --font-pixel: var(--font-pixelify), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 }
 
@@ -43,5 +48,154 @@
   .lab-node--active,
   .lab-running {
     animation: none;
+  }
+}
+
+/* The village: a pixel-art world with game windows around it. */
+.pixel-art {
+  shape-rendering: crispEdges;
+}
+
+/* The pixel font's fi and fl ligatures read as a single A. */
+.font-pixel,
+.village-button {
+  font-variant-ligatures: none;
+}
+
+.village-window {
+  background: var(--color-parchment);
+  border: 3px solid var(--color-dusk);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 2px var(--color-parchment),
+    inset 0 0 0 4px var(--color-dusk-rule),
+    0 4px 0 color-mix(in srgb, var(--color-dusk) 22%, transparent);
+}
+
+.village-button {
+  font-family: var(--font-pixel);
+  font-size: 1rem;
+  line-height: 1.25;
+  color: var(--color-dusk);
+  background: var(--color-parchment);
+  border: 2px solid var(--color-dusk);
+  border-radius: 6px;
+  padding: 0.3rem 0.9rem;
+  box-shadow: 0 3px 0 var(--color-dusk);
+  transition:
+    transform 60ms,
+    box-shadow 60ms;
+}
+.village-button:hover:not(:disabled) {
+  background: #fff1c9;
+}
+.village-button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--color-dusk);
+}
+.village-button:disabled {
+  opacity: 0.45;
+}
+.village-button:focus-visible,
+.village-menu-item:focus-visible {
+  outline: 3px solid var(--color-llm);
+  outline-offset: 2px;
+}
+.village-button--go {
+  background: #ffd75e;
+}
+.village-button--go:hover:not(:disabled) {
+  background: #ffe48e;
+}
+.village-button--danger {
+  color: var(--color-fault);
+}
+.village-button--small {
+  font-size: 0.875rem;
+  padding: 0.15rem 0.6rem;
+}
+
+/* The menu cursor of a game: a triangle beside the item you point at. */
+.village-menu-item {
+  position: relative;
+}
+.village-menu-item:hover {
+  background: #fff1c9;
+}
+.village-menu-item::before {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  margin-top: -5px;
+  border: 5px solid transparent;
+  border-left: 6px solid var(--color-dusk);
+  opacity: 0;
+}
+.village-menu-item:hover::before,
+.village-menu-item:focus-visible::before {
+  opacity: 1;
+}
+
+.village-tint {
+  transition:
+    fill 1s,
+    opacity 1s;
+}
+
+/* Water ripples in two frames; walkers bob; the cursor over a picked villager bounces. */
+.village-wave-a {
+  animation: village-frames 1.6s infinite;
+}
+.village-wave-b {
+  animation: village-frames 1.6s -0.8s infinite;
+}
+.village-walk {
+  animation: village-bob 0.5s infinite;
+}
+.village-cursor {
+  animation: village-bob 0.8s infinite;
+}
+@keyframes village-frames {
+  0%,
+  49.9% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes village-bob {
+  0%,
+  49.9% {
+    transform: translateY(0);
+  }
+  50%,
+  100% {
+    transform: translateY(-1px);
+  }
+}
+
+.village-ring,
+.village-figure .village-name {
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.village-figure:focus-visible .village-ring,
+.village-figure:hover .village-name,
+.village-figure:focus-visible .village-name,
+.village-figure[aria-pressed="true"] .village-name {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .village-wave-a,
+  .village-walk,
+  .village-cursor {
+    animation: none;
+  }
+  .village-wave-b {
+    display: none;
   }
 }

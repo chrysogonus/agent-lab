@@ -10,26 +10,28 @@ export function cellKind(char: string): CellKind {
   return "place";
 }
 
-// Soft tiles so the villagers' colors stand out; each place has its own tint for orientation.
-export const TILE_FILL: Record<string, string> = {
-  ".": "#dfe8d3",
-  "=": "#ebe1c9",
-  "~": "#bcd3e6",
-  T: "#e1dbee",
-  S: "#ece5d3",
-  M: "#f2e1cb",
-  P: "#d8c9b2",
-  F: "#e7dfb0",
-  G: "#f2d8e2",
-};
+export type Area = { x0: number; y0: number; x1: number; y1: number };
 
-/** The map darkens toward the night, so the time can be read from it. */
-export const PERIOD_SHADE: Record<VillageState["period"], number> = {
-  morning: 0,
-  midday: 0,
-  afternoon: 0.04,
-  evening: 0.16,
-  night: 0.34,
+/** The cells each place letter covers, as a box: where its building or scenery is drawn. */
+export function placeAreas(rows: string[]): Record<string, Area> {
+  const areas: Record<string, Area> = {};
+  rows.forEach((row, y) =>
+    [...row].forEach((char, x) => {
+      if (cellKind(char) !== "place") return;
+      const a = areas[char];
+      areas[char] = a ? { x0: Math.min(a.x0, x), y0: Math.min(a.y0, y), x1: Math.max(a.x1, x), y1: Math.max(a.y1, y) } : { x0: x, y0: y, x1: x, y1: y };
+    }),
+  );
+  return areas;
+}
+
+/** The light over the map: warm in the morning, dusky in the evening, dark blue at night. */
+export const PERIOD_TINT: Record<VillageState["period"], { color: string; opacity: number }> = {
+  morning: { color: "#ffcf8a", opacity: 0.08 },
+  midday: { color: "#ffffff", opacity: 0 },
+  afternoon: { color: "#ffb070", opacity: 0.07 },
+  evening: { color: "#4b2a6b", opacity: 0.3 },
+  night: { color: "#101642", opacity: 0.52 },
 };
 
 export type Figure = { villager: Villager; cx: number; cy: number };
@@ -42,21 +44,21 @@ export function figures(state: VillageState): Figure[] {
     const index = seen.get(key) ?? 0;
     seen.set(key, index + 1);
     const shared = state.villagers.filter((v) => v.x === villager.x && v.y === villager.y).length;
-    const offset = shared > 1 ? (index - (shared - 1) / 2) * 0.32 : 0;
+    const offset = shared > 1 ? (index - (shared - 1) / 2) * 0.6 : 0;
     return { villager, cx: villager.x + 0.5 + offset, cy: villager.y + 0.5 };
   });
 }
 
-/** "Hilde → Jonas: …" or "Hilde: …" for this tick's speech; null when silent. */
-export function speechText(villager: Villager): string | null {
-  if (!villager.speech) return null;
-  const who = villager.speech.to ? `${villager.name} → ${villager.speech.to}` : villager.name;
-  return `${who}: ${villager.speech.text}`;
+/** This tick's speeches, for the dialog box under the map. */
+export function speeches(state: VillageState): { villager: Villager; text: string; to: string | null }[] {
+  return state.villagers.flatMap((villager) => (villager.speech ? [{ villager, ...villager.speech }] : []));
 }
 
-/** The bubble shows the start; the full words are in the panel and the turn. */
-export function bubbleText(text: string, max = 46): string {
-  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+/** What the dialog box says when nobody spoke this tick. */
+export function narration(state: VillageState): string {
+  if (state.tick === 0 && !state.running) return "Everyone is still at home. Start the village to wake them up.";
+  if (state.ticking) return "The villagers are thinking…";
+  return state.period === "night" ? "The village is asleep. Nobody is talking." : "Nobody is talking right now.";
 }
 
 export function clockText(state: VillageState): string {

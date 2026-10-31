@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { villagerTurns, type Run, type Villager } from "@/lib/api";
 import { eventLines, turnLabel, whereText } from "@/lib/village";
+import { VillagerSprite } from "./pixels";
 
 /** One villager: who it is, where, what it remembers, and every turn it took. */
 export function VillagerPanel({
@@ -26,55 +27,53 @@ export function VillagerPanel({
   }, [villager.name, tick, turnsStarted]);
 
   return (
-    <section className="flex flex-col gap-3" aria-label={villager.title}>
-      <div className="flex items-start gap-2">
-        <span className="mt-1 size-3.5 shrink-0 rounded-full" style={{ background: villager.color }} aria-hidden />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-ink">{villager.title}</h2>
-          <p className="text-sm text-muted">{whereText(villager)}</p>
+    <section className="flex flex-col gap-4" aria-label={villager.title}>
+      <div className="flex items-start gap-3">
+        <div className="rounded-md border-2 border-dusk bg-[#b7e08f] p-1" style={{ boxShadow: `inset 0 -6px 0 ${villager.color}33` }}>
+          <VillagerSprite name={villager.name} size={56} />
         </div>
-        <button type="button" onClick={onClose} className="text-sm text-llm hover:underline focus-visible:outline-2 focus-visible:outline-llm">
-          All villagers
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl leading-tight" style={{ color: villager.color }}>
+            {villager.title}
+          </h2>
+          <p className="text-base text-dusk-muted">{whereText(villager)}</p>
+        </div>
+        <button type="button" onClick={onClose} className="village-button village-button--small">
+          Back
         </button>
       </div>
-      <p className="text-sm leading-relaxed text-ink">{villager.persona}</p>
+      <p className="font-sans text-sm leading-relaxed text-dusk">{villager.persona}</p>
       {villager.agent_id && (
-        <button
-          type="button"
-          onClick={() => onEditAgent(villager.agent_id!)}
-          className="self-start text-sm font-semibold text-llm hover:underline focus-visible:outline-2 focus-visible:outline-llm"
-        >
+        <button type="button" onClick={() => onEditAgent(villager.agent_id!)} className="village-button self-start">
           Edit its agent
         </button>
       )}
       <div>
-        <h3 className="mb-1 text-sm font-semibold text-ink">Remembers</h3>
+        <h3 className="mb-1.5 text-lg">Remembers</h3>
         {villager.events.length === 0 ? (
-          <p className="text-sm text-muted">Nothing yet. Start or step the village.</p>
+          <p className="text-sm text-dusk-muted">Nothing yet. Start or step the village.</p>
         ) : (
-          <ol className="flex flex-col gap-0.5">
+          <ol className="flex flex-col gap-1 font-sans">
             {eventLines(villager).map((e) => (
-              <li key={e.key} className="text-sm text-ink">
-                <span className="text-muted tabular-nums">{e.time}</span> {e.text}
+              <li key={e.key} className="text-sm text-dusk">
+                <span className="font-pixel text-dusk-muted tabular-nums">{e.time}</span> {e.text}
               </li>
             ))}
           </ol>
         )}
       </div>
       <div>
-        <h3 className="mb-1 text-sm font-semibold text-ink">Turns</h3>
+        <h3 className="mb-1.5 text-lg">Turns</h3>
         {turns.length === 0 ? (
-          <p className="text-sm text-muted">No turns yet.</p>
+          <p className="text-sm text-dusk-muted">No turns yet.</p>
         ) : (
-          <ol className="flex max-h-72 flex-col divide-y divide-rule/60 overflow-auto rounded-md border border-rule">
+          <ol className="flex max-h-72 flex-col overflow-auto rounded-md border-2 border-dusk-rule font-sans">
             {turns.map((turn) => (
-              <li key={turn.run_id}>
+              <li key={turn.run_id} className="border-b border-dusk-rule/70 last:border-b-0">
                 <button
                   type="button"
                   onClick={() => onOpenTurn(turn)}
-                  className={`w-full truncate px-2 py-1.5 text-left text-sm hover:bg-paper focus-visible:outline-2 focus-visible:outline-llm ${
-                    turn.village_action?.reason ? "text-signal-ink" : "text-ink"
-                  }`}
+                  className={`village-menu-item w-full truncate py-1.5 pr-2 pl-6 text-left text-sm ${turn.village_action?.reason ? "text-signal-ink" : "text-dusk"}`}
                   title="Open this turn: its graph, prompt and answer"
                 >
                   {turnLabel(turn)}

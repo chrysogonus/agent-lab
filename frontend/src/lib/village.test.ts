@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Run, VillageState, Villager } from "./api";
 import {
-  bubbleText,
   cellKind,
   clockText,
   eventLines,
   figures,
-  speechText,
+  narration,
+  placeAreas,
+  speeches,
   statusLine,
   tickTime,
   turnLabel,
@@ -49,6 +50,10 @@ describe("map", () => {
     expect(["~", "=", ".", "T"].map(cellKind)).toEqual(["water", "path", "grass", "place"]);
   });
 
+  it("boxes each place's cells", () => {
+    expect(placeAreas(["..TT", "=.TT", "~~P."])).toEqual({ T: { x0: 2, y0: 0, x1: 3, y1: 1 }, P: { x0: 2, y0: 2, x1: 2, y1: 2 } });
+  });
+
   it("puts each villager at its cell and spreads villagers who share one", () => {
     const shared = state({
       villagers: [villager({ x: 5, y: 5 }), villager({ name: "Jonas", x: 5, y: 5 }), villager({ name: "Lina", x: 2, y: 3 })],
@@ -62,12 +67,14 @@ describe("map", () => {
 });
 
 describe("words", () => {
-  it("shows speech with its addressee", () => {
-    expect(speechText(villager({ speech: { text: "Fish?", to: "Jonas" } }))).toBe("Hilde → Jonas: Fish?");
-    expect(speechText(villager({ speech: { text: "Hello all", to: null } }))).toBe("Hilde: Hello all");
-    expect(speechText(villager({}))).toBeNull();
-    expect(bubbleText("x".repeat(60))).toHaveLength(46);
-    expect(bubbleText("short")).toBe("short");
+  it("lists this tick's speeches, or narrates when nobody spoke", () => {
+    const talking = state({
+      villagers: [villager({ speech: { text: "Fish?", to: "Jonas" } }), villager({ name: "Jonas" })],
+    });
+    expect(speeches(talking).map((s) => [s.villager.name, s.text, s.to])).toEqual([["Hilde", "Fish?", "Jonas"]]);
+    expect(speeches(state({ villagers: [villager({})] }))).toEqual([]);
+    expect(narration(state({ tick: 0 }))).toMatch(/Start the village/);
+    expect(narration(state({ tick: 3, ticking: true }))).toBe("The villagers are thinking…");
   });
 
   it("states the clock and the village's status", () => {
