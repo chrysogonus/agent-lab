@@ -26,8 +26,8 @@ Decisions inside the existing stack; no new dependencies (see §8).
 - **Action format** (the model answers with exactly one JSON object):
   `{"action": "move", "place": "market"}`, `{"action": "say", "text": "…", "to": "Jonas"}`
   (`to` optional), `{"action": "wait"}`. The village validates it with a pydantic `Action`
-  union: place one of the six, text not empty (any length; cut to 200 when shown and heard, as the spec's edge case says), `to` one
-  of the other three villagers' first names. Anything else, a failed check or a failed run →
+  union: place one of the six; text not empty, any length (cut to 200 characters when shown
+  and heard, per the spec's edge case); `to` one of the other three villagers' first names. Anything else, a failed check or a failed run →
   `wait` with the reason (FR-008, FR-016).
 - **Rationale**: the owner can open and edit any villager in the builder like any block agent;
   the check makes unreadable answers visible in the trace.
