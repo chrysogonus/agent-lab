@@ -12,7 +12,10 @@ Expected: all gates pass with no real model. Notable tests: map and path finding
 observations; every action and invalid answers; simultaneous application of a tick; speech
 reaching only nearby villagers with the addressee; 100 scripted ticks with valid positions
 (SC-002); persistence, restart and reset (SC-005); self-pause after failed ticks and without a
-viewer; village turns traced with their tick and absent from `GET /runs` (SC-003).
+viewer; village turns traced with their tick and absent from `GET /runs` (SC-003); Step and
+Reset from two tabs never overlapping a tick; a turn's wait reason readable long after its
+events rolled off; a villager's turns still listed after its agent was deleted and recreated
+by Reset.
 
 ## Manual (real model)
 
