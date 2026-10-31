@@ -18,6 +18,7 @@ from agent_lab.agents.registry import (
     pinned,
     validate_config,
 )
+from agent_lab.blocks.convert import to_blocks
 from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
@@ -227,6 +228,39 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             sample_prompt=BLOCKS.sample_prompt,
             config=editable(config),
             model=None,
+            graph=BLOCKS.graph(config),
+        )
+
+    @app.get("/agents/{agent_id}/blocks")
+    async def open_as_blocks(agent_id: str) -> AgentInfo:
+        """An unsaved block copy of a template or template-based agent ("Open as blocks")."""
+        if agent_id in AGENTS:
+            spec = AGENTS[agent_id]
+            stored: dict[str, Any] = {}
+            name, description, sample_prompt = spec.name, spec.description, spec.sample_prompt
+        else:
+            agent = store.get_agent(agent_id)
+            if agent is None:
+                raise HTTPException(status_code=404, detail="unknown agent")
+            if agent.template_id == BLOCKS.id:
+                raise HTTPException(status_code=409, detail="already a block agent")
+            spec, stored = AGENTS[agent.template_id], agent.config
+            name, description, sample_prompt = agent.name, agent.description, agent.sample_prompt
+        model = pinned(stored)
+        source = validate_config(spec.id, stored, models.default)
+        pinned_keys = {"model": model.model, "provider": model.provider} if model else {}
+        config = validate_config(
+            BLOCKS.id, {**to_blocks(spec.id, source), **pinned_keys}, models.default
+        )
+        return AgentInfo(
+            id="",
+            kind="custom",
+            template_id=BLOCKS.id,
+            name=name,
+            description=description,
+            sample_prompt=sample_prompt,
+            config=editable(config),
+            model=model,
             graph=BLOCKS.graph(config),
         )
 

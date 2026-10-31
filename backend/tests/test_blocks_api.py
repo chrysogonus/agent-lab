@@ -160,3 +160,107 @@ def test_block_agent_on_pinned_model(store: Store) -> None:
     assert {s["attributes"]["gen_ai.provider.name"] for s in spans if s["kind"] == "llm"} == {
         "openai"
     }
+
+
+# --- US3: open as blocks, history ---
+
+
+def test_open_template_as_blocks(store: Store) -> None:
+    client, _ = client_for(store)
+    with client:
+        draft = client.get("/agents/routing/blocks").json()
+        template = next(a for a in client.get("/agents").json() if a["id"] == "routing")
+    assert (draft["id"], draft["template_id"], draft["model"]) == ("", "blocks", None)
+    assert (draft["name"], draft["sample_prompt"]) == (template["name"], template["sample_prompt"])
+    assert draft["config"]["blocks"][0]["kind"] == "router"
+    assert {n["id"] for n in draft["graph"]["nodes"]} == {
+        n["id"] for n in template["graph"]["nodes"]
+    }
+
+
+def test_open_custom_agent_as_blocks(store: Store) -> None:
+    client, _, _ = two_models(store)
+    with client:
+        base = next(a for a in client.get("/agents").json() if a["id"] == "evaluator")
+        body = {
+            "template_id": "evaluator",
+            "name": "Slogans",
+            "description": "",
+            "sample_prompt": "A lamp",
+            "config": {**base["config"], "max_rounds": 5},
+            "model": LUNA,
+        }
+        agent = client.post("/agents", json=body).json()
+        draft = client.get(f"/agents/{agent['id']}/blocks").json()
+        saved = save(client, {**draft, "template_id": "blocks", "name": "Slogans blocks"})
+    assert draft["model"] == LUNA and draft["name"] == "Slogans"
+    assert draft["config"]["blocks"][0]["max_rounds"] == 5
+    assert saved["model"] == LUNA  # the copy saves as a block agent on the same model
+
+
+def test_open_block_agent_conflict(store: Store) -> None:
+    client, _ = client_for(store)
+    with client:
+        agent = save(client, block_agent(model_block("a")))
+        conflict = client.get(f"/agents/{agent['id']}/blocks")
+        missing = client.get("/agents/custom-nope/blocks")
+    assert (conflict.status_code, missing.status_code) == (409, 404)
+
+
+def test_edit_keeps_past_runs(store: Store) -> None:
+    client, _ = client_for(store, [answer("one"), answer("two")])
+    with client:
+        agent = save(client, block_agent(model_block("first"), name="History"))
+        before, _ = run_to_end(client, agent["id"], "hi")
+        changed = {**agent["config"], "blocks": [model_block("renamed", system="Other prompt.")]}
+        body = {"name": "History", "description": "", "sample_prompt": "hi", "config": changed}
+        assert client.put(f"/agents/{agent['id']}", json=body).status_code == 200
+        after, _ = run_to_end(client, agent["id"], "hi")
+        replay = client.get(f"/runs/{before['run_id']}").json()
+    assert before["config_version"] != after["config_version"]
+    assert [b["name"] for b in replay["run"]["config"]["blocks"]] == ["first"]
+    assert {n["id"] for n in replay["run"]["graph"]["nodes"]} == {"start", "first", "end"}
+    assert {s["node_id"] for s in replay["spans"]} <= {"start", "first", "end"}
+
+
+def test_delete_keeps_past_runs(store: Store) -> None:
+    client, _ = client_for(store, [answer("one")])
+    with client:
+        agent = save(client, block_agent(model_block("first"), name="Gone"))
+        run, _ = run_to_end(client, agent["id"], "hi")
+        assert client.delete(f"/agents/{agent['id']}").status_code == 204
+        listed = client.get("/runs").json()
+        replay = client.get(f"/runs/{run['run_id']}").json()
+    assert [r["agent_name"] for r in listed] == ["Gone"]
+    assert replay["run"]["graph"] == run["graph"]
+
+
+def test_templates_and_m3_agents_unchanged(store: Store) -> None:
+    """Block agents add a kind; templates and M3 agents keep their M4 shape."""
+    client, _ = client_for(store)
+    with client:
+        agents = client.get("/agents").json()
+    templates = [a for a in agents if a["kind"] == "template"]
+    assert [a["id"] for a in templates] == [
+        "react",
+        "chain",
+        "routing",
+        "parallel",
+        "orchestrator",
+        "evaluator",
+    ]
+    assert all(
+        set(a)
+        == {
+            "id",
+            "kind",
+            "template_id",
+            "name",
+            "description",
+            "sample_prompt",
+            "config",
+            "model",
+            "graph",
+        }
+        for a in agents
+    )
