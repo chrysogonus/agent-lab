@@ -65,9 +65,9 @@ report; keep every gate at its current strictness.
    Block agents are custom agents with `template_id` `"blocks"`: `blocks/run.py` reaches the
    model and the tools only through `steps.chat`, `call_tool` and `decide`, and every node that
    can stop a run has an edge to `end` in `blocks/graph.py`.
-6. **Run identity**: every run records its `agent_id` and `config_version` (hash of the
-   agent's config), so runs of different configs stay apart. The only forward-looking seam is
-   the provider seam for a future Anthropic adapter; add no other.
+6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
+   `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
+   forward-looking abstractions.
 
 ## Working rules
 

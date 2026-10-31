@@ -38,9 +38,8 @@ Rationale: seeing every step is the point of the lab.
 ### IV. Smallest Change That Works
 
 - Build only what the current milestone needs. No speculative abstractions.
-- The only sanctioned forward-looking seam is the provider seam for a future Anthropic
-  adapter. Stable agent ids and config versions are core features (runs record which agent ran
-  with which config), not seams for later work.
+- The only sanctioned forward-looking seams are the Phase 2 ones: stable agent ids, config
+  versions, and a step/tick-driven runner, plus a provider seam for a future Anthropic adapter.
 
 ### V. Quality Gates and Traceability
 
@@ -61,7 +60,8 @@ Rationale: seeing every step is the point of the lab.
   Dev: ruff, pyright, pytest (async tests via the anyio pytest plugin), httpx2 (Starlette
   test client).
 - Frontend: Next.js (TypeScript, App Router), Tailwind, pnpm, @xyflow/react. Dev: eslint,
-  vitest.
+  vitest. PixiJS is
+  reserved for Phase 2.
 - LLM access: a thin own client over the OpenAI-compatible `/v1/chat/completions` API with
   native tool calling. Provider, base URL and model come from the environment. Default target:
   vLLM (Docker image `vllm/vllm-openai`, started by `make dev-llm`) at `http://localhost:8001/v1`,
@@ -88,4 +88,4 @@ Rationale: seeing every step is the point of the lab.
 - Reviews verify gate results, span coverage of new LLM/tool calls, and requirement → test
   mapping.
 
-**Version**: 1.4.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-31
+**Version**: 1.3.0 | **Ratified**: 2026-10-30 | **Last Amended**: 2026-10-30
