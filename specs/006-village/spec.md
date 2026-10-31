@@ -269,5 +269,4 @@ two ticks shows up as a new `config_version` on its next turn.
 - Tick turns use the local model unless the owner sets another model on a villager's agent; with
   four villagers and the default interval, the local server handles a tick's four concurrent
   turns.
-- The 2D map needs a rendering library; the one the constitution reserves for Phase 2 is
-  approved for this milestone.
+- The 2D map is drawn without a new library (plan decision); no dependency is added.
