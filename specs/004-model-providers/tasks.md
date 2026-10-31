@@ -118,9 +118,9 @@ hidden.
 
 ## Phase 6: Polish
 
-- [ ] T023 [P] Docs: README.md (switching models: `OPENAI_API_KEY`, `OPENAI_MODELS`, `DEFAULT_MODEL`, `OPENAI_REASONING_OFF`, restart after `.env` changes, external models send prompts and tool results to OpenAI); AGENTS.md (`.env` holds `LLM_API_KEY` and `OPENAI_API_KEY`; tests never call a real provider); `.specify/memory/constitution.md` is not changed (the second provider still comes from the environment)
-- [ ] T024 `make check` passes; FR → test map below complete
-- [ ] T025 Manual checks from quickstart.md steps 1–8 on vLLM and, with the owner's key, OpenAI; record results (including the `OPENAI_REASONING_OFF` value that works for the configured model and whether OpenAI accepts the rewritten schemas) in a "Manual check results" section of this file
+- [X] T023 [P] Docs: README.md (switching models: `OPENAI_API_KEY`, `OPENAI_MODELS`, `DEFAULT_MODEL`, `OPENAI_REASONING_OFF`, restart after `.env` changes, external models send prompts and tool results to OpenAI); AGENTS.md (`.env` holds `LLM_API_KEY` and `OPENAI_API_KEY`; tests never call a real provider); `.specify/memory/constitution.md` is not changed (the second provider still comes from the environment)
+- [X] T024 `make check` passes; FR → test map below complete
+- [X] T025 Manual checks from quickstart.md steps 1–8 on vLLM and, with the owner's key, OpenAI; record results (including the `OPENAI_REASONING_OFF` value that works for the configured model and whether OpenAI accepts the rewritten schemas) in a "Manual check results" section of this file
 
 ---
 
@@ -184,3 +184,21 @@ Task: "frontend/src/lib/builder.ts: Draft.model"
 | SC-004 | test_providers.py (T020) |
 | SC-005 | test_redaction.py::test_provider_keys_never_exposed |
 | SC-006 | quickstart step 5; models.test.ts (runModel) |
+
+## Manual check results (T025, 2026-10-31)
+
+vLLM `qwen3.5-9b`; backend on a copy of the owner's database with `OPENAI_MODELS=gpt-6-luna`
+and no real OpenAI key; UI driven headless (Chromium, Playwright). No request reached OpenAI.
+
+| Quickstart step | Result |
+|---|---|
+| 1. Model list without key | "Default (Local · qwen3.5-9b)", Local qwen3.5-9b, OpenAI "gpt-6-luna (external, no API key)" disabled; templates show the select read-only on Default (US3-1, FR-010) |
+| 2. M3 agents | all three saved agents on "Default"; a run of one gave `config_version` 1a1151999047, the same as its M3 runs; header, past-runs entry and span detail show "Local · qwen3.5-9b" / Provider local (FR-004, FR-006, FR-011) |
+| 3.–6. Real OpenAI runs | **not run: needs the owner's key.** Covered by mock-transport tests (test_providers.py, test_llm_client.py, test_redaction.py); SC-001 and SC-002 remain open |
+| 7. Pinned model removed | pinned under a dummy key (save only, no run), restarted without `OPENAI_MODELS`: the select shows "gpt-6-luna (not configured)"; Run shows "model openai/gpt-6-luna is not configured" (US3-2) |
+| 8. Default without key | `DEFAULT_MODEL=openai/gpt-6-luna` without key: the backend exits with "DEFAULT_MODEL: model openai/gpt-6-luna is not available: no API key" |
+| Templates on vLLM | all six `completed`; their `config_version`s equal those computed by the pre-M4 code (37dd998) for `qwen3.5-9b` (FR-009) |
+
+Fixed during the check: the model select looked read-only even when editable (`:read-only`
+matches every `<select>`), and a run-start error squeezed the prompt box (the form lacked
+`flex-wrap`; the latter predates M4 but M4 makes run rejections common).

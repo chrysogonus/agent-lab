@@ -11,8 +11,9 @@ export type Form = {
   errors: Record<string, string>;
 };
 
-const INPUT =
-  "w-full rounded-md border border-rule bg-panel px-2.5 py-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-llm read-only:bg-paper read-only:text-muted aria-invalid:border-fault";
+const FIELD =
+  "w-full rounded-md border border-rule bg-panel px-2.5 py-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-llm aria-invalid:border-fault";
+const INPUT = `${FIELD} read-only:bg-paper read-only:text-muted`;
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
@@ -183,7 +184,7 @@ export function ModelSelect({ form, models }: { form: Form; models: ModelInfo[] 
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         onChange={(e) => form.set(["model"], refFromValue(e.target.value))}
-        className={`${INPUT} disabled:bg-paper disabled:text-muted`}
+        className={`${FIELD} disabled:bg-paper disabled:text-muted`} // :read-only matches every select
       >
         <option value={options.default.value}>{options.default.label}</option>
         {options.groups.map((group) => (

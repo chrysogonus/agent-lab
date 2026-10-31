@@ -34,7 +34,7 @@ export function PromptForm({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-start">
+    <form onSubmit={submit} className="flex flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
       <label htmlFor="prompt" className="sr-only">
         Prompt
       </label>
