@@ -43,6 +43,22 @@ vLLM batches concurrent requests, so parallel branches and workers really run at
 time. Any OpenAI-compatible endpoint works instead (Ollama: `LLM_BASE_URL=http://localhost:11434/v1`,
 `LLM_MODEL=qwen3:8b`): set `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`.
 
+### Models
+
+A custom agent runs on "Default" or on a model you pick in its agent settings; templates always
+run on the default. The run header, past runs and span details show which model answered.
+Configure the list in `.env` (see `.env.example`) and restart the backend after changes:
+
+- `LLM_MODELS`: further model ids served by the local endpoint, comma-separated.
+- `OPENAI_MODELS` and `OPENAI_API_KEY`: OpenAI models, e.g. `OPENAI_MODELS=gpt-6-luna`. Without
+  the key they are listed but can't be picked. An agent on an OpenAI model sends its prompts and
+  tool results to OpenAI. The key stays in `.env` and is redacted from every span.
+- `OPENAI_REASONING_OFF`: the `reasoning_effort` sent when an agent's thinking is off (default
+  `none`). If a model rejects it, the run fails with OpenAI's message on the span; set the value
+  that model accepts, or leave it empty to send nothing.
+- `DEFAULT_MODEL`: `provider/model`, e.g. `openai/gpt-6-luna` (default: the local `LLM_MODEL`).
+  The backend refuses to start when it names a model that isn't configured or has no key.
+
 ## Check
 
 ```bash
@@ -55,7 +71,8 @@ make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
 |---|---|
 | `GET /agents` | templates, then custom agents, with config, sample prompt and graph |
 | `GET /tools` | tools an agent can be given |
-| `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent |
+| `GET /models` | configured models: provider, id, external, available, default (never keys) |
+| `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent (`model`: `{"provider", "model"}` or `null` for Default) |
 | `POST /graph` `{"template_id", "config"}` | the graph for an unsaved config (validation errors as `422`) |
 | `POST /runs` `{"prompt": "...", "agent_id": "react"}` | start a run of a template or custom agent (`202`) |
 | `GET /runs` | past runs with totals, newest first |

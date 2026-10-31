@@ -28,8 +28,9 @@ report; keep every gate at its current strictness.
 - `backend/src/agent_lab/`: `agents/` (`react.py`; `steps.py`: traced `chat`, `call_tool`,
   `decide`; `registry.py`: the six templates by id; `config_fields.py`: shared field rules),
   `workflows/` (chain, routing, parallel, orchestrator, evaluator), `tools/` (`catalog.py`:
-  every tool by name), `llm/` (client seam + `FakeLLM`), `tracing/` (span, tracer, redaction),
-  `store.py` (SQLite: runs, spans, custom agents), `bus.py`, `runs.py`, `api.py`.
+  every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
+  `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
+  `bus.py`, `runs.py`, `api.py`.
 - `backend/tests/`: pytest; `helpers.py` builds scripted runs and `assert_trace_valid`;
   `test_templates.py` pins the templates to `golden/templates.json` (M2 behavior).
 - `frontend/src/`: `app/page.tsx` (the one page), `components/` (`AgentBuilder.tsx` and
@@ -67,8 +68,9 @@ report; keep every gate at its current strictness.
 
 - Hand-write agent logic; agent frameworks and MCP SDKs stay out. Ask the owner before adding
   any dependency.
-- Tests use `FakeLLM` or `httpx.MockTransport`, never a real model.
+- Tests use `FakeLLM` or `httpx.MockTransport`, never a real model or provider.
 - Each milestone is one Spec Kit feature: `speckit-specify` → `clarify` → `plan` → `tasks` →
   `implement`. Map every requirement to a test in `tasks.md`. Commit after each phase and task
   group; never push.
-- `.env` holds `LLM_API_KEY`; keep it out of git.
+- `.env` holds `LLM_API_KEY` and `OPENAI_API_KEY`; keep it out of git. Both are passed to the
+  tracer as secrets; never return a key or provider URL from the API.
