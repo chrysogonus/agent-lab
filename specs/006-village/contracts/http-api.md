@@ -9,7 +9,7 @@
 | PUT | `/village/interval` | `{"seconds": int}` (1–30) | `200` `VillageState`; `422` out of range |
 | POST | `/village/reset` | – | `200` `VillageState` (paused, tick 0) after the active tick, if any, finishes; recreates deleted villager agents; past turns stay |
 | GET | `/village/villagers/{name}/turns` | – | `200` `[Turn]` newest first: every run with this `villager`, whichever agent played it; `404` unknown name |
-| WS | `/village/stream` | – | `{"type": "state", "state"}` on connect and after every tick or control change; `{"type": "tick_started", "tick"}` |
+| WS | `/village/stream` | – | `{"type": "state", "state"}` on connect and after every tick or control change; `{"type": "tick_started", "tick"}`; `{"type": "turn_started", "villager", "run_id"}` as each turn starts |
 | GET | `/runs` | – | as before, without village turns |
 
 ```text

@@ -248,3 +248,33 @@ async def test_invalid_answers_wait_with_the_reason_recorded(
     assert jonas["events"][-1]["kind"] == "waited" and reason in jonas["events"][-1]["text"]
     [turn] = v.store.list_turns("Jonas")
     assert turn.village_action is not None and turn.village_action["reason"].startswith(reason)
+
+
+API_KEY = "sk-village-0123456789abcdefghij"
+
+
+@pytest.mark.anyio
+async def test_escaped_secret_is_redacted_after_decoding(tmp_path: Path) -> None:
+    escaped = "\\u0073" + API_KEY[1:]  # survives redaction of the raw answer, decodes to the secret
+    answer = '{"action": "say", "text": "my key is ' + escaped + '"}'
+    v, _ = village_for(tmp_path, {"Hilde": [answer]}, 1, secrets=(API_KEY,))
+    v.ensure_agents()
+    await v.tick()
+    hilde = villager(v, "Hilde")
+    assert hilde["speech"] is not None and "[REDACTED]" in hilde["speech"]["text"]
+    stored = json.dumps(v.store.load_village())
+    [turn] = v.store.list_turns("Hilde")
+    assert API_KEY not in stored and API_KEY not in json.dumps(turn.village_action)
+
+
+@pytest.mark.anyio
+async def test_agent_names_beyond_the_first_fallback(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {}, 1)
+    for name in ("Mayor Hilde", "Mayor Hilde (village)"):
+        v.store.create_agent(
+            template_id="blocks", name=name, description="", sample_prompt="x", config={}
+        )
+    v.ensure_agents()
+    hilde = villager(v, "Hilde")
+    agent = v.store.get_agent(hilde["agent_id"])
+    assert agent is not None and agent.name == "Mayor Hilde (village 2)"

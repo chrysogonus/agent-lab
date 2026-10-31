@@ -81,10 +81,13 @@ def test_stream_sends_state_on_connect_and_after_a_step(store: Store) -> None:
     with client, client.websocket_connect(f"{WS_BASE}/village/stream") as ws:
         assert ws.receive_json()["type"] == "state"
         client.post("/village/step")
-        events = [ws.receive_json() for _ in range(2)]
+        events = [ws.receive_json() for _ in range(6)]
     assert events[0] == {"type": "tick_started", "tick": 0}
-    assert events[1]["type"] == "state" and events[1]["state"]["tick"] == 1
-    assert events[1]["state"]["ticking"] is False  # the published state is after the tick
+    started = [e for e in events if e["type"] == "turn_started"]  # announced while they run
+    assert sorted(e["villager"] for e in started) == ["Greta", "Hilde", "Jonas", "Lina"]
+    assert all(e["run_id"] for e in started)
+    assert events[5]["type"] == "state" and events[5]["state"]["tick"] == 1
+    assert events[5]["state"]["ticking"] is False  # the published state is after the tick
 
 
 def test_stream_refuses_foreign_origin(store: Store) -> None:

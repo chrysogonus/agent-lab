@@ -28,26 +28,46 @@ import { VillagerPanel } from "./VillagerPanel";
 const BUTTON =
   "rounded-md px-3 py-1.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-llm disabled:opacity-40";
 
-/** The village's state: fetched once, then kept live by the village stream while shown. */
-function useVillage(): [VillageState | null, (s: VillageState) => void, string | null] {
+type VillageStream = {
+  state: VillageState | null;
+  setState: (s: VillageState) => void;
+  error: string | null; // shown in the loaded view too: a stale map must say so
+  turnsStarted: number; // bumps when a villager turn starts, so an open panel lists it live
+};
+
+/** The village's state, kept live by the village stream while shown; reconnects when it drops. */
+function useVillage(): VillageStream {
   const [state, setState] = useState<VillageState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [turnsStarted, setTurnsStarted] = useState(0);
   useEffect(() => {
-    let closed = false;
-    getVillage().then(setState, () => setError("The village is unavailable until the backend is running."));
-    const ws = new WebSocket(villageStreamUrl());
-    ws.onmessage = (message) => {
-      const event = JSON.parse(message.data as string) as { type: string; state?: VillageState; tick?: number };
-      if (event.type === "state" && event.state) setState(event.state);
-      if (event.type === "tick_started") setState((s) => (s ? { ...s, ticking: true } : s));
+    let stopped = false;
+    let ws: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const connect = (attempt: number) => {
+      ws = new WebSocket(villageStreamUrl());
+      ws.onopen = () => setError(null); // the server sends the current state first
+      ws.onmessage = (message) => {
+        const event = JSON.parse(message.data as string) as { type: string; state?: VillageState };
+        if (event.type === "state" && event.state) setState(event.state);
+        if (event.type === "tick_started") setState((s) => (s ? { ...s, ticking: true } : s));
+        if (event.type === "turn_started") setTurnsStarted((n) => n + 1);
+      };
+      ws.onclose = () => {
+        if (stopped) return;
+        setError("Lost the connection to the village. Reconnecting…");
+        retry = setTimeout(() => connect(attempt + 1), Math.min(1000 * 2 ** attempt, 10000));
+      };
     };
-    ws.onclose = () => !closed && setError("Lost the connection to the village; reload to reconnect.");
+    getVillage().then(setState, () => setError("The village is unavailable until the backend is running."));
+    connect(0);
     return () => {
-      closed = true;
-      ws.close();
+      stopped = true;
+      clearTimeout(retry);
+      ws?.close();
     };
   }, []);
-  return [state, setState, error];
+  return { state, setState, error, turnsStarted };
 }
 
 function VillageMap({ state, selected, onSelect }: { state: VillageState; selected: string | null; onSelect: (name: string) => void }) {
@@ -107,7 +127,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
 
 /** The village: the map, the clock and controls, the villagers, and one villager in detail. */
 export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) => void }) {
-  const [state, setState, streamError] = useVillage();
+  const { state, setState, error: streamError, turnsStarted } = useVillage();
   const [selected, setSelected] = useState<string | null>(null);
   const [turn, setTurn] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -191,13 +211,14 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
             Reset
           </button>
         </div>
-        {error && (
+        {(streamError || error) && (
           <p role="alert" className="text-sm text-fault">
-            {error}
+            {streamError ?? error}
           </p>
         )}
         {villager ? (
           <VillagerPanel
+            turnsStarted={turnsStarted}
             villager={villager}
             tick={state.tick}
             onClose={() => setSelected(null)}

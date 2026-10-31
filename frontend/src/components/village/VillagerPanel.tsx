@@ -8,12 +8,14 @@ import { eventLines, turnLabel, whereText } from "@/lib/village";
 export function VillagerPanel({
   villager,
   tick,
+  turnsStarted,
   onClose,
   onOpenTurn,
   onEditAgent,
 }: {
   villager: Villager;
   tick: number; // refetch the turns after each tick
+  turnsStarted: number; // … and as turns start, so a running turn can be opened live
   onClose: () => void;
   onOpenTurn: (run: Run) => void;
   onEditAgent: (agentId: string) => void;
@@ -21,7 +23,7 @@ export function VillagerPanel({
   const [turns, setTurns] = useState<Run[]>([]);
   useEffect(() => {
     villagerTurns(villager.name).then(setTurns, () => setTurns([]));
-  }, [villager.name, tick]);
+  }, [villager.name, tick, turnsStarted]);
 
   return (
     <section className="flex flex-col gap-3" aria-label={villager.title}>

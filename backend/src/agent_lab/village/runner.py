@@ -7,6 +7,7 @@ model itself. One lock keeps ticks, Step, Reset and interval changes from overla
 import asyncio
 import copy
 import time
+from itertools import chain, count
 from typing import Any
 
 from pydantic import ValidationError
@@ -16,6 +17,7 @@ from agent_lab.bus import Bus
 from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
+from agent_lab.tracing.redact import redact
 from agent_lab.village.turn import SPEECH_SHOWN, observation, parse_action, villager_agent
 from agent_lab.village.world import (
     PLACES,
@@ -117,7 +119,12 @@ class Village:
                 continue
             body = villager_agent(v["name"])
             fields = {k: body[k] for k in ("template_id", "description", "sample_prompt", "config")}
-            for name in (body["name"], f"{body['name']} (village)"):
+            title = body["name"]
+            # The title, then "(village)", "(village 2)", … lazily, until one is free.
+            names = chain(
+                [title], (f"{title} (village{f' {n}' if n > 1 else ''})" for n in count(1))
+            )
+            for name in names:
                 try:
                     v["agent_id"] = self.store.create_agent(name=name, **fields).agent_id
                     break
@@ -147,6 +154,9 @@ class Village:
         except (UnavailableModel, LayoutError, ValidationError) as exc:
             return None, wait, f"turn failed: {exc}"
         self.store.create_run(run)
+        self.bus.publish(
+            CHANNEL, {"type": "turn_started", "villager": v["name"], "run_id": run.run_id}
+        )
         await execute_run(
             run=run,
             prompt=prompt,
@@ -161,7 +171,8 @@ class Village:
         if done is None or done.status != "completed":
             return run.run_id, wait, f"turn failed: run ended {done.status if done else 'missing'}"
         action, reason = parse_action(done.answer, self.world, v["name"])
-        return run.run_id, action, reason
+        # Decoding JSON can undo redaction of the raw answer (e.g. "\u0073k-…"): redact again.
+        return run.run_id, redact(action, self.secrets), redact(reason, self.secrets)
 
     async def tick(self) -> None:
         async with self.lock:
