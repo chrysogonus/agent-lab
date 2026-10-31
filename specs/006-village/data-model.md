@@ -40,7 +40,7 @@
 | `action` | Fields | Effect |
 |---|---|---|
 | `move` | `place`: one of the six keys or labels | sets the destination; the villager walks one cell per tick; already there → `wait` ("already at the market") |
-| `say` | `text`: 1–500 characters; `to`: another villager's first name, optional | heard by everyone nearby at the start of the next tick; shown cut to 200 characters |
+| `say` | `text`: not empty after trimming, any length; `to`: another villager's first name, optional | heard by everyone nearby at the start of the next tick; shown cut to 200 characters |
 | `wait` | – | nothing |
 
 Invalid answer, failed `answer-is-json` check or failed run → `wait` with the reason.
