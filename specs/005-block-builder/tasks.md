@@ -118,9 +118,9 @@ delete.
 
 ## Phase 6: Polish
 
-- [ ] T022 [P] Docs: README.md (block agents: New block agent, Open as blocks, block kinds, references `{input}` `{previous}` `{name}` `{feedback}` `{item}`, limits; API rows for `GET /blocks/new` and `GET /agents/{id}/blocks`); AGENTS.md (layout: `blocks/` package; rule: the block runner uses only the traced step helpers)
-- [ ] T023 `make check` passes; FR → test map below complete
-- [ ] T024 Manual checks from quickstart.md steps 1–8 on vLLM (and one block agent on OpenAI if the key is configured); record results in a "Manual check results" section of this file
+- [X] T022 [P] Docs: README.md (block agents: New block agent, Open as blocks, block kinds, references `{input}` `{previous}` `{name}` `{feedback}` `{item}`, limits; API rows for `GET /blocks/new` and `GET /agents/{id}/blocks`); AGENTS.md (layout: `blocks/` package; rule: the block runner uses only the traced step helpers)
+- [X] T023 `make check` passes; FR → test map below complete
+- [X] T024 Manual checks from quickstart.md steps 1–8 on vLLM (and one block agent on OpenAI if the key is configured); record results in a "Manual check results" section of this file
 
 ---
 
@@ -184,3 +184,25 @@ Task: "Pure block tree edits in frontend/src/lib/blocks.ts"
 | SC-004 | test_blocks_validation.py |
 | SC-005 | test_blocks_api.py history tests; quickstart step 8 |
 | SC-006 | test_blocks_graph.py (30-block fixture under 1 s); quickstart step 7 |
+
+## Manual check results (T024, 2026-10-31)
+
+vLLM `qwen3.5-9b` (and OpenAI `gpt-6-luna` for one agent); backend on a copy of the owner's
+database; UI driven headless (Chromium, Playwright).
+
+| Quickstart step | Result |
+|---|---|
+| 1. New block agent, model → tool → model | built from "New block agent" in the outline (+ after `answer`, + after `calc`), graph start → answer → calc → explain → end; Run saved first and completed: "17 times 23 equals 391.", 2 model calls and 1 tool call; 2.9 s from the first click to the finished run, scripted (SC-001) |
+| 2. Rename, then remove | renaming `calc` to `math` rewrote `explain`'s message to `{math}`; removing `math` and saving showed "unknown reference {math}" at `config.blocks.1.message`, and the outline marked `explain` as having errors (FR-016) |
+| 3. Failing check | `contains "*"` after an answer without one: run `error`, "check has-star failed: does not contain '*'", end span from `has-star`, the next block never ran |
+| 4. Routing as blocks | graph equal to the template's nodes; run of the sample prompt completed ("1000"), 3 model calls, 1 tool call |
+| 5. Parallelization and Orchestrator-workers as blocks | both completed (4 and 5 model calls), branches and items concurrent, merge/synthesizer after them |
+| 6. Evaluator-optimizer as blocks | completed (the judge approved in round 2: 4 model calls) |
+| 7. 30-block, 3-level layout | `POST /graph` answered in 2 ms with 31 nodes, 47 edges (SC-006) |
+| 8. Edit and delete with runs | covered by test_blocks_api.py history tests (SC-005); not repeated by hand |
+| OpenAI | a model → tool → model block agent pinned to `gpt-6-luna` completed: "17 times 23 is 391.", every model span on OpenAI |
+
+Fixed during the checks: edges into a tool-call block were drawn with the vertical handles meant
+for a model's tools below it (now only when the tool node really is below); the outline moved
+above the block settings so it stays in view; a new block agent is named "Block agent", not the
+button's label.

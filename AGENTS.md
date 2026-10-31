@@ -27,7 +27,9 @@ report; keep every gate at its current strictness.
 
 - `backend/src/agent_lab/`: `agents/` (`react.py`; `steps.py`: traced `chat`, `call_tool`,
   `decide`; `registry.py`: the six templates by id; `config_fields.py`: shared field rules),
-  `workflows/` (chain, routing, parallel, orchestrator, evaluator), `tools/` (`catalog.py`:
+  `workflows/` (chain, routing, parallel, orchestrator, evaluator), `blocks/` (block agents:
+  `model.py` types and layout rules, `graph.py`, `run.py`, `convert.py` templates as blocks),
+  `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
   `bus.py`, `runs.py`, `api.py`.
@@ -60,6 +62,9 @@ report; keep every gate at its current strictness.
    runs snapshot name, template, config and graph. Templates must keep sending exactly their
    M2 requests: `test_templates.py` fails otherwise (`UPDATE_GOLDEN=1` only for intended
    changes). Fill prompt placeholders with `config_fields.fill`, never `str.format`.
+   Block agents are custom agents with `template_id` `"blocks"`: `blocks/run.py` reaches the
+   model and the tools only through `steps.chat`, `call_tool` and `decide`, and every node that
+   can stop a run has an edge to `end` in `blocks/graph.py`.
 6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
    `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
    forward-looking abstractions.

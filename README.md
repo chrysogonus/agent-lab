@@ -32,6 +32,24 @@ and settings; add, remove or reorder chain steps, routes and parallel aspects, p
 tools and change limits in the agent settings. The graph redraws as you edit. Save stores the
 agent under "My agents"; Run saves first. Duplicate and Delete work on saved agents; past runs
 keep the name, config and graph they ran with.
+
+For more freedom, build a block agent: press "New block agent", or "Open as blocks" on any
+template or customized agent. A block agent is a list of blocks that run top to bottom, edited
+in the outline in the settings panel (+ adds a block after another; ↑ ↓ move it; ✕ removes it):
+
+- **Model call**: a system prompt and a message; optionally tools and a limit on model calls
+  (the ReAct loop as one block).
+- **Tool call**: one tool with its arguments.
+- **Check**: at least N bullet lines, at most N words, contains a text, or valid JSON; failing
+  ends the run.
+- **Router**: a model decision picks one of 2–6 routes, each a list of blocks.
+- **Parallel group**: fixed branches, or the same blocks once per item a model plans, all at the
+  same time.
+- **Loop**: repeats its blocks until a judge approves or a check passes, up to 5 rounds.
+
+Prompts refer to `{input}` (the user's prompt), `{previous}` (the previous block's output),
+`{name}` (an earlier block's output), and inside loops and per-item groups to `{feedback}` and
+`{item}`. Up to 30 blocks, nested 3 levels deep; the server checks the layout on every save.
 The run header and the past-runs list show model calls, tool calls, tokens and wall time. Past
 runs replay from the database (`backend/data/agent_lab.db`).
 
@@ -73,7 +91,8 @@ make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
 | | |
 |---|---|
 | `GET /agents` | templates, then custom agents, with config, sample prompt and graph |
-| `GET /tools` | tools an agent can be given |
+| `GET /tools` | tools an agent can be given, with their parameter schema |
+| `GET /blocks/new`, `GET /agents/{id}/blocks` | an unsaved block agent: new, or converted from a template or customized agent |
 | `GET /models` | configured models: provider, id, external, available, default (never keys) |
 | `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent (`model`: `{"provider", "model"}` or `null` for Default) |
 | `POST /graph` `{"template_id", "config"}` | the graph for an unsaved config (validation errors as `422`) |
