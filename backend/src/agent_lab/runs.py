@@ -6,7 +6,7 @@ import uuid
 
 from pydantic import BaseModel
 
-from agent_lab.agents.registry import AGENTS, AgentSpec, model_of, validate_config
+from agent_lab.agents.registry import AGENTS, KINDS, AgentSpec, model_of, validate_config
 from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
 from agent_lab.llm.base import LLMClient
@@ -36,7 +36,7 @@ def resolve(
         agent = store.get_agent(agent_id)
         if agent is None:
             raise UnknownAgent(agent_id)
-        spec, stored, name = AGENTS[agent.template_id], agent.config, agent.name
+        spec, stored, name = KINDS[agent.template_id], agent.config, agent.name
     config = validate_config(spec.id, stored, models.default)
     client = models.client(model_of(config))
     return spec, config, name, client

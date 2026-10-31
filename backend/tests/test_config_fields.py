@@ -1,7 +1,15 @@
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from agent_lab.agents.config_fields import ItemName, Prompt, ShortText, fill, known_tool, unique
+from agent_lab.agents.config_fields import (
+    BlockName,
+    ItemName,
+    Prompt,
+    ShortText,
+    fill,
+    known_tool,
+    unique,
+)
 
 
 class Fields(BaseModel):
@@ -53,3 +61,18 @@ def test_unique() -> None:
 def test_fill_keeps_other_braces() -> None:
     text = 'Review {aspect}. Reply like {"a": 1} for {aspect}.'
     assert fill(text, aspect="tone") == 'Review tone. Reply like {"a": 1} for tone.'
+
+
+class Named(BaseModel):
+    name: BlockName
+
+
+@pytest.mark.parametrize("name", ["gate", "router", "merge", "calc-2"])
+def test_block_name_ok(name: str) -> None:
+    assert Named(name=name).name == name  # template-internal names are free for blocks
+
+
+@pytest.mark.parametrize("name", ["start", "end", "input", "previous", "feedback", "item", "A"])
+def test_block_name_rejected(name: str) -> None:
+    with pytest.raises(ValidationError):
+        Named(name=name)

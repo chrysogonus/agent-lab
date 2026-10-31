@@ -28,6 +28,20 @@ ItemName = Annotated[
     str, StringConstraints(pattern=r"^[a-z0-9-]{1,30}$"), AfterValidator(_not_reserved)
 ]
 
+# Graph nodes and reference words of block agents (blocks/model.py).
+BLOCK_RESERVED = frozenset({"start", "end", "input", "previous", "feedback", "item"})
+
+
+def _not_block_reserved(name: str) -> str:
+    if name in BLOCK_RESERVED:
+        raise ValueError(f"{name!r} is reserved")
+    return name
+
+
+BlockName = Annotated[
+    str, StringConstraints(pattern=r"^[a-z0-9-]{1,30}$"), AfterValidator(_not_block_reserved)
+]
+
 
 def known_tool(name: str) -> str:
     if name not in TOOLS:

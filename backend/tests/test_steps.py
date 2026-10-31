@@ -6,7 +6,9 @@ from pydantic import BaseModel
 
 from agent_lab.agents import steps
 from agent_lab.agents.steps import DecisionError
+from agent_lab.llm.base import ToolCall
 from agent_lab.llm.fake import FakeLLM
+from agent_lab.tools.calculator import CALCULATOR
 from agent_lab.tracing.span import SpanKind
 
 
@@ -80,3 +82,13 @@ async def test_decide_rejects_invalid(content: str) -> None:
     assert decision.error.startswith("invalid route:")
     assert repr(content[:200]) in decision.error
     assert decision.output is None
+
+
+@pytest.mark.anyio
+async def test_call_tool_on_own_node() -> None:
+    ctx, events = make_ctx(FakeLLM([]))
+    call = ToolCall(id="c1", name="calculator", arguments='{"expression": "2+3"}')
+    tools = {"calculator": CALCULATOR}
+    assert await steps.call_tool(ctx, tools, call, caller="x", node_id="calc") == "5"
+    await steps.call_tool(ctx, tools, call, caller="x")
+    assert [s.node_id for s in ended(events)] == ["calc", "tool:calculator"]

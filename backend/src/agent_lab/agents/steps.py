@@ -106,14 +106,18 @@ async def call_tool(
     *,
     caller: str,
     came_from: Sequence[str] | None = None,
+    node_id: str | None = None,
 ) -> str:
-    """Run one tool call; errors become the result text so the model can recover."""
+    """Run one tool call; errors become the result text so the model can recover.
+
+    `node_id` replaces the shared `tool:<name>` node (a block agent's tool-call block).
+    """
     tool = tools.get(call.name)
     async with ctx.tracer.span(
         SpanKind.TOOL,
         f"execute_tool {call.name}",
         # An unknown tool has no node; attribute the span to the node that requested it.
-        node_id=f"tool:{call.name}" if tool else caller,
+        node_id=(node_id or f"tool:{call.name}") if tool else caller,
         input=call.arguments,
         attributes={
             "gen_ai.operation.name": "execute_tool",

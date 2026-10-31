@@ -9,7 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
-from agent_lab.agents.registry import AGENTS, AgentSpec, editable, pinned, validate_config
+from agent_lab.agents.registry import (
+    AGENTS,
+    BLOCKS,
+    KINDS,
+    AgentSpec,
+    editable,
+    pinned,
+    validate_config,
+)
+from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
 from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
@@ -52,6 +61,7 @@ class ModelInfo(BaseModel):
 class ToolInfo(BaseModel):
     name: str
     description: str
+    parameters: dict[str, Any]  # JSON Schema of the arguments (a tool block's argument fields)
 
 
 class AgentFields(BaseModel):
@@ -78,6 +88,15 @@ class RunDetail(BaseModel):
     spans: list[Span]
 
 
+def config_loc(loc: tuple[str | int, ...]) -> tuple[str | int, ...]:
+    """A pydantic loc as a path into the config: drop the block kind it adds after an index."""
+    return tuple(
+        part
+        for i, part in enumerate(loc)
+        if not (i and isinstance(loc[i - 1], int) and part in KIND_NAMES)
+    )
+
+
 def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
     """A 422 in FastAPI's own shape, so every rejection names its field the same way."""
     return RequestValidationError([{"loc": loc, "msg": msg, "type": "value_error"}])
@@ -98,7 +117,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
 
     def checked_config(template_id: str, raw: dict[str, Any]) -> BaseModel:
         """The template's model validates the config; the client never sets model or graph."""
-        if template_id not in AGENTS:
+        if template_id not in KINDS:
             raise field_error(("body", "template_id"), f"unknown template {template_id!r}")
         for key in ("model", "provider"):
             if key in raw:
@@ -106,9 +125,20 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         try:
             return validate_config(template_id, raw, models.default)
         except ValidationError as exc:
+            blocks = template_id == BLOCKS.id  # only block configs carry union tags
             errors = [
-                {"loc": ("body", "config", *e["loc"]), "msg": e["msg"], "type": e["type"]}
+                {
+                    "loc": ("body", "config", *(config_loc(e["loc"]) if blocks else e["loc"])),
+                    "msg": e["msg"],
+                    "type": e["type"],
+                }
                 for e in exc.errors()
+            ]
+            raise RequestValidationError(errors) from None
+        except LayoutError as exc:
+            errors = [
+                {"loc": ("body", "config", *loc), "msg": msg, "type": "value_error"}
+                for loc, msg in exc.errors
             ]
             raise RequestValidationError(errors) from None
 
@@ -133,7 +163,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             sample_prompt=agent.sample_prompt,
             config=editable(config),
             model=pinned(agent.config),
-            graph=AGENTS[agent.template_id].graph(config),
+            graph=KINDS[agent.template_id].graph(config),
         )
 
     def saved(agent: CustomAgent | None) -> AgentInfo:
@@ -177,7 +207,28 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
 
     @app.get("/tools")
     async def list_tools() -> list[ToolInfo]:
-        return [ToolInfo(name=t.name, description=t.description) for t in TOOLS.values()]
+        return [
+            ToolInfo(name=t.name, description=t.description, parameters=t.parameters)
+            for t in TOOLS.values()
+        ]
+
+    @app.get("/blocks/new")
+    async def new_block_agent() -> AgentInfo:
+        """An unsaved block agent with one model block, for the builder to edit."""
+        config = validate_config(
+            BLOCKS.id, {"blocks": [b.model_dump() for b in DEFAULT_BLOCKS]}, models.default
+        )
+        return AgentInfo(
+            id="",
+            kind="custom",
+            template_id=BLOCKS.id,
+            name="New block agent",
+            description="",
+            sample_prompt=BLOCKS.sample_prompt,
+            config=editable(config),
+            model=None,
+            graph=BLOCKS.graph(config),
+        )
 
     @app.post("/agents", status_code=status.HTTP_201_CREATED)
     async def create_agent(body: NewAgent) -> AgentInfo:
@@ -223,7 +274,8 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
     @app.post("/graph")
     async def preview_graph(body: GraphRequest) -> Graph:
         """The graph the server derives from an unsaved config (the builder's live preview)."""
-        return AGENTS[body.template_id].graph(checked_config(body.template_id, body.config))
+        config = checked_config(body.template_id, body.config)
+        return KINDS[body.template_id].graph(config)
 
     @app.post("/runs", status_code=status.HTTP_202_ACCEPTED)
     async def start_run(body: RunRequest) -> Run:
@@ -233,6 +285,11 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             raise field_error(("body", "agent_id"), f"unknown agent {body.agent_id!r}") from None
         except UnavailableModel as exc:
             raise field_error(("body", "agent_id"), str(exc)) from None
+        except (LayoutError, ValidationError) as exc:
+            # A stored agent that no longer validates, e.g. a tool removed from the catalog.
+            raise field_error(
+                ("body", "agent_id"), f"the agent is no longer valid: {exc}"
+            ) from None
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(

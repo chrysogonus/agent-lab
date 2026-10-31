@@ -8,6 +8,9 @@ from pydantic import BaseModel
 
 from agent_lab.agents import react
 from agent_lab.agents.config_fields import LOCAL
+from agent_lab.blocks.graph import build_graph as blocks_graph
+from agent_lab.blocks.model import BlocksConfig, LayoutError, layout_errors
+from agent_lab.blocks.run import BlockAgent
 from agent_lab.graph import Graph
 from agent_lab.llm.base import LLMClient
 from agent_lab.llm.models import ModelRef
@@ -109,11 +112,26 @@ _SPECS = [
 
 AGENTS: dict[str, AgentSpec] = {spec.id: spec for spec in _SPECS}
 
+# Not a template: block agents are custom agents of this kind (specs/005-block-builder).
+BLOCKS = AgentSpec(
+    id="blocks",
+    name="Block agent",
+    description="An agent built from blocks: model calls, tools, checks, routers, groups, loops.",
+    sample_prompt="What is 17 times 23?",
+    config_model=BlocksConfig,
+    graph=blocks_graph,
+    create=lambda llm, config, tracer: BlockAgent(llm=llm, config=config, tracer=tracer),
+)
+KINDS: dict[str, AgentSpec] = {**AGENTS, BLOCKS.id: BLOCKS}  # what a custom agent can be
+
 
 def validate_config(template_id: str, stored: dict[str, Any], default: ModelRef) -> BaseModel:
     """A template (`stored` empty) or custom agent config; without a pinned model, the default."""
     fields = {"model": default.model, "provider": default.provider, **stored}
-    return AGENTS[template_id].config_model.model_validate(fields)
+    config = KINDS[template_id].config_model.model_validate(fields)
+    if isinstance(config, BlocksConfig) and (errors := layout_errors(config)):
+        raise LayoutError(errors)
+    return config
 
 
 def editable(config: BaseModel) -> dict[str, Any]:

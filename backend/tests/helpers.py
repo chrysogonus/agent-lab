@@ -5,6 +5,7 @@ from typing import Any
 
 from agent_lab.agents.react import ReActAgent, ReActConfig
 from agent_lab.agents.steps import StepContext, config_version
+from agent_lab.blocks.model import BlocksConfig
 from agent_lab.graph import Graph
 from agent_lab.llm.base import ChatResponse, ToolCall
 from agent_lab.llm.fake import FakeLLM
@@ -100,3 +101,63 @@ def fake_models(
         ref = ModelRef(provider="openai", model=openai.model)
         entries.append(ModelEntry(ref, True, unavailable, openai))
     return Models(entries, default or entries[0].ref)
+
+
+# --- Block agents (M5): dict builders, as the API receives blocks ---
+
+BlockDict = dict[str, Any]
+
+
+def model_block(name: str, system: str = "You help.", **fields: Any) -> BlockDict:
+    return {"kind": "model", "name": name, "system": system, **fields}
+
+
+def tool_block(name: str, tool: str = "calculator", **arguments: str) -> BlockDict:
+    arguments = arguments or {"expression": "{previous}"}
+    return {"kind": "tool", "name": name, "tool": tool, "arguments": arguments}
+
+
+def check_block(name: str, rule: str = "min_bullets", value: Any = 3) -> BlockDict:
+    return {"kind": "check", "name": name, "rule": rule, "value": value}
+
+
+def router_block(
+    name: str, routes: dict[str, list[BlockDict]], fallback: str | None = None, **fields: Any
+) -> BlockDict:
+    return {
+        "kind": "router",
+        "name": name,
+        "prompt": "Classify the question.",
+        "routes": [
+            {"name": r, "description": f"{r} questions", "blocks": b} for r, b in routes.items()
+        ],
+        "fallback": fallback or list(routes)[-1],
+        **fields,
+    }
+
+
+def branches_block(name: str, branches: dict[str, list[BlockDict]]) -> BlockDict:
+    branch_list = [{"name": b, "blocks": blocks} for b, blocks in branches.items()]
+    return {"kind": "parallel", "name": name, "mode": "branches", "branches": branch_list}
+
+
+def per_item_block(name: str, body: list[BlockDict], max_items: int = 3) -> BlockDict:
+    return {
+        "kind": "parallel",
+        "name": name,
+        "mode": "per_item",
+        "planner": "Split the request into parts.",
+        "max_items": max_items,
+        "body": body,
+    }
+
+
+def loop_block(name: str, body: list[BlockDict], max_rounds: int = 3, **exit: Any) -> BlockDict:
+    exit = exit or {"exit": "judge", "judge": "Approve if good."}
+    return {"kind": "loop", "name": name, "body": body, "max_rounds": max_rounds, **exit}
+
+
+def blocks_config(*blocks: BlockDict, reasoning: bool = False) -> BlocksConfig:
+    return BlocksConfig.model_validate(
+        {"model": "fake-model", "reasoning": reasoning, "blocks": list(blocks)}
+    )

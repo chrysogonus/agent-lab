@@ -150,6 +150,8 @@ def test_tools(store: Store) -> None:
         tools = client.get("/tools").json()
     assert [t["name"] for t in tools] == ["calculator", "get_weather"]
     assert all(t["description"] for t in tools)
+    # The builder shows one argument field per parameter of a tool block.
+    assert [list(t["parameters"]["properties"]) for t in tools] == [["expression"], ["city"]]
 
 
 def test_graph_preview_matches_saved_graph(store: Store) -> None:
