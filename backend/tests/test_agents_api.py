@@ -459,3 +459,69 @@ def test_openai_request_over_http(store: Store) -> None:
         assert str(request.url) == "https://openai.test/v1/chat/completions"
         assert request.headers["authorization"] == "Bearer sk-test-0123456789abcdef"
         assert json.loads(request.content)["model"] == "gpt-6-luna"
+
+
+# --- Unavailable models (US3) ---
+
+
+def test_models_list_marks_missing_key(store: Store) -> None:
+    client, _, _ = two_models(store, openai_key=False)
+    with client:
+        luna = client.get("/models").json()[1]
+    assert (luna["available"], luna["unavailable_reason"]) == (False, "no API key")
+
+
+def test_save_rejects_unavailable_model(store: Store) -> None:
+    client, _, _ = two_models(store, openai_key=False)
+    with client:
+        base = template(client, "react")
+        body = {
+            "template_id": "react",
+            "name": "Mine",
+            "description": "",
+            "sample_prompt": "hi",
+            "config": base["config"],
+            "model": LUNA,
+        }
+        response = client.post("/agents", json=body)
+        custom = [a for a in client.get("/agents").json() if a["kind"] == "custom"]
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {
+            "loc": ["body", "model"],
+            "msg": "model openai/gpt-6-luna is not available: no API key",
+            "type": "value_error",
+        }
+    ]
+    assert custom == []
+
+
+@pytest.mark.parametrize(
+    ("removed", "message"),
+    [
+        ("key", "model openai/gpt-6-luna is not available: no API key"),
+        ("model", "model openai/gpt-6-luna is not configured"),
+    ],
+)
+def test_run_rejected_when_pinned_model_unusable(store: Store, removed: str, message: str) -> None:
+    client, _, _ = two_models(store)
+    with client:
+        agent = new_agent(client, "react", model=LUNA)
+    # Restarted after removing the key, or the model, from the configuration.
+    if removed == "model":
+        app = create_app(store=store, models=fake_models(FakeLLM([])))
+        restarted = TestClient(app, base_url=BASE)
+    else:
+        restarted, _, _ = two_models(store, openai_key=False)
+    with restarted as client:
+        response = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]})
+        listed = template(client, agent["id"])
+        runs = client.get("/runs").json()
+    assert response.status_code == 422
+    assert response.json()["detail"][0] == {
+        "loc": ["body", "agent_id"],
+        "msg": message,
+        "type": "value_error",
+    }
+    assert runs == []
+    assert listed["model"] == LUNA  # still listed with its model, shown as unavailable
