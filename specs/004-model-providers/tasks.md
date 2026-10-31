@@ -187,14 +187,17 @@ Task: "frontend/src/lib/builder.ts: Draft.model"
 
 ## Manual check results (T025, 2026-10-31)
 
-vLLM `qwen3.5-9b`; backend on a copy of the owner's database with `OPENAI_MODELS=gpt-6-luna`
-and no real OpenAI key; UI driven headless (Chromium, Playwright). No request reached OpenAI.
+vLLM `qwen3.5-9b` and OpenAI `gpt-6-luna` (owner's key); backend on copies of the owner's
+database; UI driven headless (Chromium, Playwright). Steps 1, 2, 7 and 8 ran without a real key.
 
 | Quickstart step | Result |
 |---|---|
 | 1. Model list without key | "Default (Local · qwen3.5-9b)", Local qwen3.5-9b, OpenAI "gpt-6-luna (external, no API key)" disabled; templates show the select read-only on Default (US3-1, FR-010) |
 | 2. M3 agents | all three saved agents on "Default"; a run of one gave `config_version` 1a1151999047, the same as its M3 runs; header, past-runs entry and span detail show "Local · qwen3.5-9b" / Provider local (FR-004, FR-006, FR-011) |
-| 3.–6. Real OpenAI runs | **not run: needs the owner's key.** Covered by mock-transport tests (test_providers.py, test_llm_client.py, test_redaction.py); SC-001 and SC-002 remain open |
+| 3. Pin OpenAI in the UI and run | Routing → Customize → Model "gpt-6-luna (external)" → Run: started 0.2 s after the first click (scripted), completed in 3.3 s; header, past-runs entry and span detail show "OpenAI · gpt-6-luna" / Provider openai (US1-1, US1-2, SC-001) |
+| 4. Six template shapes on `gpt-6-luna` | routing, chain, parallel, orchestrator and evaluator `completed` (OpenAI accepted `reasoning_effort: none` and the strict decision schemas). ReAct **failed** with its template's thinking on: OpenAI answered 400 "Function tools with reasoning_effort are not supported for gpt-6-luna in /v1/chat/completions ... use /v1/responses or set reasoning_effort to 'none'" (recorded on the span, run `error`, as FR-012 requires). With "Model thinking" off the same agent `completed`, calling both tools. SC-002 holds with thinking off for tool-calling agents on this model |
+| 5. Compare Local and OpenAI | the past-runs list shows model, calls, tokens and wall time per run; the OpenAI routing run's `config_version` (3f272c01142c) differs from the local one (86bf47b2682b) (US1-3, SC-006) |
+| 6. Wrong key | run `error` after 0.5 s; span: "Incorrect API key provided: sk-proj-***…cdef" (OpenAI masks the key itself); the next run completed; neither the real nor the wrong key appears in any database file (US3-3, US3-4) |
 | 7. Pinned model removed | pinned under a dummy key (save only, no run), restarted without `OPENAI_MODELS`: the select shows "gpt-6-luna (not configured)"; Run shows "model openai/gpt-6-luna is not configured" (US3-2) |
 | 8. Default without key | `DEFAULT_MODEL=openai/gpt-6-luna` without key: the backend exits with "DEFAULT_MODEL: model openai/gpt-6-luna is not available: no API key" |
 | Templates on vLLM | all six `completed`; their `config_version`s equal those computed by the pre-M4 code (37dd998) for `qwen3.5-9b` (FR-009) |

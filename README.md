@@ -56,6 +56,9 @@ Configure the list in `.env` (see `.env.example`) and restart the backend after 
 - `OPENAI_REASONING_OFF`: the `reasoning_effort` sent when an agent's thinking is off (default
   `none`). If a model rejects it, the run fails with OpenAI's message on the span; set the value
   that model accepts, or leave it empty to send nothing.
+  Some models refuse tools while thinking on Chat Completions (`gpt-6-luna`: "Function tools
+  with reasoning_effort are not supported"); turn "Model thinking" off for tool-calling agents on
+  them.
 - `DEFAULT_MODEL`: `provider/model`, e.g. `openai/gpt-6-luna` (default: the local `LLM_MODEL`).
   The backend refuses to start when it names a model that isn't configured or has no key.
 
