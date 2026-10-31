@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AgentBuilder } from "@/components/AgentBuilder";
+import { VillageView } from "@/components/village/VillageView";
 import { AgentPicker } from "@/components/AgentPicker";
 import { PromptForm } from "@/components/PromptForm";
 import { RunList } from "@/components/RunList";
@@ -40,6 +41,7 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   // Bumped when an agent is picked: the prompt box then shows that agent's sample prompt.
   const [picks, setPicks] = useState(0);
+  const [view, setView] = useState<"agents" | "village">("agents");
 
   const refresh = useCallback(() => {
     listRuns()
@@ -184,10 +186,60 @@ export default function Home() {
 
   const runAgent = current && agentPreview(agents, current.agent_id);
 
+  const switchTo = (next: "agents" | "village") => {
+    if (next === view || (next === "village" && !mayLeave())) return;
+    if (next === "village") edit(preview); // unsaved builder changes were discarded
+    setView(next);
+    if (next === "agents") listAgents().then(setAgents, () => {}); // villager agents may be new
+  };
+
+  /** "Edit its agent" in the village: open that villager's block agent in the builder. */
+  const editVillagerAgent = (id: string) => {
+    listAgents().then((list) => {
+      setAgents(list);
+      setView("agents");
+      setCurrent(null);
+      setAgentId(id);
+      setPicks((n) => n + 1);
+      edit(agentPreview(list, id));
+    }, () => {});
+  };
+
+  const viewSwitch = (
+    <nav aria-label="View" className="flex shrink-0 gap-1 rounded-full border border-rule bg-panel p-0.5 sm:mt-1.5">
+      {(["agents", "village"] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={view === v}
+          onClick={() => switchTo(v)}
+          className={`rounded-full px-3 py-1 text-sm focus-visible:outline-2 focus-visible:outline-llm ${
+            view === v ? "bg-ink text-panel" : "text-ink hover:bg-paper"
+          }`}
+        >
+          {v === "agents" ? "Agents" : "Village"}
+        </button>
+      ))}
+    </nav>
+  );
+
+  if (view === "village") {
+    return (
+      <div className="flex min-h-dvh flex-col gap-4 p-4 lg:h-dvh">
+        <header className="flex items-start gap-6">
+          <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Agent Lab</h1>
+          {viewSwitch}
+        </header>
+        <VillageView onEditAgent={editVillagerAgent} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-dvh flex-col gap-4 p-4 lg:h-dvh">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
         <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Agent Lab</h1>
+        {viewSwitch}
         <div className="flex flex-1 flex-col gap-2">
           <AgentPicker
             agents={agents}

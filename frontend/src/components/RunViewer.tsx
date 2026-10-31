@@ -44,7 +44,10 @@ export function RunViewer({
       <div className="flex min-h-0 flex-col gap-4">
         <section className="rounded-lg border border-rule bg-panel" aria-label="Run summary">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-rule px-4 py-3">
-            <h2 className="text-base font-semibold text-ink">{run.prompt}</h2>
+            {/* long prompts (a villager's observation) stay readable in the span detail */}
+            <h2 className="line-clamp-3 text-base font-semibold text-ink" title={run.prompt}>
+              {run.prompt}
+            </h2>
             <span className={`text-sm ${run.status === "running" ? "text-signal-ink" : run.status === "completed" ? "text-tool" : "text-fault"}`}>
               {STATUS_TEXT[run.status]}
             </span>

@@ -57,6 +57,52 @@ export type Run = {
   totals: RunTotals | null; // null on the run returned by POST /runs
   agent_name: string | null; // the agent's name when the run started; null before M3
   template_id: string | null; // null before M3
+  village_tick: number | null; // set on a villager's turn (M6)
+  villager: string | null;
+  village_action: VillageAction | null;
+};
+
+// The village (M6). See specs/006-village/contracts/http-api.md.
+export type VillageAction =
+  | { action: "move"; place: string; reason?: string }
+  | { action: "say"; text: string; to: string | null; reason?: string }
+  | { action: "wait"; reason?: string };
+
+export type VillageEvent = {
+  tick: number;
+  kind: "set_off" | "arrived" | "heard" | "said" | "waited";
+  text: string;
+  from?: string;
+  to?: string | null;
+};
+
+export type Villager = {
+  name: string;
+  title: string;
+  color: string;
+  initial: string;
+  persona: string;
+  agent_id: string | null;
+  x: number;
+  y: number;
+  place: string | null;
+  destination: string | null;
+  last_action: VillageAction | null;
+  speech: { text: string; to: string | null } | null;
+  events: VillageEvent[];
+};
+
+export type VillageState = {
+  tick: number;
+  day: number;
+  time: string;
+  period: "morning" | "midday" | "afternoon" | "evening" | "night";
+  running: boolean;
+  ticking: boolean;
+  interval: number;
+  paused_reason: string | null;
+  map: { width: number; height: number; rows: string[]; places: { key: string; label: string; x: number; y: number }[] };
+  villagers: Villager[];
 };
 
 export type AgentConfig = Record<string, unknown>; // a template's editable fields
@@ -155,6 +201,20 @@ export type StreamEvent =
   | { type: "error"; message: string };
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+export function villageStreamUrl(): string {
+  return `${API_URL.replace(/^http/, "ws")}/village/stream`;
+}
+
+export const getVillage = (): Promise<VillageState> => send("GET", "/village");
+export const startVillage = (): Promise<VillageState> => send("POST", "/village/start");
+export const pauseVillage = (): Promise<VillageState> => send("POST", "/village/pause");
+export const stepVillage = (): Promise<VillageState> => send("POST", "/village/step");
+export const resetVillage = (): Promise<VillageState> => send("POST", "/village/reset");
+export const setVillageInterval = (seconds: number): Promise<VillageState> =>
+  send("PUT", "/village/interval", { seconds });
+export const villagerTurns = (name: string): Promise<Run[]> =>
+  send("GET", `/village/villagers/${encodeURIComponent(name)}/turns`);
 
 export function streamUrl(runId: string): string {
   return `${API_URL.replace(/^http/, "ws")}/runs/${runId}/stream`;

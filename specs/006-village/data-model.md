@@ -34,7 +34,7 @@
 | `last_action` | `{"action", …}` and, if it became `wait`, the reason |
 | `speech` | `{"text", "to"}` said this tick, or null (shown as a bubble) |
 | `inbox` | speech heard since its last turn: `{"from", "to", "text", "tick"}` |
-| `events` | last 10 `{"tick", "kind": arrived|heard|said|waited, "text", "from"?, "to"?}` |
+| `events` | last 10 `{"tick", "kind": set_off|arrived|heard|said|waited, "text", "from"?, "to"?}` |
 
 ## Action (parsed from a turn's answer)
 

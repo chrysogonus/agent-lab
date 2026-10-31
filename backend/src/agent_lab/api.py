@@ -27,6 +27,8 @@ from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import Span
+from agent_lab.village.runner import CHANNEL, StepConflict, Village
+from agent_lab.village.world import VILLAGERS
 
 ALLOWED_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"]
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
@@ -84,6 +86,10 @@ class GraphRequest(BaseModel):
     config: dict[str, Any]
 
 
+class IntervalRequest(BaseModel):
+    seconds: int = Field(ge=1, le=30)
+
+
 class RunDetail(BaseModel):
     run: Run
     spans: list[Span]
@@ -114,6 +120,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         allow_headers=["content-type"],
     )
     bus = Bus()
+    village = Village(store=store, models=models, bus=bus, secrets=secrets)
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
     def checked_config(template_id: str, raw: dict[str, Any]) -> BaseModel:
@@ -389,5 +396,79 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             pass
         finally:
             bus.unsubscribe(run_id, queue)
+
+    # --- the village (specs/006-village/contracts/http-api.md) ---
+
+    @app.get("/village")
+    async def get_village() -> dict[str, Any]:
+        return village.state()
+
+    @app.post("/village/start")
+    async def start_village() -> dict[str, Any]:
+        village.start()
+        return village.state()
+
+    @app.post("/village/pause")
+    async def pause_village() -> dict[str, Any]:
+        village.pause()
+        return village.state()
+
+    @app.post("/village/step")
+    async def step_village() -> dict[str, Any]:
+        try:
+            await village.step()
+        except StepConflict:
+            raise HTTPException(
+                status_code=409, detail="the village is running or ticking"
+            ) from None
+        return village.state()
+
+    @app.put("/village/interval")
+    async def set_village_interval(body: IntervalRequest) -> dict[str, Any]:
+        await village.set_interval(body.seconds)
+        return village.state()
+
+    @app.post("/village/reset")
+    async def reset_village() -> dict[str, Any]:
+        await village.reset()
+        return village.state()
+
+    @app.get("/village/villagers/{name}/turns")
+    async def villager_turns(name: str) -> list[Run]:
+        """Every turn of a villager, newest first, whichever agent played it."""
+        if name not in VILLAGERS:
+            raise HTTPException(status_code=404, detail="unknown villager")
+        return store.list_turns(name)
+
+    @app.websocket("/village/stream")
+    async def village_stream(ws: WebSocket) -> None:
+        origin = ws.headers.get("origin")
+        if origin is not None and origin not in ALLOWED_ORIGINS:
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        queue = bus.subscribe(CHANNEL)
+        village.viewer_joined()
+        try:
+            await ws.accept()
+            await ws.send_json({"type": "state", "state": village.state()})
+            # Wait for village events and for the client closing, whichever comes first, so a
+            # closed tab counts as gone even while nothing is published (the idle pause).
+            receive = asyncio.create_task(ws.receive())
+            while True:
+                event = asyncio.create_task(queue.get())
+                done, _ = await asyncio.wait({event, receive}, return_when=asyncio.FIRST_COMPLETED)
+                if event in done:
+                    await ws.send_json(event.result())
+                else:
+                    event.cancel()
+                if receive in done:
+                    if receive.result()["type"] == "websocket.disconnect":
+                        break
+                    receive = asyncio.create_task(ws.receive())  # ignore anything the client sends
+        except WebSocketDisconnect:
+            pass
+        finally:
+            bus.unsubscribe(CHANNEL, queue)
+            village.viewer_left()
 
     return app

@@ -59,6 +59,15 @@ def label_cell(place: str) -> Cell:
     return min(place_cells(place), key=lambda c: (c[1], c[0]))
 
 
+def home_cell(place: str) -> Cell:
+    """Where a villager starts: the cell nearest the middle of its home (labels sit top-left)."""
+    cells = place_cells(place)
+    mx, my = sum(x for x, _ in cells) / len(cells), sum(y for _, y in cells) / len(cells)
+    return min(
+        cells, key=lambda c: ((c[0] - mx) ** 2 + (c[1] - my) ** 2, -c[1], c[0])
+    )  # ties: lower row
+
+
 def _distances(place: str) -> dict[Cell, int]:
     """Steps from every walkable cell to the nearest cell of `place` (breadth-first search)."""
     targets = place_cells(place)
@@ -175,7 +184,7 @@ def new_world() -> dict[str, Any]:
     """Tick 0, paused, every villager at a cell of its home."""
     villagers: list[dict[str, Any]] = []
     for character in VILLAGERS.values():
-        x, y = label_cell(character.home)
+        x, y = home_cell(character.home)
         villagers.append(
             {
                 "name": character.name,

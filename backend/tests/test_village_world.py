@@ -81,4 +81,6 @@ def test_new_world_has_four_villagers_at_home() -> None:
     assert names == ["Hilde", "Jonas", "Greta", "Lina"]
     assert [VILLAGERS[n].initial for n in names] == ["H", "J", "G", "L"]
     for v in world["villagers"]:
-        assert place_at(v["x"], v["y"]) == VILLAGERS[v["name"]].home
+        home = VILLAGERS[v["name"]].home
+        assert place_at(v["x"], v["y"]) == home
+        assert (v["x"], v["y"]) != label_cell(home)  # the figure leaves the place label readable
