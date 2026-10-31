@@ -28,6 +28,21 @@ All M1–M5 core contracts apply unchanged: every model and tool call is a span 
 run's graph; graphs and `config_version` come from the server; secrets are redacted; servers
 bind to 127.0.0.1; tests never call a real model.
 
+## Clarifications
+
+### Session 2026-10-31
+
+- Q: Should the village keep ticking on the server while no browser tab shows it, or only while
+  the Village view is open? → A: The server runs the ticks; the village pauses itself about 60
+  seconds after the last Village view closes.
+- Q: How should the map and villagers look in this slice? → A: Shapes drawn in code: colored
+  tiles for grass, paths, water and places, labelled places, round villager figures in their own
+  color with an initial, and speech bubbles. No image assets.
+- Q: When a villager speaks, can it address one villager by name? → A: Yes, optionally; everyone
+  nearby still hears it, marked with who it was for ("Hilde → Jonas: …").
+- Q: What should the four villagers be called? → A: Mayor Hilde, Jonas the fisher, Greta the
+  farmer, Lina the flower girl (distinct initials H, J, G, L for the map figures).
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is the project owner, a senior engineer studying agent behavior on a local machine.
@@ -53,8 +68,9 @@ by three ticks, and stores the world after each tick.
    turn, the actions are applied together, and the clock advances by one tick.
 3. **Given** a running world, **When** the owner presses Pause, **Then** the current tick
    finishes and no new tick starts.
-4. **Given** a villager says something, **When** the tick is applied, **Then** the words appear
-   next to that villager on the map and every villager in the same place hears them in its next
+4. **Given** a villager says something, optionally to a named villager, **When** the tick is
+   applied, **Then** the words appear next to that villager on the map (with the addressee if
+   any) and every villager nearby hears them, marked with who they were for, in its next
    observation.
 5. **Given** the backend restarts, **When** the owner opens the Village view, **Then** the world
    is exactly as after its last completed tick, paused.
@@ -83,8 +99,8 @@ waiting.
 2. **Given** a villager answers "move to the market", **When** ticks pass, **Then** it walks one
    cell per tick along the paths until it arrives, and its events record the arrival.
 3. **Given** a villager's answer is not a valid action (unreadable, unknown place, empty
-   speech), **When** the tick is applied, **Then** that villager waits, and the reason is shown
-   with its turn.
+   speech, an addressee who is not a villager), **When** the tick is applied, **Then** that
+   villager waits, and the reason is shown with its turn.
 4. **Given** the mayor's personality, **When** the village runs for a day on the real model,
    **Then** the mayor mentions the festival to at least one other villager (manual check).
 
@@ -132,6 +148,9 @@ two ticks shows up as a new `config_version` on its next turn.
   in the database.
 - Ticks take longer than the set interval (slow model) → the next tick starts when the current
   one has finished; ticks never overlap.
+- The owner closes the last Village view while the village runs → it keeps running for 60
+  seconds, then pauses after the current tick; reopening within the 60 seconds keeps it
+  running.
 
 ## Requirements *(mandatory)*
 
@@ -150,7 +169,8 @@ two ticks shows up as a new `config_version` on its next turn.
 
 - **FR-003**: The village MUST start with four villagers: Mayor Hilde (town hall), Jonas the
   fisher (pier), Greta the farmer (fields) and Lina the flower girl (flower garden), each with a
-  personality, a home place and a daily rhythm described in its persona.
+  personality, a home place and a daily rhythm described in its persona. Their initials (H, J, G, L)
+  label their figures on the map.
 - **FR-004**: Each villager MUST be played by its own Agent Lab block agent, created the first
   time the village starts and listed with the owner's agents; it uses that agent's model
   setting (M4).
@@ -161,16 +181,19 @@ two ticks shows up as a new `config_version` on its next turn.
 
 - **FR-006**: On each tick every villager MUST receive an observation (persona, time, place,
   nearby villagers and places, speech heard since its last turn, last events) and answer with
-  one action: move to a named place, say a text to everyone in its place, or wait.
+  one action: move to a named place, say a text (optionally to one named villager; everyone
+  nearby hears it, marked with the addressee), or wait.
 - **FR-007**: The turns of a tick MUST run concurrently; all actions MUST be applied together
   after every turn has finished, then the clock advances. Ticks MUST NOT overlap.
 - **FR-008**: An answer that is not a valid action MUST count as waiting, with the reason
   recorded in the villager's events and turn.
 - **FR-009**: Moving MUST take one cell per tick along walkable cells, by a shortest path, until
   the villager arrives.
-- **FR-010**: The owner MUST be able to start, pause, step one tick and set the interval between
-  ticks (1–30 seconds, default 5); a running village pauses itself after 3 ticks in a row in
-  which every turn failed.
+- **FR-010**: The server MUST run the ticks, so reloading or opening a second Village view does
+  not disturb them. The owner MUST be able to start, pause, step one tick and set the interval
+  between ticks (1–30 seconds, default 5). A running village MUST pause itself after 3 ticks in a
+  row in which every turn failed, and 60 seconds after the last open Village view has closed;
+  the view says why it paused.
 
 **Tracing**
 
@@ -185,7 +208,9 @@ two ticks shows up as a new `config_version` on its next turn.
 
 - **FR-014**: The Village view MUST show the map with its places, the villagers with their names
   and current speech, the clock, the controls and the tick state (running, paused, ticking); it
-  MUST be keyboard operable and readable on a laptop screen.
+  MUST be keyboard operable and readable on a laptop screen. The map is drawn from shapes:
+  colored tiles (grass, path, water, place), place labels, one round figure per villager in its
+  own color with its initial, and a speech bubble for what it said this tick; no image assets.
 - **FR-015**: Clicking a villager MUST open its panel (persona, place, last action, last 10
   events, turns).
 
@@ -205,7 +230,8 @@ two ticks shows up as a new `config_version` on its next turn.
 - **Place**: name, cells it covers.
 - **Villager**: name, role, personality, home place, the agent that plays it, position, current
   destination, last 10 events.
-- **Event**: tick, kind (arrived, heard, said, waited), text.
+- **Event**: tick, kind (arrived, heard, said, waited), text, and for speech the speaker and
+  the addressee if any.
 - **Turn**: a run of a villager's agent for one tick, with its observation and parsed action.
 
 ## Success Criteria *(mandatory)*
@@ -226,9 +252,9 @@ two ticks shows up as a new `config_version` on its next turn.
 
 ## Future Scope (not planned in M6)
 
-- Fork-and-compare worlds, per-villager stats, inventories and trading, a map editor, adding or
-  removing villagers, world actions as tools (with M7 MCP), real memory (M9: store, retrieve,
-  reflect), budgets per tick (M8 Harness).
+- Pixel-art tiles and character sprites, fork-and-compare worlds, per-villager stats,
+  inventories and trading, a map editor, adding or removing villagers, world actions as tools
+  (with M7 MCP), real memory (M9: store, retrieve, reflect), budgets per tick (M8 Harness).
 - Roadmap after M6: **M7 MCP**, **M8 Harness**, **M9 Agent memory**, **M10 RAG**.
 
 ## Assumptions
