@@ -22,7 +22,8 @@ briefly.", message `{previous}`.
 ## Block (discriminated on `kind`)
 
 Common: `kind`, `name` (`^[a-z0-9-]{1,30}$`; not `start`, `end`, `input`, `previous`,
-`feedback`, `item`; unique in the agent).
+`feedback`, `item`; unique in the agent). Converting an M3 agent renames colliding item names
+(research.md §7).
 
 | Kind | Fields |
 |---|---|
@@ -61,7 +62,8 @@ Common: `kind`, `name` (`^[a-z0-9-]{1,30}$`; not `start`, `end`, `input`, `previ
 - Node per block except parallel groups in branches mode; `tool:<name>` nodes for model calls
   with tools; `start`, `end`. Kinds: model/router/per-item/judge → `llm`, tool → `tool`,
   check/check-exit → `code`.
-- Edges as in research.md §6.
+- Edges as in research.md §6, including terminal edges to `end` from every check, model call
+  with tools, loop exit and per-item planner (the nodes that can stop a run).
 
 ## Run (unchanged)
 
@@ -75,6 +77,8 @@ The run stores the redacted `BlocksConfig` dump (`config`), the derived graph, `
 | last block finished | `completed`, answer = last output |
 | check fails (block) | `error`, end span from the check node, message names the check |
 | model call reaches `max_iterations` with tools still requested | `max_iterations`, answer `null` |
-| loop reaches `max_rounds` without exit | `max_iterations`, answer = last body output |
+| loop reaches `max_rounds` without exit | `max_iterations`, answer = last body output, end span from the loop node |
+| loop judge's verdict unusable | counts as a rejection; the error becomes the feedback |
 | router decision unusable | runs the fallback route (the route span keeps the error, as M2) |
-| model or tool transport error, unusable plan or verdict | `error` |
+| per-item plan unusable | `error`, end span from the planner node |
+| model or tool transport error | `error` |

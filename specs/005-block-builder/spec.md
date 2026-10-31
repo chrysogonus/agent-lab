@@ -145,7 +145,8 @@ field, and nothing is stored.
 - A route, branch or loop body is left empty → rejected (each holds at least one block).
 - A parallel group's planner returns more items than the maximum or an unusable list → the run
   ends `error`, as an invalid orchestrator plan does in M2.
-- A loop's judge returns an unusable verdict → the run ends `error` naming the loop.
+- A loop's judge returns an unusable verdict → it counts as a rejection and its error becomes
+  the feedback for the next round, as in the M2 evaluator.
 - A tool-call argument evaluates to text the tool rejects → the tool's error is the block's
   output and is recorded on the span, as tool errors are in M1.
 - A parallel branch fails → the group fails, the run ends `error`; branches already running

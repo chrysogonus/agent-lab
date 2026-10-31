@@ -76,14 +76,18 @@ inside the existing stack. Code references are to the M4 tree (commit `1cfcecf`)
     generalised); an invalid label runs the fallback.
   - Parallel branches / per-item bodies: `asyncio.gather(..., return_exceptions=True)`, then the
     first exception is raised, so every branch finishes and stays in the trace before the run
-    ends `error` (spec edge case). Per-item: `decide` with `orchestrator.plan_model(max_items)`.
-  - Loop: body, then the exit: a check, or `decide` with the evaluator's `Verdict`; at the cap
-    the run stops `max_iterations` with the last body output as the answer.
+    ends `error` (spec edge case). Per-item: `decide` with `orchestrator.plan_model(max_items)`;
+    an unusable plan stops the run `error` from the planner node (as `OrchestratorWorkflow`).
+  - Loop: body, then the exit: a check, or `decide` with the evaluator's `Verdict`; an unusable
+    verdict counts as a rejection whose error becomes the feedback (as `EvaluatorWorkflow`); at
+    the cap the run stops `max_iterations` with the last body output as the answer.
   - Check: a pure function per rule (`min_bullets` reuses `chain.check_outline`); failing stops
     the run `error` naming the check.
-- **Stops**: a failing check and an iteration or round cap raise `Stop(outcome)` from any
-  depth; the flow returns that outcome, so the end span records `came_from` the stopping node.
-  Model, tool and decision errors propagate as in M2 (run `error`, no end edge needed).
+- **Stops**: a failing check, an unusable plan and an iteration or round cap raise
+  `Stop(outcome)` from any depth; the flow returns that outcome, so the end span records
+  `came_from` the stopping node (every such node has an edge to `end`, §6). Model and tool
+  transport errors propagate as in M2 (run `error`, no end span, so no edge needed). Decision
+  handling matches the templates: router → fallback, judge → rejection, planner → stop.
 - **Rationale**: no new model or tool path (constitution II); every behavior already exists in
   one of the six workflows.
 
@@ -97,8 +101,9 @@ inside the existing stack. Code references are to the M4 tree (commit `1cfcecf`)
   - Edges: `entries(b)` and `exits(b)` per block; consecutive blocks connect
     `exits(a) × entries(b)`; `start` → the first block, the last block → `end`; router and
     per-item planner → each route's/the body's entries; loop: body exits → exit node, exit node
-    → body entries (repeat) and → next; model call ↔ its tool nodes; every check → `end`
-    (failure).
+    → body entries (repeat) and → next; model call ↔ its tool nodes. Terminal edges to `end`
+    from every node that can stop the run wherever it sits: checks (failure), model calls with
+    tools (iteration cap), loop exit nodes (round cap) and per-item planners (unusable plan).
   - Layout: a list runs left to right in 200 px columns; routes and branches stack in 110 px
     rows; a container is as wide as its widest child list; single nodes centre in their
     container's height.
@@ -115,12 +120,20 @@ inside the existing stack. Code references are to the M4 tree (commit `1cfcecf`)
 | Chain | one model per step (`include_input` → message `"<label>: {input}\n\n<Prev>:\n{previous}"`), check `gate` (`min_bullets`) after the first step when the gate is on |
 | Routing | router `router` (router prompt, fallback); each route: model `<route>` with the route's prompt and its tool (with tools: `max_iterations` 2, the M2 handler's tool call then answer) |
 | Parallel | parallel `reviews` (branches: one per aspect, model `<aspect>` with the filled review prompt), then model `merge` (merge prompt, message `"Text:\n{input}\n\n{reviews}"`) |
-| Orchestrator | parallel `orchestrator` per-item (filled orchestrator prompt, `max_items` = `max_subtasks`, body: model `worker` with the worker prompt and message `{item}`), then model `synthesizer` |
+| Orchestrator | parallel `orchestrator` per-item (filled orchestrator prompt, `max_items` = `max_subtasks`, body: model `worker` with the worker prompt and message `"Request: {input}\n\nSubtask: {item}"`), then model `synthesizer` with message `"Request: {input}\n\n{orchestrator}"` |
 | Evaluator | loop `evaluator` (judge = evaluator prompt, `max_rounds`), body: model `generator` with message `"{input}\n\n{feedback}"` |
 
 Prompts and settings come from the agent's current config (template defaults or an M3 custom
 agent's edits) and its model setting. Requests are not byte-identical to the template's (spec
-assumption); SC-002 compares status, answer and call counts on the same script.
+assumption); SC-002 compares status, answer, call counts and taken edges on the same script, for
+the golden template scripts and for malformed decisions (an invalid route label, an invalid
+plan, an unreadable verdict).
+
+**Name collisions**: M3 item names (steps, routes, aspects) become block names. A name that is a
+reserved block name (`input`, `previous`, `feedback`, `item`) or collides with a fixed name the
+conversion adds (`reviews`, `merge`, …) gets the first free `<name>-<n>`; references in converted
+prompts use the new name, and the graph equals the template's up to that rename. Tests cover a
+chain step named `input` and an aspect named `reviews`.
 
 ## 8. Spec adjustments made with this plan
 
