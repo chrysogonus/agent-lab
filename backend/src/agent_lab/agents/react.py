@@ -89,10 +89,7 @@ class ReActAgent:
         return ReActState(messages=steps.messages(self.config.system_prompt, prompt))
 
     async def run(self, prompt: str) -> ReActState:
-        """Loop `step` until the model answers or the iteration cap is hit.
-
-        A Phase 2 tick runner replaces this loop and calls `step` once per tick.
-        """
+        """Loop `step` until the model answers or the iteration cap is hit."""
         state = self.start(prompt)
         async with self.tracer.span(
             SpanKind.STEP,
