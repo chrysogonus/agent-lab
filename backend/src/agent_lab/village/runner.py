@@ -107,10 +107,13 @@ class Village:
 
     # --- villager agents ---
 
-    def ensure_agents(self) -> None:
-        """Creates each villager's block agent, again if the owner deleted it."""
+    def ensure_agents(self, *, recreate: bool = False) -> None:
+        """Creates each villager's block agent; with `recreate` (Reset), also deleted ones.
+
+        Without it a villager whose agent was deleted waits each tick until the owner resets.
+        """
         for v in self.world["villagers"]:
-            if v["agent_id"] and self.store.get_agent(v["agent_id"]):
+            if v["agent_id"] and (not recreate or self.store.get_agent(v["agent_id"])):
                 continue
             body = villager_agent(v["name"])
             fields = {k: body[k] for k in ("template_id", "description", "sample_prompt", "config")}
@@ -270,7 +273,7 @@ class Village:
             self.world = new_world()
             for v in self.world["villagers"]:
                 v["agent_id"] = agents.get(v["name"])
-            self.ensure_agents()
+            self.ensure_agents(recreate=True)
             self._publish()
 
     def viewer_joined(self) -> None:

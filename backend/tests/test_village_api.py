@@ -103,3 +103,54 @@ def test_turns_stay_out_of_the_main_list(store: Store) -> None:
         client.post("/village/step")
         runs = client.get("/runs").json()
     assert runs == []
+
+
+# --- US3: a villager's turns ---
+
+
+def test_turns_per_villager(store: Store) -> None:
+    plan: dict[str, list[str | Exception]] = {"Jonas": ['{"action": "move", "place": "harbour"}']}
+    with client_for(store, plan, ticks=13) as client:
+        for _ in range(13):  # more than ten events after the invalid answer
+            client.post("/village/step")
+        turns = client.get("/village/villagers/Jonas/turns").json()
+        missing = client.get("/village/villagers/Bob/turns")
+    assert missing.status_code == 404
+    assert len(turns) == 13 and [t["village_tick"] for t in turns] == list(range(12, -1, -1))
+    assert {t["villager"] for t in turns} == {"Jonas"}
+    first = turns[-1]
+    assert first["village_action"] == {"action": "wait", "reason": "unknown place 'harbour'"}
+    assert first["prompt"].startswith("Day 1, 06:00, morning.")
+
+
+def test_an_edit_applies_from_the_next_tick(store: Store) -> None:
+    with client_for(store, ticks=2) as client:
+        client.post("/village/step")
+        agent_id = client.get("/village").json()["villagers"][0]["agent_id"]
+        agent = next(a for a in client.get("/agents").json() if a["id"] == agent_id)
+        config = agent["config"]
+        config["blocks"][0]["system"] += " Always talk about the weather."
+        fields = {k: agent[k] for k in ("name", "description", "sample_prompt", "model")}
+        assert (
+            client.put(f"/agents/{agent_id}", json={**fields, "config": config}).status_code == 200
+        )
+        client.post("/village/step")
+        before, after = reversed(client.get("/village/villagers/Hilde/turns").json())
+    assert before["config_version"] != after["config_version"]
+    assert after["config"]["blocks"][0]["system"].endswith("Always talk about the weather.")
+
+
+def test_turns_survive_a_replaced_agent(store: Store) -> None:
+    with client_for(store, ticks=3) as client:
+        client.post("/village/step")
+        old_id = client.get("/village").json()["villagers"][1]["agent_id"]
+        assert client.delete(f"/agents/{old_id}").status_code == 204
+        client.post("/village/step")  # Jonas cannot act: his agent is gone
+        jonas = client.get("/village").json()["villagers"][1]
+        assert jonas["last_action"] == {"action": "wait", "reason": "turn failed: unknown agent"}
+        client.post("/village/reset")
+        new_id = client.get("/village").json()["villagers"][1]["agent_id"]
+        client.post("/village/step")
+        turns = client.get("/village/villagers/Jonas/turns").json()
+    assert new_id and new_id != old_id
+    assert {t["agent_id"] for t in turns} == {old_id, new_id}  # old and new turns listed

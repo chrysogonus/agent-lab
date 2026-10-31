@@ -215,8 +215,9 @@ class Store:
         """A villager's turns, newest first, whichever agent played them."""
         with self._lock:
             rows = self._db.execute(
+                # Insertion order: the wall clock can step back (e.g. under WSL), rowid cannot.
                 _RUNS_WITH_TOTALS + "WHERE runs.villager=?"
-                " GROUP BY runs.run_id ORDER BY runs.started_at DESC LIMIT ?",
+                " GROUP BY runs.run_id ORDER BY runs.rowid DESC LIMIT ?",
                 (villager, limit),
             ).fetchall()
         return [_run(r) for r in rows]
