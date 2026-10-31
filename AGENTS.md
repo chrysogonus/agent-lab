@@ -1,9 +1,10 @@
 # AGENTS.md
 
-Agent Lab: hand-built agent fundamentals (ReAct and five workflow patterns now; MCP, harness,
-memory, RAG later) with a live trace view. Rules for every change:
-`.specify/memory/constitution.md`. Current feature spec, plan and tasks:
-`specs/002-workflow-patterns/` (M1: `specs/001-react-walking-skeleton/`).
+Agent Lab: hand-built agent fundamentals (ReAct, five workflow patterns and a builder for
+custom agents now; MCP, harness, memory, RAG later) with a live trace view. Rules for every
+change: `.specify/memory/constitution.md`. Current feature spec, plan and tasks:
+`specs/003-agent-builder/` (M2: `specs/002-workflow-patterns/`, M1:
+`specs/001-react-walking-skeleton/`).
 
 ## Commands
 
@@ -25,12 +26,16 @@ report; keep every gate at its current strictness.
 ## Layout
 
 - `backend/src/agent_lab/`: `agents/` (`react.py`; `steps.py`: traced `chat`, `call_tool`,
-  `decide`; `registry.py`: every runnable agent by id), `workflows/` (chain, routing, parallel,
-  orchestrator, evaluator), `tools/`, `llm/` (client seam + `FakeLLM`), `tracing/` (span,
-  tracer, redaction), `store.py` (SQLite), `bus.py`, `runs.py`, `api.py`.
-- `backend/tests/`: pytest; `helpers.py` builds scripted runs and `assert_trace_valid`.
-- `frontend/src/`: `app/page.tsx` (the one page), `components/`, `lib/run-state.ts` (pure view
-  logic, tested in `lib/run-state.test.ts`; keep testable logic there, not in components). Next.js 16 differs from older versions: read `frontend/AGENTS.md` before editing.
+  `decide`; `registry.py`: the six templates by id; `config_fields.py`: shared field rules),
+  `workflows/` (chain, routing, parallel, orchestrator, evaluator), `tools/` (`catalog.py`:
+  every tool by name), `llm/` (client seam + `FakeLLM`), `tracing/` (span, tracer, redaction),
+  `store.py` (SQLite: runs, spans, custom agents), `bus.py`, `runs.py`, `api.py`.
+- `backend/tests/`: pytest; `helpers.py` builds scripted runs and `assert_trace_valid`;
+  `test_templates.py` pins the templates to `golden/templates.json` (M2 behavior).
+- `frontend/src/`: `app/page.tsx` (the one page), `components/` (`AgentBuilder.tsx` and
+  `builder/`), `lib/run-state.ts` and `lib/builder.ts` (pure view and builder logic, tested next
+  to them; keep testable logic there, not in components). Next.js 16 differs from older
+  versions: read `frontend/AGENTS.md` before editing.
 
 ## Contracts
 
@@ -48,7 +53,13 @@ report; keep every gate at its current strictness.
 4. **Security.** Bind to 127.0.0.1. The tracer redacts before any sink sees a span. Tools get
    parsed arguments only and declare `scopes`; agents reject ungranted scopes. The API checks
    `Host`, CORS origin and WebSocket `Origin`.
-5. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
+5. **Templates and custom agents.** Each template's pydantic `Config` is the only definition of
+   its editable fields, defaults and limits; graphs and decision schemas are derived from it.
+   A custom agent is a stored (template id, config) that the server validates with that model;
+   runs snapshot name, template, config and graph. Templates must keep sending exactly their
+   M2 requests: `test_templates.py` fails otherwise (`UPDATE_GOLDEN=1` only for intended
+   changes). Fill prompt placeholders with `config_fields.fill`, never `str.format`.
+6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
    `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
    forward-looking abstractions.
 

@@ -4,7 +4,8 @@ Learn agent fundamentals by building them by hand, and watch every step live. M1
 traced ReAct agent with two tools (`calculator`, `get_weather`), an API, and a one-page UI
 with the agent graph, a span waterfall, span details and replay of past runs. M2 adds the
 five workflow patterns: prompt chaining, routing, parallelization, orchestrator-workers and
-evaluator-optimizer.
+evaluator-optimizer. M3 adds a builder: the six agents are templates, and custom agents made
+from them can be edited, saved and run.
 
 ## Requirements
 
@@ -23,8 +24,14 @@ make dev-llm              # vLLM on http://127.0.0.1:8001, detached (first start
 make dev                  # backend on http://127.0.0.1:8000 and frontend on http://127.0.0.1:3000
 ```
 
-Open http://127.0.0.1:3000, pick the ReAct agent or a workflow (its graph, description and a
-sample prompt appear), press Run, and click spans for their input, output, tokens and latency.
+Open http://127.0.0.1:3000, pick a template (its graph, settings and a sample prompt appear),
+press Run, and click spans for their input, output, tokens and latency.
+
+To build your own agent, pick a template and press Customize. Click a node to edit its prompt
+and settings; add, remove or reorder chain steps, routes and parallel aspects, pick ReAct's
+tools and change limits in the agent settings. The graph redraws as you edit. Save stores the
+agent under "My agents"; Run saves first. Duplicate and Delete work on saved agents; past runs
+keep the name, config and graph they ran with.
 The run header and the past-runs list show model calls, tool calls, tokens and wall time. Past
 runs replay from the database (`backend/data/agent_lab.db`).
 
@@ -46,11 +53,14 @@ make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
 
 | | |
 |---|---|
-| `GET /agents` | agents and workflows with description, sample prompt and graph |
-| `POST /runs` `{"prompt": "...", "agent_id": "react"}` | start a run, returns it (`202`) |
+| `GET /agents` | templates, then custom agents, with config, sample prompt and graph |
+| `GET /tools` | tools an agent can be given |
+| `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent |
+| `POST /graph` `{"template_id", "config"}` | the graph for an unsaved config (validation errors as `422`) |
+| `POST /runs` `{"prompt": "...", "agent_id": "react"}` | start a run of a template or custom agent (`202`) |
 | `GET /runs` | past runs with totals, newest first |
 | `GET /runs/{id}` | run and its spans |
 | `WS /runs/{id}/stream` | stored spans, then live span events, then `run_ended` |
 
 Design and requirements: `specs/001-react-walking-skeleton/` (M1),
-`specs/002-workflow-patterns/` (M2).
+`specs/002-workflow-patterns/` (M2), `specs/003-agent-builder/` (M3).

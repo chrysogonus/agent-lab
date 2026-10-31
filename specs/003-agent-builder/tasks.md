@@ -79,11 +79,11 @@ the agent's name.
 ### Frontend
 
 - [X] T018 [P] [US1] frontend/src/lib/api.ts: `AgentInfo` gains `kind`, `template_id`, `config`; `ToolInfo`; `Run` gains `agent_name`, `template_id` (nullable); `listTools()`, `createAgent()`, `updateAgent()`, `previewGraph()`; a `ValidationError` carrying the 422 `detail` list
-- [X] T019 [P] [US1] Pure builder state in new frontend/src/lib/builder.ts: `Draft{agentId: string | null, templateId, name, description, samplePrompt, config, dirty}`; `draftFromTemplate(template, agents)` (name via `copyName(template.name, names)`), `draftFromAgent(agent)`; `setField(draft, path, value)` (path into the draft, marks dirty); `nodeSettings(templateId, config, nodeId)` → which panel section a node opens (model node → its prompt or list item; gate → bullets; `tool:*` → tool info; start or none → agent settings); `fieldErrors(detail)` → map from dotted path (`config.routes.1.name`, `name`) to message; `copyName(name, names)` ("<name> (copy)", then "(copy 2)", …, case-insensitive); tests in new frontend/src/lib/builder.test.ts
+- [X] T019 [P] [US1] Pure builder state in new frontend/src/lib/builder.ts: `Draft{agentId: string | null, templateId, name, description, samplePrompt, config, dirty}`; `draftFrom(source, agents)` (a template or a duplicate; name via `copyName(source.name, names)`), `draftFromAgent(agent)`; `setField(draft, path, value)` (path into the draft, marks dirty); `nodeSettings(templateId, config, nodeId)` → which panel section a node opens (model node → its prompt or list item; gate → bullets; `tool:*` → tool info; start or none → agent settings); `fieldErrors(detail)` → map from dotted path (`config.routes.1.name`, `name`) to message; `copyName(name, names)` ("<name> (copy)", then "(copy 2)", …, case-insensitive); tests in new frontend/src/lib/builder.test.ts
 - [X] T020 [P] [US1] frontend/src/components/GraphView.tsx: optional `selected?: string` (drawn highlighted) and `onNodeClick?: (id: string) => void` (pointer cursor and keyboard focus on nodes when set)
 - [X] T021 [P] [US1] frontend/src/components/AgentPicker.tsx: two labelled groups, "Templates" and "My agents" (the latter hidden when empty)
 - [X] T022 [US1] Builder UI in new frontend/src/components/AgentBuilder.tsx and frontend/src/components/builder/ (`AgentSettings.tsx`: name, description, sample prompt, reasoning, the template's limits; `NodeSettings.tsx`: the prompt of the clicked node, gate bullets, tool name and description): graph left, settings panel right (stacked on narrow screens); read-only for templates with a "Customize" action; editable for custom agents with Save and Discard and a visible unsaved marker; after 300 ms without edits call `previewGraph` and show its graph (keep the last valid one); field errors from `fieldErrors` next to their inputs
-- [X] T023 [US1] Wire in frontend/src/app/page.tsx: the preview area renders `AgentBuilder` for the selected agent; Customize creates a draft (`draftFromTemplate`); Save → `createAgent`/`updateAgent`, refresh agents, select the saved agent; the header Run (frontend/src/components/PromptForm.tsx gets an `onRun(prompt)` prop instead of calling `startRun` itself) saves a dirty draft first and starts no run when the save is rejected; `confirm()` before discarding a dirty draft (switching agent, opening a past run) plus a `beforeunload` guard; frontend/src/components/RunViewer.tsx gets an optional `onEdit` shown when the run's agent is an existing custom agent (FR-024); frontend/src/components/RunList.tsx shows `run.agent_name`, falling back to `agentName(agents, id)` for M1/M2 runs
+- [X] T023 [US1] Wire in frontend/src/app/page.tsx: the preview area renders `AgentBuilder` for the selected agent; Customize creates a draft (`draftFrom`); Save → `createAgent`/`updateAgent`, refresh agents, select the saved agent; the header Run (frontend/src/components/PromptForm.tsx gets an `onRun(prompt)` prop instead of calling `startRun` itself) saves a dirty draft first and starts no run when the save is rejected; `confirm()` before discarding a dirty draft (switching agent, opening a past run) plus a `beforeunload` guard; frontend/src/components/RunViewer.tsx gets an optional `onEdit` shown when the run's agent is an existing custom agent (FR-024); frontend/src/components/RunList.tsx shows `run.agent_name`, falling back to `agentName(agents, id)` for M1/M2 runs
 
 **Checkpoint**: a custom agent can be made from any template, edited, saved and run from the UI.
 
@@ -129,10 +129,10 @@ their own graph and config, show different `config_version`s and keep the agent'
 
 ## Phase 6: Polish
 
-- [ ] T035 [P] Update AGENTS.md: current feature `specs/003-agent-builder/` (M2 and M1 as earlier features); layout adds `tools/catalog.py`, `agents/config_fields.py`, `components/AgentBuilder.tsx`, `components/builder/`; contracts: template `Config` classes define editable fields and limits, custom agents resolve to (template, config), templates are pinned by the golden test
-- [ ] T036 [P] Update README.md: builder usage (Customize, Save, Run saves first, Duplicate, Delete) and the API table (`/tools`, `/agents` CRUD, `/graph`)
-- [ ] T037 Run quickstart.md manual checks on vLLM (`qwen3.5-9b`) and record results under "Manual check results" in this file; record anything not verified
-- [ ] T038 Final `make check`; fill in any missing rows of the Traceability table below
+- [X] T035 [P] Update AGENTS.md: current feature `specs/003-agent-builder/` (M2 and M1 as earlier features); layout adds `tools/catalog.py`, `agents/config_fields.py`, `components/AgentBuilder.tsx`, `components/builder/`; contracts: template `Config` classes define editable fields and limits, custom agents resolve to (template, config), templates are pinned by the golden test
+- [X] T036 [P] Update README.md: builder usage (Customize, Save, Run saves first, Duplicate, Delete) and the API table (`/tools`, `/agents` CRUD, `/graph`)
+- [X] T037 Run quickstart.md manual checks on vLLM (`qwen3.5-9b`) and record results under "Manual check results" in this file; record anything not verified
+- [X] T038 Final `make check`; fill in any missing rows of the Traceability table below
 
 ---
 
@@ -175,7 +175,7 @@ Task: "Evaluator in backend/src/agent_lab/workflows/evaluator.py"
 | FR | Test / check |
 |---|---|
 | FR-001 | test_templates.py::test_templates_match_m2; quickstart step 8 |
-| FR-002 | test_agents_api.py::test_customize_each_template; builder.test.ts (draftFromTemplate) |
+| FR-002 | test_agents_api.py::test_customize_each_template; builder.test.ts (draftFrom) |
 | FR-003 | test_agents_validation.py (T033); test_store.py::test_name_unique_ignoring_case_and_spaces |
 | FR-004 | test_store.py agent CRUD; test_agents_api.py::test_update_agent, test_delete_keeps_runs, test_duplicate_is_independent |
 | FR-005 | test_agents_api.py::test_list_agents_order_and_kinds; quickstart step 1 |
@@ -207,3 +207,22 @@ Task: "Evaluator in backend/src/agent_lab/workflows/evaluator.py"
 | SC-004 | test_edit_changes_version_not_history, test_delete_keeps_runs |
 | SC-005 | T033 |
 | SC-006 | test_templates.py::test_templates_match_m2 |
+
+## Manual check results (T037, 2026-10-31)
+
+vLLM `qwen3.5-9b`, backend on a scratch database, UI driven headless (Chromium, Playwright):
+
+| Quickstart step | Result |
+|---|---|
+| 1. Routing template: nodes open read-only settings, Customize | "Routing (copy)", "Not saved yet"; router prompt shown read-only (US1-1, US1-4) |
+| 2. Edit the general route's prompt; add route `poem` | graph showed the fourth branch before saving (FR-014) |
+| 3. Run without saving | saved first, ran: "The capital of France is Paris. Cheers!" (edited prompt used); poem request routed to `poem` (label in the route span), only that branch marked (FR-015, US2-2) |
+| 4. Invalid route name, Back to editing | pattern error next to the Name field and in the panel's list, no save (US3-4); Back to editing reopened the agent, no unsaved changes (FR-024) |
+| 5. Chain: add step `german`, gate off | no gate node, 4 model calls, German answer, 6.3 s (US2-1, US2-5) |
+| 6. Parallel with 6 aspects | 7 model calls, completed in 5.6 s |
+| 7. Duplicate, then delete the original | copy saved under a free name; the deleted agent's run still listed as "Routing (copy)" with the custom tag, replays its graph, no Back to editing (US3-2, US3-3, FR-019) |
+| 8. Six templates, sample prompts | all `completed`; graphs equal the M2 golden graphs; every `lab.came_from` pair declared (SC-006) |
+
+SC-001 (under a minute for a person) was not timed with a person; the scripted flow from picking
+a template to a finished run took about 10 s. Not checked: the narrow layout after resizing an
+open page (React Flow fits the graph only on mount, as in M2).
