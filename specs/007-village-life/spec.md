@@ -292,8 +292,8 @@ routine); seeing someone updates it; it is not updated when the other moves out 
 ### Measurable Outcomes
 
 - **SC-001**: Over one scripted village day, each villager leaves home within one step of its
-  wake-up time and is asleep at home from at most 30 village minutes after its bedtime until
-  its next wake-up time (allowing the walk home).
+  wake-up time and is asleep at home from its bedtime plus the walk home until its next
+  wake-up time.
 - **SC-002**: Over 100 scripted steps, villagers never move more than one cell per step, always
   stand on walkable cells, and no step has all walking villagers moving at the same moment.
 - **SC-003**: 100% of tested speeches reach exactly the villagers next to the speaker they were

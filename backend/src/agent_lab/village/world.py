@@ -1,28 +1,39 @@
-"""The village map, its clock and its four villagers (specs/006-village/data-model.md)."""
+"""The village map, its clock and its four villagers (specs/007-village-life/data-model.md)."""
 
 from collections import deque
 from dataclasses import dataclass
+from functools import cache
 from typing import Any
 
-# 20 x 15 cells: . grass, = path, ~ water (not walkable), letters: places.
+# 32 x 22 cells. Walkable: . grass, = path, the place letters. Not walkable: ~ water, B the town
+# hall building, h j g l the villagers' houses, t trees, i lamps.
 ROWS = (
-    "....................",
-    ".TTT.......GGGG.....",
-    ".TTT==.....GGGG.....",
-    "...=.=====.==.......",
-    "...=.....=.=........",
-    "...=..SSSS==........",
-    "...===SSSS....MMM...",
-    "......SSSS====MMM...",
-    ".......=.....=MMM...",
-    "FFFF...=.....=......",
-    "FFFF====.....==~~~~~",
-    "FFFF.........P~~~~~~",
-    "FFFF........PP~~~~~~",
-    "..........~~~~~~~~~~",
-    "..........~~~~~~~~~~",
+    "tt.....t.....t...t......t.....tt",
+    "..BBBB..hhh..............lll....",
+    "..TTTT..hhh.......tGGGGG.lll.t..",
+    "..TTTT...=......t..GGGGG..=.....",
+    "t...=..i.=.........GGGGG..=.....",
+    "..============================..",
+    "....=......i..=........=........",
+    "....=.......SSSSS.....MMMM.....t",
+    "....=...t...SSSSS=====MMMM......",
+    "t...=.......SSSSS.....MMMM......",
+    "....=.......SSSSS.............t.",
+    "....========================....",
+    "t...=......=.....i...=..=.......",
+    "....=......=.......t.=..=jjj.t..",
+    ".FFFFFF.ggg=.........=..=jjj....",
+    ".FFFFFF.ggg=.t......i=..===.....",
+    ".FFFFFF..===...t...~~P~~~~~~~~~~",
+    ".FFFFFF..........~~~~PP~~~~~~~~~",
+    ".FFFFFF..........~~~~~~~~~~~~~~~",
+    "..........t......~~~~~~~~~~~~~~~",
+    "..t...t.......~~~~~~~~~~~~~~~~~~",
+    "..............~~~~~~~~~~~~~~~~~~",
 )
 WIDTH, HEIGHT = len(ROWS[0]), len(ROWS)
+BLOCKED = frozenset("~Bhjglti")
+SIGHT = 6  # cells a villager sees, for knowing where others are
 
 PLACES = {
     "town_hall": ("T", "town hall"),
@@ -42,16 +53,19 @@ def label(place: str) -> str:
 
 
 def walkable(x: int, y: int) -> bool:
-    return 0 <= x < WIDTH and 0 <= y < HEIGHT and ROWS[y][x] != "~"
+    return 0 <= x < WIDTH and 0 <= y < HEIGHT and ROWS[y][x] not in BLOCKED
 
 
 def place_at(x: int, y: int) -> str | None:
     return _PLACE_BY_LETTER.get(ROWS[y][x])
 
 
-def place_cells(place: str) -> list[Cell]:
-    letter = PLACES[place][0]
+def _cells(letter: str) -> list[Cell]:
     return [(x, y) for y, row in enumerate(ROWS) for x, char in enumerate(row) if char == letter]
+
+
+def place_cells(place: str) -> list[Cell]:
+    return _cells(PLACES[place][0])
 
 
 def label_cell(place: str) -> Cell:
@@ -59,18 +73,9 @@ def label_cell(place: str) -> Cell:
     return min(place_cells(place), key=lambda c: (c[1], c[0]))
 
 
-def home_cell(place: str) -> Cell:
-    """Where a villager starts: the cell nearest the middle of its home (labels sit top-left)."""
-    cells = place_cells(place)
-    mx, my = sum(x for x, _ in cells) / len(cells), sum(y for _, y in cells) / len(cells)
-    return min(
-        cells, key=lambda c: ((c[0] - mx) ** 2 + (c[1] - my) ** 2, -c[1], c[0])
-    )  # ties: lower row
-
-
-def _distances(place: str) -> dict[Cell, int]:
-    """Steps from every walkable cell to the nearest cell of `place` (breadth-first search)."""
-    targets = place_cells(place)
+@cache
+def _distances(targets: frozenset[Cell]) -> dict[Cell, int]:
+    """Steps from every walkable cell to the nearest target (breadth-first search)."""
     distance = dict.fromkeys(targets, 0)
     queue = deque(targets)
     while queue:
@@ -82,32 +87,43 @@ def _distances(place: str) -> dict[Cell, int]:
     return distance
 
 
-def steps_between(x: int, y: int, place: str) -> int:
-    return _distances(place)[(x, y)]
+def steps_to(x: int, y: int, targets: list[Cell]) -> int:
+    return _distances(frozenset(targets))[(x, y)]
 
 
-def step_towards(x: int, y: int, place: str) -> Cell:
-    """The next cell on a shortest path into `place`; the same cell once inside it."""
-    distance = _distances(place)
+def step_towards(x: int, y: int, targets: list[Cell]) -> Cell:
+    """The next cell on a shortest path to the nearest target; the same cell once on one."""
+    distance = _distances(frozenset(targets))
     if distance[(x, y)] == 0:
         return x, y
     neighbours = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
     return min((c for c in neighbours if c in distance), key=lambda c: distance[c])
 
 
-def nearby(a: Cell, b: Cell) -> bool:
-    """In the same place, or within 3 cells of each other outside places."""
-    place_a, place_b = place_at(*a), place_at(*b)
-    if place_a or place_b:
-        return place_a == place_b
-    return max(abs(a[0] - b[0]), abs(a[1] - b[1])) <= 3
+def adjacent(a: Cell, b: Cell) -> bool:
+    """The same cell or one of its eight neighbours: close enough to talk."""
+    return max(abs(a[0] - b[0]), abs(a[1] - b[1])) <= 1
+
+
+def sees(a: Cell, b: Cell) -> bool:
+    return max(abs(a[0] - b[0]), abs(a[1] - b[1])) <= SIGHT
+
+
+START_MINUTES = 270  # day 1, 04:30: before anyone wakes
+
+
+def minute_of_day(tick: int) -> int:
+    return (START_MINUTES + 10 * tick) % 1440
+
+
+def hhmm(minutes: int) -> str:
+    return f"{minutes // 60 % 24:02d}:{minutes % 60:02d}"
 
 
 def clock(tick: int) -> tuple[int, str, str]:
-    """(day, "HH:MM", period) after `tick` ticks of 10 minutes from day 1, 06:00."""
-    minutes = 360 + 10 * tick
-    day, minute_of_day = 1 + minutes // 1440, minutes % 1440
-    hour = minute_of_day // 60
+    """(day, "HH:MM", period) after `tick` steps of 10 minutes from day 1, 04:30."""
+    minutes = START_MINUTES + 10 * tick
+    day, hour = 1 + minutes // 1440, minutes % 1440 // 60
     if 5 <= hour < 11:
         period = "morning"
     elif 11 <= hour < 14:
@@ -118,7 +134,7 @@ def clock(tick: int) -> tuple[int, str, str]:
         period = "evening"
     else:
         period = "night"
-    return day, f"{hour:02d}:{minute_of_day % 60:02d}", period
+    return day, hhmm(minutes % 1440), period
 
 
 @dataclass(frozen=True)
@@ -126,7 +142,11 @@ class Character:
     name: str  # first name: unique, what others use as "to"
     title: str
     color: str
-    home: str
+    work: str  # the place it works at; its home is next to it
+    home: str  # how its house is called
+    wake: int  # minutes of the day
+    bed: int
+    routine: tuple[tuple[int, str], ...]  # (from hour, place) during its waking hours
     persona: str
 
     @property
@@ -142,9 +162,13 @@ VILLAGERS = {
             "Mayor Hilde",
             "#7c4dcc",
             "town_hall",
+            "the mayor's house by the town hall",
+            7 * 60 + 30,
+            23 * 60,
+            ((7, "town_hall"), (11, "square"), (12, "market"), (14, "town_hall"), (18, "square")),
             "You are Hilde, the mayor. Sociable and a little self-important, you want the village "
             "to look good. You are planning a harvest festival on the square and need fish from "
-            "Jonas, vegetables from Greta and flowers from Lina, so you go and talk to them. "
+            "Jonas, vegetables from Greta and flowers from Lina, so you go and find them. "
             "Mornings you spend at the town hall, around midday you walk through the square and "
             "the market, evenings you like the square.",
         ),
@@ -153,16 +177,24 @@ VILLAGERS = {
             "Jonas the fisher",
             "#0f7f81",
             "pier",
+            "the fisher's hut by the pier",
+            5 * 60,
+            21 * 60,
+            ((5, "pier"), (11, "market"), (14, "pier")),
             "You are Jonas, the fisher. Quiet and patient, you say little until you warm up, then "
             "you tell long stories about the lake. Early mornings you fish at the pier, around "
-            "midday you bring your catch to the market and trade fish for vegetables, evenings "
-            "you mend nets at the pier.",
+            "midday you bring your catch to the market and trade fish for vegetables, afternoons "
+            "and evenings you mend nets at the pier.",
         ),
         Character(
             "Greta",
             "Greta the farmer",
             "#a35a12",
             "fields",
+            "the farmhouse by the fields",
+            5 * 60 + 30,
+            21 * 60 + 30,
+            ((5, "fields"), (11, "market"), (14, "fields")),
             "You are Greta, the farmer. Practical and hard-working, you worry about the weather "
             "and the coming harvest and would welcome a helping hand. Mornings and afternoons you "
             "work in the fields, around midday you sell vegetables at the market.",
@@ -172,26 +204,61 @@ VILLAGERS = {
             "Lina the flower girl",
             "#c22d6f",
             "flower_garden",
+            "the cottage by the flower garden",
+            6 * 60 + 30,
+            22 * 60,
+            ((6, "flower_garden"), (10, "square"), (12, "market"), (15, "square")),
             "You are Lina, the flower girl. Cheerful and curious, you know everyone's news and "
             "love passing it on. Mornings you tend the flower garden, later you sell flowers on "
             "the square and the market and visit the others to chat.",
         ),
     )
 }
+HOMES = {"Hilde": "h", "Jonas": "j", "Greta": "g", "Lina": "l"}  # map letter of each house
+
+
+def door(name: str) -> Cell:
+    """The cell in front of a villager's house: below the middle of its bottom row."""
+    cells = _cells(HOMES[name])
+    bottom = max(y for _, y in cells)
+    xs = sorted(x for x, y in cells if y == bottom)
+    return xs[len(xs) // 2], bottom + 1
+
+
+def awake_at(name: str, minute: int) -> bool:
+    character = VILLAGERS[name]
+    return character.wake <= minute < character.bed
+
+
+def usual_place(name: str, minute: int) -> str:
+    """Where the village expects a villager at a time of day: a place key, or "home"."""
+    if not awake_at(name, minute):
+        return "home"
+    routine = VILLAGERS[name].routine
+    return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
+
+
+VERSION = 2  # the world's shape; another version starts the village fresh
 
 
 def new_world() -> dict[str, Any]:
-    """Tick 0, paused, every villager at a cell of its home."""
+    """Day 1, 04:30, paused, every villager asleep at home."""
     villagers: list[dict[str, Any]] = []
-    for character in VILLAGERS.values():
-        x, y = home_cell(character.home)
+    for name in VILLAGERS:
+        x, y = door(name)
         villagers.append(
             {
-                "name": character.name,
+                "name": name,
                 "agent_id": None,
                 "x": x,
                 "y": y,
-                "destination": None,
+                "asleep": True,
+                "bedtime": False,
+                "goal": None,
+                "triggers": [],
+                "last_decided": 0,
+                "neighbours": [],
+                "beliefs": {},
                 "last_action": None,
                 "speech": None,
                 "inbox": [],
@@ -199,10 +266,14 @@ def new_world() -> dict[str, Any]:
             }
         )
     return {
+        "version": VERSION,
         "tick": 0,
         "running": False,
         "interval": 5,
         "paused_reason": None,
         "failed_ticks": 0,
         "villagers": villagers,
+        "conversations": [],
+        "talked_out": [],
+        "log": [],
     }

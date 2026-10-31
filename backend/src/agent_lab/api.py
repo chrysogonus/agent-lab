@@ -397,7 +397,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         finally:
             bus.unsubscribe(run_id, queue)
 
-    # --- the village (specs/006-village/contracts/http-api.md) ---
+    # --- the village (specs/006-village/ and specs/007-village-life/contracts/http-api.md) ---
 
     @app.get("/village")
     async def get_village() -> dict[str, Any]:
@@ -419,7 +419,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
             await village.step()
         except StepConflict:
             raise HTTPException(
-                status_code=409, detail="the village is running or ticking"
+                status_code=409, detail="the village is running or a step is in progress"
             ) from None
         return village.state()
 
