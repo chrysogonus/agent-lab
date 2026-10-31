@@ -126,7 +126,7 @@ field, and nothing is stored.
 
 1. **Given** any template or template-based custom agent, **When** the owner chooses "Open as
    blocks", **Then** an unsaved block agent opens with the same prompts, settings and model,
-   expressed as blocks, and its graph has the same shape.
+   expressed as blocks, and its graph has the same model, tool and check nodes.
 2. **Given** an invalid layout (an empty prompt, a reference to a later or unknown block, a
    router with one route, more than the allowed blocks or nesting), **When** the owner saves or
    runs it, **Then** it is rejected, each error is shown at its block and field, and nothing is
@@ -184,8 +184,8 @@ field, and nothing is stored.
   output listing the route names (M2 decision rules); the output is the chosen route's output.
 - **FR-008**: **Parallel group**: either 1–6 named branches, each a list of blocks, or a planning
   model call plus a body that runs once per planned item (maximum 1–6); branches and items run
-  concurrently; an optional merge prompt combines the outputs, otherwise the output lists each
-  branch's or item's output under its name or number.
+  concurrently; the group's output lists each branch's or item's output under its name or item.
+  Merging is a model call after the group that refers to its output.
 - **FR-009**: **Loop**: a body (a list of blocks), an exit condition (a check, or a judge prompt
   answering approved/feedback as structured output) and a maximum of 1–5 rounds; the judge's
   last feedback is available to the body's prompts in the next round.
@@ -208,8 +208,9 @@ field, and nothing is stored.
 **Templates**
 
 - **FR-013**: "Open as blocks" MUST convert any of the six templates, and any M3 custom agent
-  built on one, into an equivalent unsaved block agent: same prompts, settings, model and graph
-  shape; run on the same scripted model it MUST reach the same status and answer.
+  built on one, into an equivalent unsaved block agent: same prompts, settings and model; its
+  graph has the template's model, tool and check nodes and a subset of its edges; run on the
+  same scripted model it MUST reach the same status and answer and take the same edges.
 - **FR-014**: Templates and M3 custom agents MUST keep working unchanged (golden requests,
   versions, editing as in M3–M4).
 
