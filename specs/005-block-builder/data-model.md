@@ -76,4 +76,5 @@ The run stores the redacted `BlocksConfig` dump (`config`), the derived graph, `
 | check fails (block) | `error`, end span from the check node, message names the check |
 | model call reaches `max_iterations` with tools still requested | `max_iterations`, answer `null` |
 | loop reaches `max_rounds` without exit | `max_iterations`, answer = last body output |
-| model, tool transport, decision (router, planner, judge) error | `error` |
+| router decision unusable | runs the fallback route (the route span keeps the error, as M2) |
+| model or tool transport error, unusable plan or verdict | `error` |
