@@ -43,7 +43,9 @@ def _chain(c: dict[str, Any]) -> Blocks:
         if i and step["include_input"]:
             message = f"{c['input_label']}: {{input}}\n\n{previous.capitalize()}:\n{{previous}}"
         blocks.append(model(own, step["prompt"], message))
-        if i == 0 and c["gate"] and len(c["steps"]) > 1:
+        if (
+            i == 0 and c["gate"]
+        ):  # the template checks the first output even when it is the only one
             blocks.append(
                 {
                     "kind": "check",
@@ -64,7 +66,10 @@ def _routing(c: dict[str, Any]) -> Blocks:
         own = name(route["name"])
         route_names[route["name"]] = own
         tools = [route["tool"]] if route["tool"] else []
-        handler = model(own, route["prompt"], tools=tools, max_iterations=2)  # tool, then answer
+        # The template's handler: one call with the tool, its tool calls, then an answer call.
+        handler = model(
+            own, route["prompt"], tools=tools, max_iterations=2, answer_on_last_call=True
+        )
         routes.append({"name": own, "description": route["description"], "blocks": [handler]})
     router = {"kind": "router", "name": "router", "prompt": c["router_prompt"], "routes": routes}
     return [{**router, "fallback": route_names[c["fallback"]]}]
@@ -130,7 +135,7 @@ def to_blocks(template_id: str, config: BaseModel) -> dict[str, Any]:
                 "name": "evaluator",
                 "body": [generator],
                 "exit": "judge",
-                "judge": c["evaluator_prompt"],
+                "judge": f"{c['evaluator_prompt']}\n\nProduct: {{input}}",  # the template sends it
                 "max_rounds": c["max_rounds"],
             }
         ]

@@ -120,11 +120,11 @@ inside the existing stack. Code references are to the M4 tree (commit `1cfcecf`)
 | Template | Blocks |
 |---|---|
 | ReAct | model `llm` (system prompt, tools, `max_iterations`); reasoning as the template |
-| Chain | one model per step (`include_input` → message `"<label>: {input}\n\n<Prev>:\n{previous}"`), check `gate` (`min_bullets`) after the first step when the gate is on |
-| Routing | router `router` (router prompt, fallback); each route: model `<route>` with the route's prompt and its tool (with tools: `max_iterations` 2, the M2 handler's tool call then answer) |
+| Chain | one model per step (`include_input` → message `"<label>: {input}\n\n<Prev>:\n{previous}"`), check `gate` (`min_bullets`) after the first step whenever the gate is on, also for a single step |
+| Routing | router `router` (router prompt, fallback); each route: model `<route>` with the route's prompt and its tool (with tools: `max_iterations` 2 and `answer_on_last_call`, the M2 handler's tool call then an answer call without tools) |
 | Parallel | parallel `reviews` (branches: one per aspect, model `<aspect>` with the filled review prompt), then model `merge` (merge prompt, message `"Text:\n{input}\n\n{reviews}"`) |
 | Orchestrator | parallel `orchestrator` per-item (filled orchestrator prompt, `max_items` = `max_subtasks`, body: model `worker` with the worker prompt and message `"Request: {input}\n\nSubtask: {item}"`), then model `synthesizer` with message `"Request: {input}\n\n{orchestrator}"` |
-| Evaluator | loop `evaluator` (judge = evaluator prompt, `max_rounds`), body: model `generator` with message `"{input}\n\n{feedback}"` |
+| Evaluator | loop `evaluator` (judge = evaluator prompt plus `"Product: {input}"`, as the template's judge message; `max_rounds`), body: model `generator` with message `"{input}\n\n{feedback}"` |
 
 Prompts and settings come from the agent's current config (template defaults or an M3 custom
 agent's edits) and its model setting. Requests are not byte-identical to the template's (spec

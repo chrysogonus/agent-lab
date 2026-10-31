@@ -104,6 +104,7 @@ export type ModelBlock = {
   message: string;
   tools: string[];
   max_iterations: number;
+  answer_on_last_call: boolean;
 };
 export type ToolBlock = { kind: "tool"; name: string; tool: string; arguments: Record<string, string> };
 export type CheckBlock = CheckRule & { kind: "check"; name: string };

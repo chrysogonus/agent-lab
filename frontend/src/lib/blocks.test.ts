@@ -32,6 +32,7 @@ const model = (name: string, fields: Partial<ModelBlock> = {}): ModelBlock => ({
   message: "{previous}",
   tools: [],
   max_iterations: 4,
+  answer_on_last_call: false,
   ...fields,
 });
 

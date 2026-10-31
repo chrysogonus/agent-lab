@@ -22,6 +22,7 @@ from agent_lab.blocks.model import (
     ParallelBlock,
     RouterBlock,
     ToolBlock,
+    children,
 )
 from agent_lab.llm.base import LLMClient, Message, ToolCall
 from agent_lab.tools.catalog import TOOLS
@@ -70,8 +71,32 @@ def _unique(nodes: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(nodes))
 
 
+def tool_names(blocks: list[Block]) -> set[str]:
+    """Every tool the blocks may call: model tools and tool-call blocks, at any depth."""
+    names: set[str] = set()
+    for block in blocks:
+        if isinstance(block, ModelBlock):
+            names |= set(block.tools)
+        elif isinstance(block, ToolBlock):
+            names.add(block.tool)
+        for _, sub in children(block):
+            names |= tool_names(sub)
+    return names
+
+
 class BlockAgent:
-    def __init__(self, *, llm: LLMClient, config: BlocksConfig, tracer: Tracer) -> None:
+    def __init__(
+        self,
+        *,
+        llm: LLMClient,
+        config: BlocksConfig,
+        tracer: Tracer,
+        granted_scopes: frozenset[str] = frozenset(),
+    ) -> None:
+        for name in sorted(tool_names(config.blocks)):  # as ReActAgent: no ungranted scopes
+            if not TOOLS[name].scopes <= granted_scopes:
+                missing = sorted(TOOLS[name].scopes - granted_scopes)
+                raise ValueError(f"tool {name!r} needs ungranted scopes {missing}")
         self.config = config
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
@@ -139,16 +164,17 @@ class BlockAgent:
             return reply.content or "", [block.name]
         tools = {t: TOOLS[t] for t in block.tools}
         for iteration in range(1, block.max_iterations + 1):  # the ReAct loop as one block
+            last = block.answer_on_last_call and iteration == block.max_iterations
             reply = await steps.chat(
                 self.ctx,
                 block.name,
                 messages,
-                tools=list(tools.values()),
+                tools=[] if last else list(tools.values()),
                 came_from=came,
                 attributes={"lab.iteration": iteration},
             )
             messages.append(reply.as_message())
-            if not reply.tool_calls:
+            if last or not reply.tool_calls:
                 return reply.content or "", [block.name]
             for call in reply.tool_calls:
                 result = await steps.call_tool(

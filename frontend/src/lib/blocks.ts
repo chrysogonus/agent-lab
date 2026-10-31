@@ -77,6 +77,7 @@ export function defaultBlock(kind: BlockKind, taken: Set<string>, tools: ToolInf
     message: "{previous}",
     tools: [],
     max_iterations: 4,
+    answer_on_last_call: false,
   });
   switch (kind) {
     case "model":

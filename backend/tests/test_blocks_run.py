@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -28,6 +29,8 @@ from agent_lab.blocks.graph import build_graph
 from agent_lab.blocks.run import BlockAgent
 from agent_lab.llm.base import ChatResponse
 from agent_lab.llm.fake import FakeLLM, ScriptItem
+from agent_lab.tools import catalog
+from agent_lab.tools.calculator import CALCULATOR
 from agent_lab.tracing.span import Span
 
 PROMPT = "What is 17 times 23?"
@@ -315,3 +318,32 @@ async def test_stop_inside_a_nested_container() -> None:
     outcome, spans, llm = await run_blocks(blocks, [answer("far too many words")])
     assert outcome.status == "error" and end_from(spans) == ["short"]
     assert len(llm.calls) == 1
+
+
+@pytest.mark.anyio
+async def test_answer_on_last_call_offers_no_tools() -> None:
+    blocks = [
+        model_block("handler", tools=["calculator"], max_iterations=2, answer_on_last_call=True)
+    ]
+    script = [
+        tool_call("calculator", '{"expression": "2"}'),
+        tool_call("calculator", '{"expression": "3"}'),
+    ]
+    outcome, spans, llm = await run_blocks(blocks, script)
+    assert outcome.status == "completed"  # the second call could not run a tool
+    assert [bool(r["tools"]) for r in llm.requests] == [True, False]
+    assert len([s for s in spans if s.kind == "tool"]) == 1
+
+
+def test_ungranted_tool_scopes_rejected() -> None:
+    saved = dict(catalog.TOOLS)
+    catalog.TOOLS["calculator"] = replace(CALCULATOR, scopes=frozenset({"fs:read"}))
+    try:
+        config = blocks_config(model_block("a"), tool_block("calc"))
+        with pytest.raises(ValueError, match="ungranted scopes"):
+            BlockAgent(llm=FakeLLM([]), config=config, tracer=make_tracer()[0])
+        granted = frozenset({"fs:read"})
+        BlockAgent(llm=FakeLLM([]), config=config, tracer=make_tracer()[0], granted_scopes=granted)
+    finally:
+        catalog.TOOLS.clear()
+        catalog.TOOLS.update(saved)

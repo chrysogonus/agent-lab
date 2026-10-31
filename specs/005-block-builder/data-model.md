@@ -27,7 +27,7 @@ Common: `kind`, `name` (`^[a-z0-9-]{1,30}$`; not `start`, `end`, `input`, `previ
 
 | Kind | Fields |
 |---|---|
-| `model` | `system`: 1–4000 characters; `message`: 1–4000 characters, default `{previous}`; `tools`: known tool names, unique, 0–2; `max_iterations`: 1–10, default 4 (used only with tools) |
+| `model` | `system`: 1–4000 characters; `message`: 1–4000 characters, default `{previous}`; `tools`: known tool names, unique, 0–2; `max_iterations`: 1–10, default 4 (used only with tools); `answer_on_last_call`: bool, default false (the last allowed call offers no tools, so the model answers) |
 | `tool` | `tool`: a known tool; `arguments`: one template (1–4000 characters) per parameter of that tool, exactly its parameter names |
 | `check` | `rule`: `min_bullets` \| `max_words` \| `contains` \| `valid_json`; `value`: integer 1–1000 for `min_bullets`/`max_words`, text 1–300 characters for `contains`, absent for `valid_json` |
 | `router` | `prompt`: 1–4000 characters; `routes`: 2–6 of `{name (block-name pattern, unique among the routes), description: 1–300 characters, blocks: 1 or more}`; `fallback`: one of the route names |

@@ -91,8 +91,10 @@ export default function Home() {
       const name = names.includes(source.name) ? copyName(source.name, names) : source.name;
       setDraft(fromId ? draftFrom(source, agents) : { ...draftFromAgent(source), agentId: null, dirty: true, name });
       setPicks((n) => n + 1);
-    } catch {
-      setSaveErrors({ "": "Can't reach the backend to open a block agent." });
+    } catch (e) {
+      setSaveErrors({
+        "": e instanceof ValidationError ? e.message : "Can't reach the backend to open a block agent.",
+      });
     }
   };
 

@@ -18,7 +18,7 @@ import {
   setRule,
 } from "@/lib/blocks";
 import { pathKey, setField, type Path } from "@/lib/builder";
-import { FIELD, FieldError, INPUT, NumberField, TextField, type Form } from "./fields";
+import { FIELD, FieldError, INPUT, NumberField, TextField, Toggle, type Form } from "./fields";
 
 const REFERENCES = "{input} is the user's prompt, {previous} the previous block's output, {name} an earlier block's output.";
 
@@ -147,7 +147,17 @@ function ModelFields({ form, path, block, tools }: { form: Form; path: Path; blo
         ))}
         <FieldError id={`field-${pathKey([...path, "tools"])}-error`} message={form.errors[pathKey([...path, "tools"])]} />
       </fieldset>
-      {block.tools.length > 0 && <NumberField form={form} path={[...path, "max_iterations"]} label="Max model calls" />}
+      {block.tools.length > 0 && (
+        <>
+          <NumberField form={form} path={[...path, "max_iterations"]} label="Max model calls" />
+          <Toggle
+            form={form}
+            path={[...path, "answer_on_last_call"]}
+            label="Answer without tools on the last call"
+            hint="Otherwise reaching the limit while it still calls tools ends the run."
+          />
+        </>
+      )}
     </>
   );
 }

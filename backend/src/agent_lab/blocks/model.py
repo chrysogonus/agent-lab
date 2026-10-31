@@ -36,6 +36,7 @@ class ModelBlock(BaseModel):
     message: Prompt = "{previous}"
     tools: list[ToolName] = Field(default=[], max_length=2)
     max_iterations: int = Field(default=4, ge=1, le=10)  # model calls; used only with tools
+    answer_on_last_call: bool = False  # the last call offers no tools, so the model must answer
 
     @field_validator("tools")
     @classmethod

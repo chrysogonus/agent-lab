@@ -264,3 +264,22 @@ def test_templates_and_m3_agents_unchanged(store: Store) -> None:
         }
         for a in agents
     )
+
+
+def test_open_as_blocks_rejects_a_literal_placeholder(store: Store) -> None:
+    """A valid ReAct prompt with literal "{city}" can't become blocks: 422, not a crash."""
+    client, _ = client_for(store)
+    with client:
+        base = next(a for a in client.get("/agents").json() if a["id"] == "react")
+        config = {**base["config"], "system_prompt": "Fill in {city} for the user."}
+        body = {
+            "template_id": "react",
+            "name": "Braces",
+            "description": "",
+            "sample_prompt": "x",
+            "config": config,
+        }
+        agent = save(client, body)
+        response = client.get(f"/agents/{agent['id']}/blocks")
+    assert response.status_code == 422
+    assert "{city}" in response.json()["detail"][0]["msg"]

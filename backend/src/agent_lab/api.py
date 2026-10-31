@@ -249,9 +249,13 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         model = pinned(stored)
         source = validate_config(spec.id, stored, models.default)
         pinned_keys = {"model": model.model, "provider": model.provider} if model else {}
-        config = validate_config(
-            BLOCKS.id, {**to_blocks(spec.id, source), **pinned_keys}, models.default
-        )
+        try:
+            config = validate_config(
+                BLOCKS.id, {**to_blocks(spec.id, source), **pinned_keys}, models.default
+            )
+        except LayoutError as exc:
+            # e.g. a prompt with literal "{city}", which a block agent reads as a reference
+            raise field_error(("path", "agent_id"), f"can't open as blocks: {exc}") from None
         return AgentInfo(
             id="",
             kind="custom",
