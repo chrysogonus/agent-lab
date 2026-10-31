@@ -68,13 +68,16 @@ Details: [research.md](research.md), [data-model.md](data-model.md),
   (persona, rules and action format in the system prompt).
 - `runner.py`: `Village(store, models, bus)`: `load()`, `ensure_agents()`, `tick()`,
   `start()`, `pause()`, `step()`, `set_interval()`, `reset()`, viewer counting and self-pause,
-  `state()` for the API and stream.
+  `state()` for the API and stream; one lock serializes ticks with Step, Reset and interval
+  changes (research §5).
 
 ### Existing code
 
-- `store.py`: `village` table with `load_village()` / `save_village(state)`; `runs.village_tick`
-  column; `list_runs()` excludes village turns; `list_turns(agent_id)`.
-- `runs.py`: `new_run(..., village_tick=None)` stores it; `Run.village_tick`.
+- `store.py`: `village` table with `load_village()` / `save_village(state)`; `runs` columns
+  `village_tick`, `villager`, `village_action`; `list_runs()` excludes village turns;
+  `list_turns(villager)`; `set_village_action(run_id, action)`.
+- `runs.py`: `new_run(..., village_tick=None, villager=None)` stores them; `Run` gains the three
+  fields.
 - `api.py`: the `/village` endpoints and `WS /village/stream`; one `Village` per app.
 
 ### UI

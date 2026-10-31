@@ -7,8 +7,11 @@ Decisions inside the existing stack; no new dependencies (see §8).
 - **Decision**: each turn calls the existing `runs.new_run` / `runs.execute_run` with the
   villager's agent id and the observation as the prompt, awaited directly by the tick (not via
   `POST /runs`). The answer is read back from the stored run and parsed into an action. `runs`
-  gains a nullable `village_tick INTEGER` column (added in place like the M3 columns);
-  `new_run` takes an optional `village_tick`.
+  gains three nullable columns, added in place like the M3 columns: `village_tick` (integer),
+  `villager` (the villager's first name, stable across agent replacement) and `village_action`
+  (JSON: the applied action and, when it became `wait`, the reason). `new_run` takes the tick
+  and villager; the action is written after the tick is applied, so a turn explains itself
+  long after the villager's last 10 events have moved on (FR-008).
 - **Rationale**: tracing, redaction, `config_version`, the model choice and run replay all work
   unchanged (FR-011, FR-013: the agent is resolved from the store on every turn, so an edit
   applies from the next tick). The column lets the main list exclude village turns (FR-012) and
@@ -60,6 +63,11 @@ Decisions inside the existing stack; no new dependencies (see §8).
   store the world → publish the new state. A `Village` object owns one asyncio task while
   running: tick, then sleep the remainder of the interval (never overlapping, FR-007). Pause
   sets a flag checked between ticks; Step runs one tick when paused.
+- **One lock for ticks and controls**: every tick runs under one `asyncio.Lock`, and the state
+  carries `ticking` while it holds it. Step is rejected (409) while running or ticking, so a
+  Step right after Pause, or two Steps from two tabs, never overlap a tick. Reset and interval
+  changes take the same lock: they wait for the active tick to finish, then apply. Start while
+  ticking only sets the flag.
 - **Self-pause** (FR-010): after 3 consecutive ticks where every turn failed; and when no
   Village view has been connected for 60 s (the WebSocket count, with a timestamp of the last
   disconnect). The world stores why it paused.

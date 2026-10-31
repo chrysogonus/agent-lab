@@ -14,6 +14,7 @@
 |---|---|
 | `tick` | integer ≥ 0; clock derived from it (research §4) |
 | `running` | bool; false after load, reset, pause and self-pause |
+| `ticking` | bool, not stored; true while a tick holds the tick lock |
 | `interval` | seconds between tick starts, 1–30, default 5 |
 | `paused_reason` | null, `"owner"`, `"no viewer for 60 s"`, `"every turn failed 3 ticks in a row"` |
 | `failed_ticks` | consecutive ticks in which every turn failed |
@@ -45,9 +46,13 @@
 
 Invalid answer, failed `answer-is-json` check or failed run → `wait` with the reason.
 
-## Run (existing table, one new column)
+## Run (existing table, three new columns)
 
 - `village_tick INTEGER NULL`: the tick a villager turn belongs to; null for every other run.
+- `villager TEXT NULL`: the villager's first name; turn history is queried by it, so a reset that
+  replaces a deleted agent keeps the villager's earlier turns listed.
+- `village_action TEXT NULL` (JSON): the action applied for this turn, and the reason when it
+  became `wait`; written when the tick is applied.
 - `GET /runs` lists only rows with `village_tick IS NULL`.
 - Prompt = the observation; answer = the model's JSON text.
 
