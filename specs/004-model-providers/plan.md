@@ -91,7 +91,7 @@ Details: [research.md](research.md), [data-model.md](data-model.md),
   `{"model": default.model, "provider": default.provider, **stored}`; `editable()` also drops
   `provider`; new `pinned(stored) -> ModelRef | None`.
 - `runs.resolve(agent_id, store, models)`: build the config as above, then
-  `models.client(ModelRef(config.provider, config.model))`; a pinned ref that is missing or
+  `models.client(ModelRef(provider=config.provider, model=config.model))`; a pinned ref that is missing or
   unavailable raises `UnavailableModel(message)`. `new_run`/`execute_run` take the resolved
   client instead of the app-wide `llm`.
 
