@@ -1,22 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AgentBuilder } from "@/components/AgentBuilder";
 import { AgentPicker } from "@/components/AgentPicker";
-import { GraphView } from "@/components/GraphView";
 import { PromptForm } from "@/components/PromptForm";
 import { RunList } from "@/components/RunList";
 import { RunViewer } from "@/components/RunViewer";
-import { listAgents, listRuns, type AgentInfo, type Run } from "@/lib/api";
+import {
+  createAgent,
+  listAgents,
+  listRuns,
+  listTools,
+  startRun,
+  updateAgent,
+  ValidationError,
+  type AgentInfo,
+  type Run,
+  type ToolInfo,
+} from "@/lib/api";
+import { draftFields, draftFrom, draftFromAgent, fieldErrors, type Draft } from "@/lib/builder";
 import { agentPreview } from "@/lib/run-state";
-
-const NOTHING = new Set<string>();
 
 export default function Home() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [current, setCurrent] = useState<Run | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [tools, setTools] = useState<ToolInfo[]>([]);
   const [agentId, setAgentId] = useState("react");
+  // The custom agent being edited (or a fresh copy of a template); null shows the agent read-only.
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  // Bumped when an agent is picked: the prompt box then shows that agent's sample prompt.
+  const [picks, setPicks] = useState(0);
 
   const refresh = useCallback(() => {
     listRuns()
@@ -31,19 +48,88 @@ export default function Home() {
   useEffect(() => {
     // Without the backend there is nothing to pick; refresh() already reports that.
     listAgents().then(setAgents, () => {});
+    listTools().then(setTools, () => {});
   }, []);
+  useEffect(() => {
+    if (!draft?.dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draft?.dirty]);
 
   const preview = agentPreview(agents, agentId);
 
-  const select = (id: string) => {
-    setAgentId(id);
-    setCurrent(null); // show the picked agent's preview instead of the open run
+  /** Asks before unsaved builder changes are thrown away; true when it is fine to go on. */
+  const mayLeave = () =>
+    !draft?.dirty || window.confirm(`Discard the unsaved changes to "${draft.name}"?`);
+
+  const edit = (agent: AgentInfo | null) => {
+    setDraft(agent?.kind === "custom" ? draftFromAgent(agent) : null);
+    setSaveErrors({});
   };
 
-  const started = (run: Run) => {
-    setCurrent(run);
-    setRuns((r) => [run, ...r]);
+  const select = (id: string) => {
+    if (id === agentId && !current) return;
+    if (!mayLeave()) return;
+    setAgentId(id);
+    setPicks((n) => n + 1);
+    setCurrent(null); // show the picked agent instead of the open run
+    edit(agentPreview(agents, id));
   };
+
+  const open = (run: Run) => {
+    if (!mayLeave()) return;
+    if (draft?.dirty) edit(preview); // the changes were discarded
+    setCurrent(run);
+  };
+
+  const editAgain = (id: string) => {
+    setCurrent(null);
+    if (id !== agentId) {
+      setAgentId(id);
+      setPicks((n) => n + 1);
+      edit(agentPreview(agents, id));
+    }
+  };
+
+  /** Saves the draft; the saved agent, or null when the server rejected it. */
+  const save = async (): Promise<AgentInfo | null> => {
+    if (!draft) return null;
+    setSaving(true);
+    try {
+      const saved = draft.agentId
+        ? await updateAgent(draft.agentId, draftFields(draft))
+        : await createAgent(draft.templateId, draftFields(draft));
+      setAgents(await listAgents());
+      setAgentId(saved.id);
+      setDraft(draftFromAgent(saved));
+      setSaveErrors({});
+      return saved;
+    } catch (e) {
+      setSaveErrors(
+        e instanceof ValidationError
+          ? fieldErrors(e.detail)
+          : { "": e instanceof TypeError ? "Can't reach the backend to save." : String(e) },
+      );
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const run = async (prompt: string) => {
+    let id = agentId;
+    if (draft?.dirty) {
+      const saved = await save();
+      if (!saved) return; // the builder shows what to fix
+      id = saved.id;
+    }
+    const started = await startRun(prompt, id);
+    setCurrent(started);
+    setRuns((r) => [started, ...r]);
+  };
+
+  const runAgent = current && agentPreview(agents, current.agent_id);
 
   return (
     <div className="flex min-h-dvh flex-col gap-4 p-4 lg:h-dvh">
@@ -52,10 +138,9 @@ export default function Home() {
         <div className="flex flex-1 flex-col gap-2">
           <AgentPicker agents={agents} selected={agentId} onSelect={select} />
           <PromptForm
-            key={preview ? agentId : "loading"}
-            agentId={agentId}
-            samplePrompt={preview?.sample_prompt ?? ""}
-            onStarted={started}
+            key={preview ? picks : "loading"}
+            samplePrompt={draft?.sample_prompt ?? preview?.sample_prompt ?? ""}
+            onRun={run}
           />
         </div>
       </header>
@@ -68,32 +153,35 @@ export default function Home() {
           {listError ? (
             <p className="p-3 text-sm text-muted">{listError}</p>
           ) : (
-            <RunList runs={runs} agents={agents} current={current?.run_id ?? null} onOpen={setCurrent} />
+            <RunList runs={runs} agents={agents} current={current?.run_id ?? null} onOpen={open} />
           )}
         </nav>
         <main className="flex min-h-0 min-w-0 flex-1">
           {current ? (
-            <RunViewer key={current.run_id} initial={current} onEnded={refresh} />
+            <RunViewer
+              key={current.run_id}
+              initial={current}
+              onEnded={refresh}
+              onEdit={
+                runAgent?.kind === "custom" ? () => editAgain(runAgent.id) : undefined
+              }
+            />
           ) : preview ? (
-            <section
-              className="flex h-96 min-w-0 flex-1 flex-col rounded-lg border border-rule bg-panel"
-              aria-label="Selected agent"
-            >
-              <div className="border-b border-rule px-4 py-3">
-                <h2 className="text-base font-semibold text-ink">{preview.name}</h2>
-                <p className="text-sm text-muted">{preview.description}</p>
-              </div>
-              <div className="min-h-0 flex-1">
-                {/* key: React Flow fits the view only on mount */}
-                <GraphView
-                  key={preview.id}
-                  graph={preview.graph}
-                  active={NOTHING}
-                  visited={NOTHING}
-                  taken={NOTHING}
-                />
-              </div>
-            </section>
+            <AgentBuilder
+              key={`${preview.id}:${draft?.agentId ?? (draft ? "new" : "view")}`}
+              agent={preview}
+              draft={draft}
+              tools={tools}
+              saveErrors={saveErrors}
+              busy={saving}
+              onChange={(d) => {
+                setDraft(d);
+                setSaveErrors({});
+              }}
+              onCustomize={() => setDraft(draftFrom(preview, agents))}
+              onSave={() => void save()}
+              onDiscard={() => edit(preview)}
+            />
           ) : (
             <p className="text-sm text-muted">
               Pick an agent and run it, or open a past run to replay it.

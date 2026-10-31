@@ -1,17 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { API_URL, startRun, type Run } from "@/lib/api";
+import { API_URL } from "@/lib/api";
 
 /** Mount with key={agentId} so switching agents resets the prompt to the new sample. */
 export function PromptForm({
-  agentId,
   samplePrompt,
-  onStarted,
+  onRun,
 }: {
-  agentId: string;
   samplePrompt: string;
-  onStarted: (run: Run) => void;
+  /** Starts the run (saving unsaved builder changes first); throws to show an error here. */
+  onRun: (prompt: string) => Promise<void>;
 }) {
   const [prompt, setPrompt] = useState(samplePrompt);
   const [pending, setPending] = useState(false);
@@ -22,7 +21,7 @@ export function PromptForm({
     setPending(true);
     setError(null);
     try {
-      onStarted(await startRun(prompt.trim(), agentId));
+      await onRun(prompt.trim());
     } catch (e) {
       setError(
         e instanceof TypeError

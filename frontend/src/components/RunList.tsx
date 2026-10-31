@@ -43,7 +43,9 @@ export function RunList({
               run.run_id === current ? "bg-paper" : ""
             }`}
           >
-            <span className="text-xs font-semibold text-muted">{agentName(agents, run.agent_id)}</span>
+            <span className="text-xs font-semibold text-muted">
+              {run.agent_name ?? agentName(agents, run.agent_id)}
+            </span>
             <span className="line-clamp-2 text-sm text-ink">{run.prompt}</span>
             <span className="flex items-center gap-2 text-xs text-muted">
               <span className={`size-2 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />

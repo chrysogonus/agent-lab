@@ -117,8 +117,6 @@ AGENTS: dict[str, AgentSpec] = {spec.id: spec for spec in _SPECS}
 
 def validate_config(template_id: str, raw: dict[str, Any], model: str) -> BaseModel:
     """A custom agent's config, validated by its template's model; the server picks the model."""
-    if "model" in raw:
-        raise ValueError("model is set by the server")
     return AGENTS[template_id].config_model.model_validate({**raw, "model": model})
 
 

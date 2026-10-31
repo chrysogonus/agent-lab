@@ -14,7 +14,13 @@ import type { Graph, GraphNode } from "@/lib/api";
 import { edgeKey, isBackEdge } from "@/lib/run-state";
 
 type NodeState = "active" | "visited" | "idle";
-type LabNodeData = { label: string; kind: GraphNode["kind"]; state: NodeState };
+type LabNodeData = {
+  label: string;
+  kind: GraphNode["kind"];
+  state: NodeState;
+  selected: boolean;
+  onSelect?: () => void; // set when nodes open their settings (the builder)
+};
 
 const KIND_COLOR: Record<GraphNode["kind"], string> = {
   start: "var(--color-step)",
@@ -36,13 +42,27 @@ const HANDLES = [
 
 function LabNode({ data }: NodeProps<Node<LabNodeData>>) {
   const color = KIND_COLOR[data.kind];
+  const clickable = data.onSelect != null;
   return (
     <div
       className={`lab-node flex size-full items-center justify-center rounded-md border-2 bg-panel px-3 text-sm font-medium text-ink ${
         data.state === "active" ? "lab-node--active" : ""
+      } ${data.selected ? "lab-node--selected" : ""} ${
+        clickable ? "cursor-pointer hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-llm" : ""
       }`}
+      {...(clickable && {
+        role: "button",
+        tabIndex: 0,
+        "aria-pressed": data.selected,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            data.onSelect?.();
+          }
+        },
+      })}
       style={{
-        borderColor: data.state === "idle" ? "var(--color-rule)" : color,
+        borderColor: data.state === "idle" && !data.selected ? "var(--color-rule)" : color,
         borderStyle: data.kind === "code" ? "dashed" : undefined, // code step, no model call
         boxShadow: data.state === "visited" ? `inset 4px 0 0 ${color}` : undefined,
       }}
@@ -82,11 +102,16 @@ export function GraphView({
   active,
   visited,
   taken,
+  selected = null,
+  onNodeClick,
 }: {
   graph: Graph;
   active: Set<string>;
   visited: Set<string>;
   taken: Set<string>;
+  selected?: string | null;
+  /** Node clicks (and clicks on empty space, as null) when the graph is a builder's. */
+  onNodeClick?: (nodeId: string | null) => void;
 }) {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const nodes: Node<LabNodeData>[] = graph.nodes.map((n) => ({
@@ -100,6 +125,8 @@ export function GraphView({
       label: n.label,
       kind: n.kind,
       state: active.has(n.id) ? "active" : visited.has(n.id) ? "visited" : "idle",
+      selected: n.id === selected,
+      onSelect: onNodeClick && (() => onNodeClick(n.id)),
     },
   }));
   const edges: Edge[] = graph.edges.map((e) => {
@@ -124,6 +151,8 @@ export function GraphView({
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
+      onNodeClick={onNodeClick && ((_, node) => onNodeClick(node.id))}
+      onPaneClick={onNodeClick && (() => onNodeClick(null))}
       aria-label="Agent graph"
     />
   );

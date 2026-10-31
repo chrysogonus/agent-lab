@@ -17,7 +17,15 @@ const STATUS_TEXT: Record<Run["status"], string> = {
 };
 
 /** Live view and replay of one run; both render the same stream. Mount with key={run_id}. */
-export function RunViewer({ initial, onEnded }: { initial: Run; onEnded: (run: Run) => void }) {
+export function RunViewer({
+  initial,
+  onEnded,
+  onEdit,
+}: {
+  initial: Run;
+  onEnded: (run: Run) => void;
+  onEdit?: () => void; // set while the run's custom agent still exists
+}) {
   const view = useRunStream(initial.run_id);
   const run = view.run ?? initial;
   const [selected, setSelected] = useState<string | null>(null);
@@ -40,6 +48,15 @@ export function RunViewer({ initial, onEnded }: { initial: Run; onEnded: (run: R
               {STATUS_TEXT[run.status]}
             </span>
             <span className="text-sm text-muted">{formatTotals(runTotals(view.spans, run, now))}</span>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="ml-auto text-sm font-semibold text-llm hover:underline focus-visible:outline-2 focus-visible:outline-llm"
+              >
+                Back to editing
+              </button>
+            )}
           </div>
           {run.answer && <p className="px-4 py-3 text-sm text-ink">{run.answer}</p>}
           {view.error && <p role="alert" className="px-4 py-3 text-sm text-fault">{view.error}</p>}

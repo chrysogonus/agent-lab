@@ -1,0 +1,124 @@
+import { getField, pathKey, type Draft, type Path } from "@/lib/builder";
+
+/** What every builder field needs: the draft, how to change it, and its errors. */
+export type Form = {
+  draft: Draft;
+  set: (path: Path, value: unknown) => void;
+  readOnly: boolean; // templates: settings are shown, not edited
+  errors: Record<string, string>;
+};
+
+const INPUT =
+  "w-full rounded-md border border-rule bg-panel px-2.5 py-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-llm read-only:bg-paper read-only:text-muted aria-invalid:border-fault";
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="text-sm text-fault">
+      {message}
+    </p>
+  );
+}
+
+export function TextField({
+  form,
+  path,
+  label,
+  multiline = false,
+  mono = false,
+  hint,
+}: {
+  form: Form;
+  path: Path;
+  label: string;
+  multiline?: boolean;
+  mono?: boolean; // prompts: what the model reads, verbatim
+  hint?: string;
+}) {
+  const id = `field-${pathKey(path)}`;
+  const error = form.errors[pathKey(path)];
+  const value = String(getField(form.draft, path) ?? "");
+  const shared = {
+    id,
+    value,
+    readOnly: form.readOnly,
+    "aria-invalid": error ? true : undefined,
+    "aria-describedby": error ? `${id}-error` : undefined,
+    className: `${INPUT} ${mono ? "font-mono text-[13px] leading-relaxed" : ""}`,
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium text-ink">
+        {label}
+      </label>
+      {multiline ? (
+        <textarea
+          {...shared}
+          rows={Math.min(12, Math.max(3, Math.ceil(value.length / 48)))}
+          onChange={(e) => form.set(path, e.target.value)}
+        />
+      ) : (
+        <input {...shared} onChange={(e) => form.set(path, e.target.value)} />
+      )}
+      {hint && <p className="text-sm text-muted">{hint}</p>}
+      <FieldError id={`${id}-error`} message={error} />
+    </div>
+  );
+}
+
+export function NumberField({ form, path, label }: { form: Form; path: Path; label: string }) {
+  const id = `field-${pathKey(path)}`;
+  const error = form.errors[pathKey(path)];
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={id} className="text-sm font-medium text-ink">
+          {label}
+        </label>
+        <input
+          id={id}
+          type="number"
+          step={1}
+          value={String(getField(form.draft, path) ?? "")}
+          readOnly={form.readOnly}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          // An empty box is sent as is; the server names what is allowed.
+          onChange={(e) => form.set(path, e.target.value === "" ? "" : Number(e.target.value))}
+          className={`${INPUT} w-20 tabular-nums`}
+        />
+      </div>
+      <FieldError id={`${id}-error`} message={error} />
+    </div>
+  );
+}
+
+export function Toggle({
+  form,
+  path,
+  label,
+  hint,
+}: {
+  form: Form;
+  path: Path;
+  label: string;
+  hint?: string;
+}) {
+  const id = `field-${pathKey(path)}`;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <label htmlFor={id} className="flex items-center gap-2 text-sm font-medium text-ink">
+        <input
+          id={id}
+          type="checkbox"
+          checked={getField(form.draft, path) === true}
+          disabled={form.readOnly}
+          onChange={(e) => form.set(path, e.target.checked)}
+          className="size-4 accent-llm"
+        />
+        {label}
+      </label>
+      {hint && <p className="pl-6 text-sm text-muted">{hint}</p>}
+    </div>
+  );
+}

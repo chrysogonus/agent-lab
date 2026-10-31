@@ -176,7 +176,16 @@ describe("activeNodes", () => {
 
 describe("agentPreview and agentName", () => {
   const agents: AgentInfo[] = [
-    { id: "react", name: "ReAct agent", description: "loop", sample_prompt: "2+2?", graph },
+    {
+      id: "react",
+      kind: "template",
+      template_id: "react",
+      name: "ReAct agent",
+      description: "loop",
+      sample_prompt: "2+2?",
+      config: {},
+      graph,
+    },
   ];
 
   it("finds a listed agent", () => {

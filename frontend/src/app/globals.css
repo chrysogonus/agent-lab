@@ -16,6 +16,11 @@
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 }
 
+/* The node whose settings are open in the builder. */
+.lab-node--selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-llm) 30%, transparent);
+}
+
 /* The active graph node is the one loud thing on the page: a signal lamp. */
 .lab-node--active {
   border-color: var(--color-signal) !important;

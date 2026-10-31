@@ -55,15 +55,41 @@ export type Run = {
   started_at: number;
   ended_at: number | null;
   totals: RunTotals | null; // null on the run returned by POST /runs
+  agent_name: string | null; // the agent's name when the run started; null before M3
+  template_id: string | null; // null before M3
 };
+
+export type AgentConfig = Record<string, unknown>; // a template's editable fields
 
 export type AgentInfo = {
   id: string;
+  kind: "template" | "custom";
+  template_id: string;
   name: string;
   description: string;
   sample_prompt: string;
+  config: AgentConfig;
   graph: Graph;
 };
+
+export type ToolInfo = { name: string; description: string };
+
+/** What the builder saves; `template_id` only when creating. */
+export type AgentFields = {
+  name: string;
+  description: string;
+  sample_prompt: string;
+  config: AgentConfig;
+};
+
+export type FieldErrorDetail = { loc: (string | number)[]; msg: string };
+
+/** A 422 from the backend: every entry names the field it belongs to. */
+export class ValidationError extends Error {
+  constructor(readonly detail: FieldErrorDetail[]) {
+    super(detail.map((d) => d.msg).join("; "));
+  }
+}
 
 export type StreamEvent =
   | { type: "span_started" | "span_ended"; span: Span }
@@ -96,4 +122,37 @@ export async function listAgents(): Promise<AgentInfo[]> {
   const response = await fetch(`${API_URL}/agents`);
   if (!response.ok) throw new Error(`Loading agents failed (HTTP ${response.status}).`);
   return response.json();
+}
+
+export async function listTools(): Promise<ToolInfo[]> {
+  const response = await fetch(`${API_URL}/tools`);
+  if (!response.ok) throw new Error(`Loading tools failed (HTTP ${response.status}).`);
+  return response.json();
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: body === undefined ? {} : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (response.status === 422) throw new ValidationError((await response.json()).detail);
+  if (!response.ok) throw new Error(`${method} ${path} failed (HTTP ${response.status}).`);
+  return response.status === 204 ? (undefined as T) : response.json();
+}
+
+export function createAgent(templateId: string, fields: AgentFields): Promise<AgentInfo> {
+  return send("POST", "/agents", { template_id: templateId, ...fields });
+}
+
+export function updateAgent(agentId: string, fields: AgentFields): Promise<AgentInfo> {
+  return send("PUT", `/agents/${encodeURIComponent(agentId)}`, fields);
+}
+
+export function deleteAgent(agentId: string): Promise<void> {
+  return send("DELETE", `/agents/${encodeURIComponent(agentId)}`);
+}
+
+export function previewGraph(templateId: string, config: AgentConfig): Promise<Graph> {
+  return send("POST", "/graph", { template_id: templateId, config });
 }
