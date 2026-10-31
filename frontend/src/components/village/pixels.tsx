@@ -199,10 +199,6 @@ const STALL_GOODS: [string, Palette][] = [
 const BOAT = [".oooooooooooooooooo.", "obbbbbbbbbbbbbbbbbbo", "obBBoBBBBBBBBBBoBBbo", ".obbbbbbbbbbbbbbbbo.", "..oBBBBBBBBBBBBBBo..", "...oooooooooooooo..."];
 const BOAT_PALETTE = { o: INK, b: "#c98a4f", B: "#9a5f30" };
 
-// Scenery stands on grass cells off the main routes; a cell that is not grass is skipped.
-const TREES: [number, number][] = [[0, 0], [9, 0], [19, 0], [18, 2], [0, 5], [1, 7], [19, 6], [19, 9], [5, 13], [8, 14], [1, 14], [16, 3]];
-const LAMPS: [number, number][] = [[5, 5], [10, 8], [12, 11]];
-
 function hash(x: number, y: number): number {
   return (x * 7 + y * 13 + x * y) % 3;
 }
@@ -269,19 +265,26 @@ function Edges({ rows, x, y, kind, color, width }: { rows: string[]; x: number; 
 
 const PLACE_TILE: Record<string, string> = { T: "vt-stone", S: "vt-stone", M: "vt-stone", G: "vt-flowers", P: "vt-water" };
 
-function TownHall({ area }: { area: Area }) {
-  // stands on the row above the town hall's cells; villagers wait on its forecourt
+/** A building two cells tall whose bottom row is the area's bottom row: the town hall (its
+ * row of `B` cells, with a flag) or a villager's house (roof in its owner's color). */
+function Building({ area, roof, roofDark, flag }: { area: Area; roof: string; roofDark: string; flag?: boolean }) {
   const x = area.x0 * TILE;
-  const y = (area.y0 - 1) * TILE;
+  const y = (area.y1 - 1) * TILE;
   const w = (area.x1 - area.x0 + 1) * TILE;
   const bands = [8, 6, 4, 2, 0];
   return (
     <g>
-      <rect x={x + w / 2} y={y} width={1} height={8} fill={INK} />
-      <rect x={x + w / 2 + 1} y={y} width={7} height={4} fill="#4f7fd0" />
+      {flag ? (
+        <>
+          <rect x={x + w / 2} y={y} width={1} height={8} fill={INK} />
+          <rect x={x + w / 2 + 1} y={y} width={7} height={4} fill="#4f7fd0" />
+        </>
+      ) : (
+        <rect x={x + w - 14} y={y + 1} width={4} height={6} fill={C.woodDark} stroke={INK} strokeWidth={0.5} />
+      )}
       {bands.map((inset, i) => (
         <g key={inset}>
-          <rect x={x + inset} y={y + 5 + i * 2} width={w - inset * 2} height={2} fill={i === bands.length - 1 ? C.roofDark : C.roof} />
+          <rect x={x + inset} y={y + 5 + i * 2} width={w - inset * 2} height={2} fill={i === bands.length - 1 ? roofDark : roof} />
           <rect x={x + inset - 1} y={y + 5 + i * 2} width={1} height={2} fill={INK} />
           <rect x={x + w - inset} y={y + 5 + i * 2} width={1} height={2} fill={INK} />
         </g>
@@ -294,7 +297,7 @@ function TownHall({ area }: { area: Area }) {
       <rect x={x + w / 2 - 5} y={y + 21} width={10} height={11} fill={INK} />
       <rect x={x + w / 2 - 4} y={y + 22} width={8} height={10} fill={C.woodDark} />
       <rect x={x + w / 2 + 2} y={y + 27} width={1} height={1} fill={C.lit} />
-      {townHallWindows(area).map(([wx, wy]) => (
+      {buildingWindows(area).map(([wx, wy]) => (
         <g key={wx}>
           <rect x={wx - 1} y={wy - 1} width={10} height={8} fill={INK} />
           <rect x={wx} y={wy} width={8} height={6} fill={C.glass} />
@@ -305,14 +308,20 @@ function TownHall({ area }: { area: Area }) {
   );
 }
 
-function townHallWindows(area: Area): [number, number][] {
+function buildingWindows(area: Area): [number, number][] {
   const x = area.x0 * TILE;
-  const y = (area.y0 - 1) * TILE + 22; // below the name plate on the wall
+  const y = (area.y1 - 1) * TILE + 22; // below the name plate on the wall
   const w = (area.x1 - area.x0 + 1) * TILE;
   return [
-    [x + 6, y],
-    [x + w - 14, y],
+    [x + 5, y],
+    [x + w - 13, y],
   ];
+}
+
+/** "#7c4dcc" darkened by `factor` (0–1), for a roof's lower band. */
+function darker(hex: string, factor: number): string {
+  const channels = [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * factor));
+  return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function Garden({ area }: { area: Area }) {
@@ -358,20 +367,34 @@ function Market({ area }: { area: Area }) {
   );
 }
 
-/** Everything that does not change between ticks: ground, places and scenery. */
-export const Ground = memo(function Ground({ map }: { map: string }) {
+function cellsOf(rows: string[], char: string): [number, number][] {
+  return rows.flatMap((row, y) => [...row].flatMap((c, x) => (c === char ? [[x, y] as [number, number]] : [])));
+}
+
+/** Everything that does not change between steps: ground, places, houses and scenery.
+ * `houses` is "letter:color" per home, joined by commas, so the memo compares a string. */
+export const Ground = memo(function Ground({ map, houses }: { map: string; houses: string }) {
   const rows = map.split("\n");
   const areas = placeAreas(rows);
   const cells = rows.flatMap((row, y) => [...row].map((char, x) => ({ char, x, y })));
   const water = cells.filter((c) => c.char === "~" || c.char === "P");
-  const free = ([x, y]: [number, number]) => rows[y]?.[x] === ".";
   return (
     <g>
       <Defs />
       {cells.map(({ char, x, y }) => {
         const kind = cellKind(char);
         const id =
-          kind === "grass" ? `vt-grass${hash(x, y)}` : kind === "path" ? "vt-path" : kind === "water" ? "vt-water" : char === "F" ? (x % 2 ? "vt-wheat" : "vt-greens") : (PLACE_TILE[char] ?? "vt-grass0");
+          kind === "path"
+            ? "vt-path"
+            : kind === "water"
+              ? "vt-water"
+              : kind === "place"
+                ? char === "F"
+                  ? x % 2
+                    ? "vt-wheat"
+                    : "vt-greens"
+                  : (PLACE_TILE[char] ?? "vt-grass0")
+                : `vt-grass${hash(x, y)}`; // grass, and the ground under trees, lamps and buildings
         return <use key={`${x},${y}`} href={`#${id}`} x={x * TILE} y={y * TILE} />;
       })}
       <g className="village-wave-a">
@@ -404,11 +427,18 @@ export const Ground = memo(function Ground({ map }: { map: string }) {
       {areas.G && <Garden area={areas.G} />}
       {areas.S && <Pixels rows={FOUNTAIN} palette={FOUNTAIN_PALETTE} x={((areas.S.x0 + areas.S.x1 + 1) / 2) * TILE - 10} y={((areas.S.y0 + areas.S.y1 + 1) / 2) * TILE - 6} />}
       {areas.M && <Market area={areas.M} />}
-      {areas.T && <TownHall area={areas.T} />}
-      {TREES.filter(free).map(([x, y]) => (
+      {areas.B && <Building area={areas.B} roof={C.roof} roofDark={C.roofDark} flag />}
+      {houses
+        .split(",")
+        .filter(Boolean)
+        .map((house) => {
+          const [letter, color] = house.split(":");
+          return areas[letter] && <Building key={letter} area={areas[letter]} roof={color} roofDark={darker(color, 0.7)} />;
+        })}
+      {cellsOf(rows, "t").map(([x, y]) => (
         <use key={`tree-${x},${y}`} href="#vt-tree" x={x * TILE} y={y * TILE} />
       ))}
-      {LAMPS.filter(free).map(([x, y]) => (
+      {cellsOf(rows, "i").map(([x, y]) => (
         <use key={`lamp-${x},${y}`} href="#vt-lamp" x={x * TILE} y={y * TILE} />
       ))}
     </g>
@@ -418,18 +448,18 @@ export const Ground = memo(function Ground({ map }: { map: string }) {
 /** Lit windows and lamps, drawn above the night tint; shown from the evening on. */
 export function Lights({ map, on }: { map: string; on: boolean }) {
   const rows = map.split("\n");
-  const hall = placeAreas(rows).T;
+  const hall = placeAreas(rows).B;
   return (
     <g className="transition-opacity duration-1000" opacity={on ? 1 : 0} aria-hidden>
       {hall &&
-        townHallWindows(hall).map(([x, y]) => (
+        buildingWindows(hall).map(([x, y]) => (
           <g key={x}>
             <rect x={x - 3} y={y - 3} width={14} height={12} fill={C.lit} opacity={0.25} />
             <rect x={x} y={y} width={8} height={6} fill={C.lit} />
             <rect x={x + 4} y={y} width={1} height={6} fill={INK} />
           </g>
         ))}
-      {LAMPS.filter(([x, y]) => rows[y]?.[x] === ".").map(([x, y]) => (
+      {cellsOf(rows, "i").map(([x, y]) => (
         <g key={`${x},${y}`}>
           {/* a wide and a tall box overlap into a stepped, roughly round glow */}
           <rect x={x * TILE - 4} y={y * TILE - 2} width={24} height={10} fill={C.lit} opacity={0.14} />
@@ -438,6 +468,22 @@ export function Lights({ map, on }: { map: string; on: boolean }) {
           <rect x={x * TILE + 6} y={y * TILE + 1} width={4} height={2} fill="#fff6c8" />
         </g>
       ))}
+    </g>
+  );
+}
+
+/** "Zz" over the roof of a house whose owner sleeps. */
+export function Snores({ area }: { area: Area }) {
+  const x = (area.x1 + 1) * TILE - 12;
+  const y = (area.y1 - 1) * TILE + 2;
+  return (
+    <g className="village-snore" aria-hidden>
+      <text x={x} y={y} fontSize={7} fill="#fffaf0" stroke={INK} strokeWidth={1.5} style={{ paintOrder: "stroke" }} className="font-pixel">
+        z
+      </text>
+      <text x={x + 5} y={y - 5} fontSize={9} fill="#fffaf0" stroke={INK} strokeWidth={1.5} style={{ paintOrder: "stroke" }} className="font-pixel">
+        Z
+      </text>
     </g>
   );
 }

@@ -93,16 +93,16 @@ nothing known it is the routine; moving out of sight does not update it.
 
 ## Phase 6: UI (US1–US4)
 
-- [ ] T008 [P] View logic in frontend/src/lib/api.ts (new `VillageState` fields) and frontend/src/lib/village.ts: `stateText(villager)` ("Asleep at home", "Going home to bed", "Thinking…", "Talking with Greta", "Walking to the pier", "Looking for Lina", "At the market"), `sleepText` ("Up at 05:00, in bed at 21:00"), `logLines(state)` (last 4, newest last), `homeAreas(map)` (letter boxes with owner), `figures` skips sleeping villagers; remove what is no longer used (`speeches`, `narration` move to the log); tests in frontend/src/lib/village.test.ts
-- [ ] T009 Pixel art in frontend/src/components/village/pixels.tsx: the town hall drawn on its `B` cells, a house sprite per home (roof in the owner's color, door at the door cell, name plate), trees and lamps from `t` / `i` cells (the hard-coded lists go), "Zz" over a sleeping owner's house, lit lamps unchanged; test that every map character the backend uses has a drawing (pixels.test.ts)
-- [ ] T010 Village view in frontend/src/components/village/VillageView.tsx and VillagerPanel.tsx: hide sleeping villagers, a thinking mark while deciding, the talk bubble for a line said this step, the dialog box from the log (newest last; narration when empty), the list with `stateText`, the panel with `sleepText` and "Thinks the others are" (beliefs), `decision_started` refreshes the turns; screenshots at 1400 × 950 and 390 × 844 (day, evening with lit lamps, night with "Zz", a conversation)
+- [X] T008 [P] View logic in frontend/src/lib/api.ts (new `VillageState` fields) and frontend/src/lib/village.ts: `stateText(villager)` ("Asleep at home", "Going home to bed", "Thinking…", "Talking with Greta", "Walking to the pier", "Looking for Lina", "At the market"), `sleepText` ("Up at 05:00, in bed at 21:00"), `logLines(state)` (last 4, newest last), `homeAreas(map)` (letter boxes with owner), `figures` skips sleeping villagers; remove what is no longer used (`speeches`, `narration` move to the log); tests in frontend/src/lib/village.test.ts
+- [X] T009 Pixel art in frontend/src/components/village/pixels.tsx: the town hall drawn on its `B` cells, a house sprite per home (roof in the owner's color, door at the door cell, name plate), trees and lamps from `t` / `i` cells (the hard-coded lists go), "Zz" over a sleeping owner's house, lit lamps unchanged; test that every map character the backend uses has a drawing (pixels.test.ts)
+- [X] T010 Village view in frontend/src/components/village/VillageView.tsx and VillagerPanel.tsx: hide sleeping villagers, a thinking mark while deciding, the talk bubble for a line said this step, the dialog box from the log (newest last; narration when empty), the list with `stateText`, the panel with `sleepText` and "Thinks the others are" (beliefs), `decision_started` refreshes the turns; screenshots at 1400 × 950 and 390 × 844 (day, evening with lit lamps, night with "Zz", a conversation)
 
 ---
 
 ## Phase 7: Polish
 
-- [ ] T011 Docs: AGENTS.md (village layout line, roadmap M8–M11), README.md (village section: homes, sleep, meetings), specs/006-village nothing; the M6 golden behaviour of templates unchanged
-- [ ] T012 `make check`; quickstart manual steps on the real model with results recorded below
+- [X] T011 Docs: AGENTS.md (village layout line, roadmap M8–M11), README.md (village section: homes, sleep, meetings), specs/006-village nothing; the M6 golden behaviour of templates unchanged
+- [X] T012 `make check`; quickstart manual steps on the real model with results recorded below
 
 ---
 
@@ -143,3 +143,23 @@ MVP = Phases 1–2 (homes, sleep, the step loop with background decisions). Then
 | SC-004 | test_village_runner.py (fast night timing); quickstart step 5 |
 | SC-005 | test_village_runner.py (no model call while walking) |
 | SC-006 | quickstart step 3 (real model) |
+
+## Manual check results (T012, 2026-11-01)
+
+vLLM `qwen3.5-9b`; a scratch backend on a copy of the owner's database (the stored M6 world
+started fresh on the new map and its villager agents were updated), driven over the API and
+stream at a 1 s interval; the view checked with mocked states (headless Chromium).
+
+| Quickstart step | Result |
+|---|---|
+| 1. Open the view | bigger map with four houses (roofs in their owners' colors, name plates), everyone asleep with "Zz", day 1, 04:30, "Paused: the village moved to a bigger map and started fresh" |
+| 2. Wake-up times, staggered moves | first decisions at 05:00 (Jonas), 05:30 (Greta), 06:30 (Lina), 07:30 (Hilde) (SC-001); 0 of 562 published states moved more than one villager (US2-1) |
+| 3. Talking face to face | a full day: 29 lines, Hilde used `find` 7 times; she found Jonas at the market ("We need those fresh fish for the harvest festival on the square!") and talked with Lina about festival flowers (SC-006); waits were readable ("Greta is not next to you", "it was already your bedtime") |
+| 4. Villager panel | sleeping hours, "Thinks the others are" (routine, seen, heard), events and turns |
+| 5. Evening and night | every villager's last decision came before its bedtime; at 05:30 on day 2 Jonas and Greta were up and walking, Hilde and Lina asleep; a day and a night of 150 steps took 133 s at a 1 s interval |
+| 6. Restart, Reset | covered by tests (load paused, reset to 04:30 with everyone asleep) |
+
+Fixed during the checks: the model often named villagers by title ("Mayor Hilde"), which made
+speech and finds wait; names now match a first name or a title. Villagers drifted home in the
+morning; the observation now says where the villager usually is at this hour. The dev server
+served an outdated cached stylesheet until `frontend/.next` was cleared.

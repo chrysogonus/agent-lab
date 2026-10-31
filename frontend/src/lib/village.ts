@@ -1,23 +1,28 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
 import type { Run, VillageEvent, VillageState, Villager } from "./api";
 
-export type CellKind = "grass" | "path" | "water" | "place";
+export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
+/** B is the town hall building, h j g l the villagers' houses (specs/007-village-life). */
 export function cellKind(char: string): CellKind {
   if (char === "~") return "water";
   if (char === "=") return "path";
   if (char === ".") return "grass";
+  if (char === "t") return "tree";
+  if (char === "i") return "lamp";
+  if ("Bhjgl".includes(char)) return "building";
   return "place";
 }
 
 export type Area = { x0: number; y0: number; x1: number; y1: number };
 
-/** The cells each place letter covers, as a box: where its building or scenery is drawn. */
+/** The cells each place or building letter covers, as a box: where it is drawn. */
 export function placeAreas(rows: string[]): Record<string, Area> {
   const areas: Record<string, Area> = {};
   rows.forEach((row, y) =>
     [...row].forEach((char, x) => {
-      if (cellKind(char) !== "place") return;
+      const kind = cellKind(char);
+      if (kind !== "place" && kind !== "building") return;
       const a = areas[char];
       areas[char] = a ? { x0: Math.min(a.x0, x), y0: Math.min(a.y0, y), x1: Math.max(a.x1, x), y1: Math.max(a.y1, y) } : { x0: x, y0: y, x1: x, y1: y };
     }),
@@ -36,29 +41,51 @@ export const PERIOD_TINT: Record<VillageState["period"], { color: string; opacit
 
 export type Figure = { villager: Villager; cx: number; cy: number };
 
-/** One figure per villager at its cell centre; villagers sharing a cell are spread apart. */
+/** One figure per awake villager at its cell centre; villagers sharing a cell are spread apart. */
 export function figures(state: VillageState): Figure[] {
   const seen = new Map<string, number>();
-  return state.villagers.map((villager) => {
+  const awake = state.villagers.filter((v) => !v.asleep); // sleepers are inside their houses
+  return awake.map((villager) => {
     const key = `${villager.x},${villager.y}`;
     const index = seen.get(key) ?? 0;
     seen.set(key, index + 1);
-    const shared = state.villagers.filter((v) => v.x === villager.x && v.y === villager.y).length;
+    const shared = awake.filter((v) => v.x === villager.x && v.y === villager.y).length;
     const offset = shared > 1 ? (index - (shared - 1) / 2) * 0.6 : 0;
     return { villager, cx: villager.x + 0.5 + offset, cy: villager.y + 0.5 };
   });
 }
 
-/** This tick's speeches, for the dialog box under the map. */
-export function speeches(state: VillageState): { villager: Villager; text: string; to: string | null }[] {
-  return state.villagers.flatMap((villager) => (villager.speech ? [{ villager, ...villager.speech }] : []));
+/** The dialog box: the last lines said in the village, newest last. */
+export function logLines(state: VillageState, count = 4): VillageState["log"] {
+  return state.log.slice(-count);
 }
 
-/** What the dialog box says when nobody spoke this tick. */
+/** What the dialog box says before anyone has spoken. */
 export function narration(state: VillageState): string {
-  if (state.tick === 0 && !state.running) return "Everyone is still at home. Start the village to wake them up.";
-  if (state.ticking) return "The villagers are thinking…";
-  return state.period === "night" ? "The village is asleep. Nobody is talking." : "Nobody is talking right now.";
+  if (state.villagers.every((v) => v.asleep)) return "Everyone is asleep. Start the village to see who gets up first.";
+  return "Nobody has said anything yet. Villagers talk when they stand right next to each other.";
+}
+
+/** A villager's state in words, for the list: "Asleep at home", "Talking with Greta", … */
+export function stateText(villager: Villager): string {
+  switch (villager.state) {
+    case "asleep":
+      return "Asleep at home";
+    case "bedtime":
+      return "Going home to bed";
+    case "deciding":
+      return "Thinking…";
+    case "talking":
+      return `Talking with ${villager.talking_with.join(" and ")}`;
+    case "walking":
+      return villager.goal ? villager.goal[0].toUpperCase() + villager.goal.slice(1) : "Walking";
+    default:
+      return whereText(villager);
+  }
+}
+
+export function sleepText(villager: Villager): string {
+  return `Up at ${villager.wake}, in bed at ${villager.bed}`;
 }
 
 export function clockText(state: VillageState): string {
@@ -66,17 +93,17 @@ export function clockText(state: VillageState): string {
 }
 
 export function statusLine(state: VillageState): string {
-  if (state.ticking) return "Ticking…";
-  if (state.running) return `Running, a tick every ${state.interval} s`;
+  if (state.ticking) return "Stepping…";
+  if (state.running) return `Running, a step every ${state.interval} s`;
   if (state.paused_reason === "owner" || !state.paused_reason) return "Paused";
   return `Paused: ${state.paused_reason}`;
 }
 
 const TICK_MINUTES = 10;
 
-/** "07:10" for a tick (the clock starts at 06:00). */
+/** "07:10" for a step (the clock starts at 04:30). */
 export function tickTime(tick: number): string {
-  const minutes = (360 + tick * TICK_MINUTES) % 1440;
+  const minutes = (270 + tick * TICK_MINUTES) % 1440;
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
@@ -102,6 +129,7 @@ export function placeLabel(key: string | null): string | null {
 
 /** Where a villager is, in words: "At the market", "Walking to the pier", "Between places". */
 export function whereText(villager: Villager): string {
+  if (villager.asleep) return "Asleep at home";
   if (villager.place) return `At the ${placeLabel(villager.place)}`;
   if (villager.destination) return `Walking to the ${placeLabel(villager.destination)}`;
   return "Between places";
@@ -113,7 +141,9 @@ export function turnLabel(turn: Run): string {
   const action = turn.village_action;
   if (!action) return `${time}${turn.status === "running" ? "thinking…" : "no action recorded"}`;
   if (action.reason) return `${time}waited: ${action.reason}`;
-  if (action.action === "move") return `${time}walks to the ${placeLabel(action.place)}`;
+  if (action.action === "move") return `${time}walks ${action.place === "home" ? "home" : `to the ${placeLabel(action.place)}`}`;
+  if (action.action === "find") return `${time}goes looking for ${action.villager}`;
+  if (action.action === "goodbye") return `${time}says goodbye${action.text ? `: ${action.text}` : ""}`;
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
   return `${time}waits`;
 }

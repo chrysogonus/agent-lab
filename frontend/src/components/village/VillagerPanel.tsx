@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { villagerTurns, type Run, type Villager } from "@/lib/api";
-import { eventLines, turnLabel, whereText } from "@/lib/village";
+import { eventLines, sleepText, stateText, turnLabel } from "@/lib/village";
 import { VillagerSprite } from "./pixels";
 
 /** One villager: who it is, where, what it remembers, and every turn it took. */
@@ -15,8 +15,8 @@ export function VillagerPanel({
   onEditAgent,
 }: {
   villager: Villager;
-  tick: number; // refetch the turns after each tick
-  turnsStarted: number; // … and as turns start, so a running turn can be opened live
+  tick: number; // refetch the turns after each step
+  turnsStarted: number; // … and as decisions start, so a running one can be opened live
   onClose: () => void;
   onOpenTurn: (run: Run) => void;
   onEditAgent: (agentId: string) => void;
@@ -36,7 +36,8 @@ export function VillagerPanel({
           <h2 className="text-xl leading-tight" style={{ color: villager.color }}>
             {villager.title}
           </h2>
-          <p className="text-base text-dusk-muted">{whereText(villager)}</p>
+          <p className="text-base text-dusk-muted">{stateText(villager)}</p>
+          <p className="text-sm text-dusk-muted">{sleepText(villager)}</p>
         </div>
         <button type="button" onClick={onClose} className="village-button village-button--small">
           Back
@@ -48,6 +49,16 @@ export function VillagerPanel({
           Edit its agent
         </button>
       )}
+      <div>
+        <h3 className="mb-1.5 text-lg">Thinks the others are</h3>
+        <ul className="flex flex-col gap-1 font-sans">
+          {villager.beliefs.map((b) => (
+            <li key={b.villager} className="text-sm text-dusk">
+              <span className="font-pixel">{b.villager}</span> {b.text}
+            </li>
+          ))}
+        </ul>
+      </div>
       <div>
         <h3 className="mb-1.5 text-lg">Remembers</h3>
         {villager.events.length === 0 ? (

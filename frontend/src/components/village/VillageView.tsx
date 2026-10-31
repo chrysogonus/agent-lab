@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   getVillage,
   pauseVillage,
@@ -12,16 +12,16 @@ import {
   type Run,
   type VillageState,
 } from "@/lib/api";
-import { PERIOD_TINT, clockText, placeAreas, figures, narration, speeches, statusLine, whereText } from "@/lib/village";
+import { PERIOD_TINT, clockText, figures, logLines, narration, placeAreas, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
-import { Ground, Lights, PixelDigits, Pixels, SPRITES, TILE, VillagerSprite } from "./pixels";
+import { Ground, Lights, PixelDigits, Pixels, SPRITES, Snores, TILE, VillagerSprite } from "./pixels";
 import { VillagerPanel } from "./VillagerPanel";
 
 type VillageStream = {
   state: VillageState | null;
   setState: (s: VillageState) => void;
   error: string | null; // shown in the loaded view too: a stale map must say so
-  turnsStarted: number; // bumps when a villager turn starts, so an open panel lists it live
+  turnsStarted: number; // bumps when a villager's decision starts, so an open panel lists it live
 };
 
 /** The village's state, kept live by the village stream while shown; reconnects when it drops. */
@@ -39,8 +39,7 @@ function useVillage(): VillageStream {
       ws.onmessage = (message) => {
         const event = JSON.parse(message.data as string) as { type: string; state?: VillageState };
         if (event.type === "state" && event.state) setState(event.state);
-        if (event.type === "tick_started") setState((s) => (s ? { ...s, ticking: true } : s));
-        if (event.type === "turn_started") setTurnsStarted((n) => n + 1);
+        if (event.type === "decision_started") setTurnsStarted((n) => n + 1);
       };
       ws.onclose = () => {
         if (stopped) return;
@@ -60,10 +59,12 @@ function useVillage(): VillageStream {
 }
 
 function VillageMap({ state, selected, onSelect }: { state: VillageState; selected: string | null; onSelect: (name: string) => void }) {
-  const { width, height, rows, places } = state.map;
+  const { width, height, rows, places, homes } = state.map;
   const map = rows.join("\n");
   const tint = PERIOD_TINT[state.period];
   const areas = placeAreas(rows);
+  const owners = new Map(state.villagers.map((v) => [v.name, v]));
+  const houses = homes.map((h) => `${h.letter}:${owners.get(h.villager)?.color ?? "#d6584b"}`).join(",");
   const placed = figures(state).sort((a, b) => a.cy - b.cy); // lower on the map is nearer, drawn later
   return (
     <svg
@@ -72,21 +73,18 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
       role="group"
       aria-label={`Village map, ${clockText(state)}`}
     >
-      <Ground map={map} />
+      <Ground map={map} houses={houses} />
       <rect width={width * TILE} height={height * TILE} fill={tint.color} opacity={tint.opacity} className="village-tint" aria-hidden />
       <Lights map={map} on={state.period === "evening" || state.period === "night"} />
+      {homes.map((h) => owners.get(h.villager)?.asleep && areas[h.letter] && <Snores key={h.letter} area={areas[h.letter]} />)}
       {places.map((p) => {
         const area = areas[rows[p.y][p.x]];
-        const label = { x: ((area.x0 + area.x1 + 1) / 2) * TILE, y: area.y0 * TILE }; // on the top edge: villagers stand lower
-        const w = p.label.length * 4.4 + 8;
-        return (
-          <g key={p.key} aria-hidden>
-            <rect x={label.x - w / 2} y={label.y - 5} width={w} height={10} rx={2} fill="#2a2340" opacity={0.82} />
-            <text x={label.x} y={label.y + 2.6} textAnchor="middle" fontSize={7.5} fill="#fffaf0" className="font-pixel">
-              {p.label}
-            </text>
-          </g>
-        );
+        const top = rows[area.y0 - 1]?.[area.x0] === "B" ? area.y0 - 1 : area.y0; // the town hall's sign hangs on its wall
+        return <NamePlate key={p.key} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={top * TILE} text={p.label} />;
+      })}
+      {homes.map((h) => {
+        const area = areas[h.letter];
+        return area && <NamePlate key={h.letter} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={area.y0 * TILE + 16} text={h.villager} small />;
       })}
       {placed.map(({ villager, cx, cy }) => {
         const sprite = SPRITES[villager.name];
@@ -97,7 +95,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
             key={villager.name}
             role="button"
             tabIndex={0}
-            aria-label={`${villager.title}, ${whereText(villager).toLowerCase()}`}
+            aria-label={`${villager.title}, ${stateText(villager).toLowerCase()}`}
             aria-pressed={isSelected}
             onClick={() => onSelect(villager.name)}
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(villager.name))}
@@ -108,7 +106,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
             <rect className="village-ring" pointerEvents="none" x={-10} y={-13} width={20} height={21} rx={3} fill="none" stroke="#fffaf0" strokeWidth={1.5} />
             <rect x={-5} y={4} width={10} height={2} fill="#00000030" />
             <rect x={-4} y={3} width={8} height={4} fill="#00000018" />
-            <g className={villager.destination ? "village-walk" : undefined}>
+            <g className={villager.state === "walking" || villager.state === "bedtime" ? "village-walk" : undefined}>
               {sprite ? (
                 <Pixels rows={sprite.rows} palette={sprite.palette} x={-8} y={-11} />
               ) : (
@@ -121,6 +119,15 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
                 {villager.name}
               </text>
             </g>
+            {!villager.speech && villager.state === "deciding" && (
+              <g aria-hidden>
+                <rect x={0} y={-24} width={10} height={10} rx={3} fill="#fffaf0" stroke="#2a2340" strokeWidth={1} />
+                <rect x={-1} y={-14} width={2} height={2} fill="#fffaf0" stroke="#2a2340" strokeWidth={0.5} />
+                <text x={5} y={-16.5} textAnchor="middle" fontSize={8} fill="#2a2340" className="font-pixel">
+                  ?
+                </text>
+              </g>
+            )}
             {villager.speech && (
               <g aria-hidden>
                 <rect x={-1} y={-25} width={15} height={10} rx={2} fill="#fffaf0" stroke="#2a2340" strokeWidth={1} />
@@ -143,25 +150,40 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
   );
 }
 
-/** Under the map, like a game's text box: what was said this tick, or what is going on. */
+function NamePlate({ x, y, text, small = false }: { x: number; y: number; text: string; small?: boolean }) {
+  const size = small ? 6.5 : 7.5;
+  const w = text.length * size * 0.59 + 8;
+  return (
+    <g aria-hidden>
+      <rect x={x - w / 2} y={y - size * 0.67} width={w} height={size * 1.33} rx={2} fill="#2a2340" opacity={0.82} />
+      <text x={x} y={y + size * 0.35} textAnchor="middle" fontSize={size} fill="#fffaf0" className="font-pixel">
+        {text}
+      </text>
+    </g>
+  );
+}
+
+/** Under the map, like a game's text box: the last lines said in the village, newest last. */
 function DialogBox({ state }: { state: VillageState }) {
-  const said = speeches(state);
+  const lines = logLines(state);
+  const colors = new Map(state.villagers.map((v) => [v.name, v.color]));
   return (
     <div className="village-window px-4 py-3 font-pixel text-base leading-snug text-dusk" aria-label="What the villagers say">
-      {said.length === 0 ? (
+      {lines.length === 0 ? (
         <p className="text-dusk-muted">{narration(state)}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {said.map(({ villager, text, to }) => (
-            <li key={villager.name} className="flex items-start gap-2">
-              <VillagerSprite name={villager.name} size={24} />
+          {lines.map((line) => (
+            <li key={`${line.tick}-${line.from}-${line.text}`} className="flex items-start gap-2">
+              <VillagerSprite name={line.from} size={24} />
               <p className="min-w-0">
-                <span className="font-semibold" style={{ color: villager.color }}>
-                  {villager.name}
+                <span className="text-dusk-muted tabular-nums">{line.time} </span>
+                <span className="font-semibold" style={{ color: colors.get(line.from) }}>
+                  {line.from}
                 </span>
-                {to && <span className="text-dusk-muted"> to {to}</span>}
+                {line.to && <span className="text-dusk-muted"> to {line.to}</span>}
                 <span className="text-dusk-muted">: </span>
-                {text}
+                {line.text}
               </p>
             </li>
           ))}
@@ -211,7 +233,10 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
             <RunViewer key={turn.run_id} initial={turn} onEnded={setTurn} />
           </div>
         ) : (
-          <div className="mx-auto flex w-full flex-col gap-3 lg:max-w-[calc((100dvh-15rem)*4/3)]">
+          <div
+            className="mx-auto flex w-full flex-col gap-3 lg:max-w-(--map-max)"
+            style={{ "--map-max": `calc((100dvh - 17rem) * ${state.map.width / state.map.height})` } as CSSProperties}
+          >
             <div className="village-window overflow-hidden p-1.5">
               <div className="overflow-hidden rounded-[5px]">
                 <VillageMap state={state} selected={selected} onSelect={(name) => setSelected(name === selected ? null : name)} />
@@ -267,7 +292,7 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
           </button>
         </div>
         <label className="flex items-center gap-2 text-base text-dusk-muted">
-          A tick every
+          A step every
           <input
             type="number"
             min={1}
@@ -277,7 +302,7 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
             onBlur={saveInterval}
             onKeyDown={(e) => e.key === "Enter" && saveInterval()}
             className="w-16 rounded-md border-2 border-dusk bg-parchment px-2 py-0.5 font-sans text-base text-dusk tabular-nums focus-visible:outline-3 focus-visible:outline-llm"
-            aria-label="Seconds between ticks"
+            aria-label="Seconds between steps"
           />
           seconds
         </label>
@@ -305,7 +330,7 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
                     <VillagerSprite name={v.name} size={32} />
                     <span className="min-w-0">
                       <span className="block text-base">{v.title}</span>
-                      <span className="block truncate text-sm text-dusk-muted">{whereText(v)}</span>
+                      <span className="block truncate text-sm text-dusk-muted">{stateText(v)}</span>
                     </span>
                   </button>
                 </li>

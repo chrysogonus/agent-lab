@@ -135,6 +135,11 @@ def goal_text(goal: dict[str, Any] | None) -> str | None:
     return f"looking for {goal['villager']}"
 
 
+def _usually(name: str, tick: int) -> str:
+    usual = usual_place(name, minute_of_day(tick))
+    return f" At this hour you are usually at the {label(usual)}." if usual != "home" else ""
+
+
 def _heard(entry: dict[str, Any], listener: str) -> str:
     to = entry.get("to")
     who = entry["from"] if not to else f"{entry['from']} to {'you' if to == listener else to}"
@@ -173,7 +178,8 @@ def observation(world: dict[str, Any], name: str) -> str:
     goal = goal_text(me["goal"])
     lines = [
         f"Day {day}, {time}, {period}. {where_text(world, me)}",
-        f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}.",
+        f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
+        + _usually(name, world["tick"]),
         *([f"You are {goal}."] if goal else []),
         f"Next to you: {', '.join(VILLAGERS[n].title for n in next_to) or 'nobody'}.",
         f"In sight: {', '.join(in_sight) or 'nobody else'}.",
@@ -203,7 +209,10 @@ def _place(text: str) -> str | None:
 
 
 def _name(text: str) -> str | None:
-    return next((n for n in VILLAGERS if n.lower() == text.strip().lower()), None)
+    """A villager by first name or title ("Mayor Hilde", "hilde"): models often use the title."""
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    named = [n for n in VILLAGERS if n.lower() in words]
+    return named[0] if len(named) == 1 else None
 
 
 def parse_action(

@@ -62,15 +62,17 @@ export type Run = {
   village_action: VillageAction | null;
 };
 
-// The village (M6). See specs/006-village/contracts/http-api.md.
+// The village (M6, M7). See specs/007-village-life/contracts/http-api.md.
 export type VillageAction =
   | { action: "move"; place: string; reason?: string }
+  | { action: "find"; villager: string; reason?: string }
   | { action: "say"; text: string; to: string | null; reason?: string }
+  | { action: "goodbye"; text: string | null; reason?: string }
   | { action: "wait"; reason?: string };
 
 export type VillageEvent = {
   tick: number;
-  kind: "set_off" | "arrived" | "heard" | "said" | "waited";
+  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited";
   text: string;
   from?: string;
   to?: string | null;
@@ -88,9 +90,18 @@ export type Villager = {
   place: string | null;
   destination: string | null;
   last_action: VillageAction | null;
-  speech: { text: string; to: string | null } | null;
+  speech: { text: string; to: string | null; tick: number } | null;
   events: VillageEvent[];
+  asleep: boolean;
+  state: "asleep" | "bedtime" | "deciding" | "talking" | "walking" | "idle";
+  wake: string; // "05:00"
+  bed: string;
+  goal: string | null; // "walking to the market", "going home", "looking for Lina"
+  talking_with: string[];
+  beliefs: { villager: string; text: string }[];
 };
+
+export type VillageLine = { tick: number; time: string; from: string; to: string | null; text: string };
 
 export type VillageState = {
   tick: number;
@@ -101,7 +112,14 @@ export type VillageState = {
   ticking: boolean;
   interval: number;
   paused_reason: string | null;
-  map: { width: number; height: number; rows: string[]; places: { key: string; label: string; x: number; y: number }[] };
+  log: VillageLine[]; // newest last
+  map: {
+    width: number;
+    height: number;
+    rows: string[];
+    places: { key: string; label: string; x: number; y: number }[];
+    homes: { villager: string; letter: string; door: [number, number] }[];
+  };
   villagers: Villager[];
 };
 

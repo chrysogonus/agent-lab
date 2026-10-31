@@ -53,17 +53,26 @@ Prompts refer to `{input}` (the user's prompt), `{previous}` (the previous block
 
 ### The village
 
-Switch the header to "Village" to watch four villagers live on a small map: Mayor Hilde (town
-hall), Jonas the fisher (pier), Greta the farmer (fields) and Lina the flower girl (flower
-garden). Each tick is 10 minutes of village time: every villager reads what it sees and hears
-and picks one action (walk to a place, say something, optionally to one villager, or wait).
-Start, Pause, Step and Reset control the clock; the interval sets the seconds between ticks.
-The village pauses itself 60 seconds after the last Village tab closes, and after three ticks in
-which every turn failed (e.g. the model server is down).
+Switch the header to "Village" to watch four villagers live in a small pixel-art village: Mayor
+Hilde (town hall), Jonas the fisher (pier), Greta the farmer (fields) and Lina the flower girl
+(flower garden). Each has a house next to its work and its own sleeping hours: Jonas is up at
+05:00, Greta at 05:30, Lina at 06:30 and Hilde at 07:30; at bedtime they walk home by
+themselves, and once everyone sleeps the night passes in seconds.
+
+The clock moves in steps of 10 village minutes, and walkers move one at a time within a step.
+A villager only asks its model what to do when something happens: it woke, arrived, met
+someone, was spoken to, found (or missed) someone it was looking for, or half an hour passed.
+It can walk to a place or home, go and find another villager where it thinks they are, talk to
+someone standing right next to it, say goodbye, or wait. Villagers talk only face to face, and
+each one keeps an idea of where the others are (seen, heard, or their usual routine), which can
+be out of date. Start, Pause, Step and Reset control the clock; the interval sets the seconds
+between steps. The village pauses itself 60 seconds after the last Village tab closes, and after
+three steps in which every decision failed (e.g. the model server is down).
 
 Each villager is a block agent under "My agents", created on the first Start; "Edit its agent"
-opens it in the builder, and an edit applies from the next tick. Click a villager for what it
-remembers and every turn it took; a turn opens in the usual run view (graph, prompt, answer).
+opens it in the builder, and an edit applies from its next decision. Click a villager for its
+sleeping hours, where it thinks the others are, what it remembers and every turn it took; a turn
+opens in the usual run view (graph, prompt, answer).
 Village turns stay out of the past-runs list.
 The run header and the past-runs list show model calls, tool calls, tokens and wall time. Past
 runs replay from the database (`backend/data/agent_lab.db`).
@@ -107,7 +116,7 @@ make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
 |---|---|
 | `GET /agents` | templates, then custom agents, with config, sample prompt and graph |
 | `GET /tools` | tools an agent can be given, with their parameter schema |
-| `GET /village`, `POST /village/start`, `/pause`, `/step`, `/reset`, `PUT /village/interval` | the village and its controls; `WS /village/stream` sends the state after every tick |
+| `GET /village`, `POST /village/start`, `/pause`, `/step`, `/reset`, `PUT /village/interval` | the village and its controls; `WS /village/stream` sends the state after every move, step and decision |
 | `GET /village/villagers/{name}/turns` | a villager's turns, newest first |
 | `GET /blocks/new`, `GET /agents/{id}/blocks` | an unsaved block agent: new, or converted from a template or customized agent |
 | `GET /models` | configured models: provider, id, external, available, default (never keys) |

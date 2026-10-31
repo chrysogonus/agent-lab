@@ -156,6 +156,9 @@
 .village-cursor {
   animation: village-bob 0.8s infinite;
 }
+.village-snore {
+  animation: village-bob 1.6s infinite;
+}
 @keyframes village-frames {
   0%,
   49.9% {
@@ -192,7 +195,8 @@
 @media (prefers-reduced-motion: reduce) {
   .village-wave-a,
   .village-walk,
-  .village-cursor {
+  .village-cursor,
+  .village-snore {
     animation: none;
   }
   .village-wave-b {

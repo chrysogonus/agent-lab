@@ -61,6 +61,7 @@ def test_observation() -> None:
     text = observation(world, "Jonas")
     assert text.startswith("Day 1, 09:30, morning. You are at the market.")
     assert "You get up at 05:00 and go to bed at 21:00." in text
+    assert "At this hour you are usually at the pier." in text
     assert "Next to you: Mayor Hilde." in text
     assert "In sight: Lina the flower girl (3 steps away)." in text
     assert "You are talking with Hilde (2 lines so far)." in text
@@ -98,6 +99,14 @@ def test_belief_from_routine_outside_waking_hours() -> None:
         ('{"action": "move", "place": "town hall"}', {"action": "move", "place": "town_hall"}),
         ('{"action": "find", "villager": "lina"}', {"action": "find", "villager": "Lina"}),
         (
+            '{"action": "find", "villager": "Lina the flower girl"}',
+            {"action": "find", "villager": "Lina"},
+        ),
+        (
+            '{"action": "say", "text": "Hi", "to": "Jonas the fisher"}',
+            {"action": "say", "text": "Hi", "to": "Jonas"},
+        ),
+        (
             '{"action": "say", "text": " Hi! ", "to": "jonas"}',
             {"action": "say", "text": "Hi!", "to": "Jonas"},
         ),
@@ -134,7 +143,8 @@ def test_move_home() -> None:
         ('{"action": "find", "villager": "Jonas"}', "Jonas is already next to you"),
         ('{"action": "say", "text": "   "}', "nothing to say"),
         ('{"action": "say", "text": "Hi", "to": "Bob"}', "unknown villager 'Bob'"),
-        ('{"action": "say", "text": "Hi", "to": "Hilde"}', "unknown villager 'Hilde'"),
+        ('{"action": "say", "text": "Hi", "to": "Mayor Hilde"}', "unknown villager 'Mayor Hilde'"),
+        ('{"action": "say", "text": "Hi", "to": "Jonas and Lina"}', "unknown villager"),
         ('{"action": "say", "text": "Hi", "to": "Lina"}', "Lina is not next to you"),
     ],
 )
