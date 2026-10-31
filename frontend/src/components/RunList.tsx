@@ -1,5 +1,5 @@
 import type { AgentInfo, Run } from "@/lib/api";
-import { agentName, formatTotals } from "@/lib/run-state";
+import { formatTotals, runAgentLabel } from "@/lib/run-state";
 
 const STATUS_DOT: Record<Run["status"], string> = {
   running: "bg-signal",
@@ -33,7 +33,9 @@ export function RunList({
   }
   return (
     <ul className="divide-y divide-rule/60">
-      {runs.map((run) => (
+      {runs.map((run) => {
+        const agent = runAgentLabel(run, agents);
+        return (
         <li key={run.run_id}>
           <button
             type="button"
@@ -43,8 +45,11 @@ export function RunList({
               run.run_id === current ? "bg-paper" : ""
             }`}
           >
-            <span className="text-xs font-semibold text-muted">
-              {run.agent_name ?? agentName(agents, run.agent_id)}
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+              {agent.name}
+              {agent.custom && (
+                <span className="rounded border border-rule px-1 font-normal">custom</span>
+              )}
             </span>
             <span className="line-clamp-2 text-sm text-ink">{run.prompt}</span>
             <span className="flex items-center gap-2 text-xs text-muted">
@@ -54,7 +59,8 @@ export function RunList({
             {run.totals && <span className="text-xs text-muted">{formatTotals(run.totals)}</span>}
           </button>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }

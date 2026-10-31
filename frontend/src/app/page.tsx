@@ -8,6 +8,7 @@ import { RunList } from "@/components/RunList";
 import { RunViewer } from "@/components/RunViewer";
 import {
   createAgent,
+  deleteAgent,
   listAgents,
   listRuns,
   listTools,
@@ -93,8 +94,9 @@ export default function Home() {
   };
 
   /** Saves the draft; the saved agent, or null when the server rejected it. */
-  const save = async (): Promise<AgentInfo | null> => {
-    if (!draft) return null;
+  const save = async (): Promise<AgentInfo | null> => (draft ? saveDraft(draft) : null);
+
+  const saveDraft = async (draft: Draft): Promise<AgentInfo | null> => {
     setSaving(true);
     try {
       const saved = draft.agentId
@@ -115,6 +117,27 @@ export default function Home() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const duplicate = async () => {
+    if (!preview || !mayLeave()) return;
+    const copy = draftFrom(preview, agents); // the saved agent, not unsaved edits
+    setDraft(copy);
+    await saveDraft(copy);
+  };
+
+  const remove = async () => {
+    if (!preview || !window.confirm(`Delete "${preview.name}"? Its past runs stay listed.`)) return;
+    try {
+      await deleteAgent(preview.id);
+    } catch {
+      setSaveErrors({ "": "Can't reach the backend to delete." });
+      return;
+    }
+    setAgents(await listAgents());
+    setAgentId(preview.template_id); // its template is the closest thing left
+    setPicks((n) => n + 1);
+    edit(null);
   };
 
   const run = async (prompt: string) => {
@@ -181,6 +204,8 @@ export default function Home() {
               onCustomize={() => setDraft(draftFrom(preview, agents))}
               onSave={() => void save()}
               onDiscard={() => edit(preview)}
+              onDuplicate={() => void duplicate()}
+              onDelete={() => void remove()}
             />
           ) : (
             <p className="text-sm text-muted">

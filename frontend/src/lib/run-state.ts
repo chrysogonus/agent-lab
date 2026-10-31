@@ -110,6 +110,14 @@ export function agentName(agents: AgentInfo[], id: string): string {
   return agentPreview(agents, id)?.name ?? id;
 }
 
+/** Who ran: the name stored with the run (it outlives a deleted agent), else the listed name. */
+export function runAgentLabel(run: Run, agents: AgentInfo[]): { name: string; custom: boolean } {
+  return {
+    name: run.agent_name ?? agentName(agents, run.agent_id),
+    custom: run.template_id != null && run.template_id !== run.agent_id,
+  };
+}
+
 /** Same definition as the backend's stored totals; wall time counts up to `now` while running. */
 export function runTotals(spans: Record<string, Span>, run: Run, now: number): RunTotals {
   const all = Object.values(spans);

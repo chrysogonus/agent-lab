@@ -63,6 +63,8 @@ export function AgentBuilder({
   onCustomize,
   onSave,
   onDiscard,
+  onDuplicate,
+  onDelete,
 }: {
   agent: AgentInfo;
   draft: Draft | null;
@@ -73,6 +75,8 @@ export function AgentBuilder({
   onCustomize: () => void;
   onSave: () => void;
   onDiscard: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
 }) {
   const [opened, setSection] = useState<Section>({ kind: "agent" });
   const preview = useGraphPreview(agent.template_id, draft?.config ?? null);
@@ -122,6 +126,16 @@ export function AgentBuilder({
                 <button type="button" onClick={onDiscard} disabled={busy} className={`${BUTTON} text-ink hover:bg-paper`}>
                   Discard
                 </button>
+              )}
+              {draft.agentId != null && (
+                <>
+                  <button type="button" onClick={onDuplicate} disabled={busy} className={`${BUTTON} text-ink hover:bg-paper`}>
+                    Duplicate
+                  </button>
+                  <button type="button" onClick={onDelete} disabled={busy} className={`${BUTTON} text-fault hover:bg-fault/10`}>
+                    Delete
+                  </button>
+                </>
               )}
               <button
                 type="button"

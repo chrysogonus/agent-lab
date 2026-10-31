@@ -174,6 +174,12 @@ def create_app(*, store: Store, llm: LLMClient, secrets: tuple[str, ...] = ()) -
         except NameInUse:
             raise field_error(("body", "name"), "name already in use") from None
 
+    @app.delete("/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_agent(agent_id: str) -> None:
+        """Runs of the agent keep their own snapshot (name, config, graph) and stay listed."""
+        if not store.delete_agent(agent_id):
+            raise HTTPException(status_code=404, detail="unknown custom agent")
+
     @app.post("/graph")
     async def preview_graph(body: GraphRequest) -> Graph:
         """The graph the server derives from an unsaved config (the builder's live preview)."""

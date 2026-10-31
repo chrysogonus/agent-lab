@@ -4,6 +4,7 @@ import {
   activeNodes,
   agentName,
   agentPreview,
+  runAgentLabel,
   applyEvent,
   durationMs,
   edgeKey,
@@ -362,5 +363,25 @@ describe("durationMs", () => {
   it("uses the end time, or now while running", () => {
     expect(durationMs(span("a", "llm", 1, 1.25), 99)).toBe(250);
     expect(durationMs(span("a", "llm", 1, null), 1.5)).toBe(500);
+  });
+});
+
+describe("runAgentLabel", () => {
+  const agents = [{ id: "react", name: "ReAct agent" }] as AgentInfo[];
+  const run = (fields: Partial<Run>) => ({ agent_id: "react", agent_name: null, template_id: null, ...fields }) as Run;
+
+  it("prefers the stored name, so deleted custom agents keep theirs", () => {
+    expect(runAgentLabel(run({ agent_id: "custom-1", agent_name: "Mine", template_id: "chain" }), agents)).toEqual({
+      name: "Mine",
+      custom: true,
+    });
+  });
+
+  it("names template runs and runs from before M3 from the agents list", () => {
+    expect(runAgentLabel(run({ agent_name: "ReAct agent", template_id: "react" }), agents)).toEqual({
+      name: "ReAct agent",
+      custom: false,
+    });
+    expect(runAgentLabel(run({}), agents)).toEqual({ name: "ReAct agent", custom: false });
   });
 });

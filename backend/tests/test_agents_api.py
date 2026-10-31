@@ -1,5 +1,6 @@
 """Custom agents through the API: create, list, update, preview, run (US1, US3)."""
 
+import threading
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -7,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from helpers import answer
-from test_api import BASE, ORIGIN, WS_BASE, final_spans, read_until_run_ended
+from test_api import BASE, ORIGIN, WS_BASE, GatedLLM, final_spans, read_until_run_ended
 from test_templates import CASES
 
 from agent_lab.api import create_app
@@ -203,3 +204,75 @@ def test_cors_allows_put_delete(store: Store) -> None:
                 headers={"Origin": ORIGIN, "Access-Control-Request-Method": method},
             )
             assert response.status_code == 200, method
+
+
+def test_delete_keeps_runs(store: Store) -> None:
+    """Deleting an agent leaves its runs listed and replayable with their snapshot (US3-3)."""
+    client, _ = client_for(store, [answer("first")])
+    with client:
+        agent = new_agent(client, "react", name="Short-lived")
+        run, _ = run_to_end(client, agent["id"], "hi")
+        assert client.delete(f"/agents/{agent['id']}").status_code == 204
+        assert agent["id"] not in [a["id"] for a in client.get("/agents").json()]
+        [listed] = client.get("/runs").json()
+        detail = client.get(f"/runs/{run['run_id']}").json()
+        assert client.delete(f"/agents/{agent['id']}").status_code == 404
+        assert client.delete("/agents/react").status_code == 404
+    assert (listed["agent_id"], listed["agent_name"]) == (agent["id"], "Short-lived")
+    assert detail["run"]["graph"] == run["graph"]
+    assert detail["run"]["config"] == run["config"]
+    assert detail["spans"]
+
+
+def test_delete_while_running(store: Store) -> None:
+    gate = threading.Event()
+    llm = GatedLLM([answer("late")], gate)
+    with TestClient(create_app(store=store, llm=llm), base_url=BASE) as client:
+        agent = new_agent(client, "react")
+        run = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]}).json()
+        assert client.delete(f"/agents/{agent['id']}").status_code == 204
+        gate.set()
+        with client.websocket_connect(f"{WS_BASE}/runs/{run['run_id']}/stream") as ws:
+            ended = read_until_run_ended(ws)[-1]["run"]
+    assert (ended["status"], ended["answer"], ended["agent_name"]) == (
+        "completed",
+        "late",
+        "My react",
+    )
+
+
+def test_edit_changes_version_not_history(store: Store) -> None:
+    """Earlier runs keep the config and version they ran with (US3-1, SC-004)."""
+    client, _ = client_for(store, [answer("one"), answer("two")])
+    with client:
+        agent = new_agent(client, "react")
+        before, _ = run_to_end(client, agent["id"], "hi")
+        config = {**agent["config"], "system_prompt": "Be terse."}
+        body = {"name": agent["name"], "sample_prompt": "x", "config": config}
+        assert client.put(f"/agents/{agent['id']}", json=body).status_code == 200
+        after, _ = run_to_end(client, agent["id"], "hi")
+        stored_before = client.get(f"/runs/{before['run_id']}").json()["run"]
+    assert before["config_version"] != after["config_version"]
+    assert stored_before["config"] == before["config"]
+    assert stored_before["config"]["system_prompt"] != "Be terse."
+    assert after["config"]["system_prompt"] == "Be terse."
+
+
+def test_duplicate_is_independent(store: Store) -> None:
+    """A duplicate is a new agent with copied fields; editing one leaves the other (US3-2)."""
+    client, _ = client_for(store)
+    with client:
+        original = new_agent(client, "parallel", name="Reviewer")
+        copy = new_agent(
+            client,
+            "parallel",
+            name="Reviewer (copy)",
+            config=deepcopy(original["config"]),
+        )
+        config = {**copy["config"], "merge_prompt": "Only the top issue."}
+        body = {"name": copy["name"], "sample_prompt": "x", "config": config}
+        client.put(f"/agents/{copy['id']}", json=body)
+        agents = {a["id"]: a for a in client.get("/agents").json()}
+    assert copy["id"] != original["id"]
+    assert agents[original["id"]]["config"] == original["config"]
+    assert agents[copy["id"]]["config"]["merge_prompt"] == "Only the top issue."
