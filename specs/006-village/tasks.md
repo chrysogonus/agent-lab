@@ -111,9 +111,9 @@ turns listed.
 
 ## Phase 6: Polish
 
-- [ ] T020 [P] Docs: README.md (the Village: Start/Pause/Step/Reset, interval, the four villagers, editing a villager's agent, self-pauses; API rows for `/village…`); AGENTS.md (layout: `village/` package; rule: villager turns are ordinary runs, the village never calls the model directly)
-- [ ] T021 `make check` passes; FR → test map below complete
-- [ ] T022 Manual checks from quickstart.md steps 1–8 on vLLM; record results (including whether the villagers talk to each other and the mayor mentions the festival, SC-006) in a "Manual check results" section of this file
+- [X] T020 [P] Docs: README.md (the Village: Start/Pause/Step/Reset, interval, the four villagers, editing a villager's agent, self-pauses; API rows for `/village…`); AGENTS.md (layout: `village/` package; rule: villager turns are ordinary runs, the village never calls the model directly)
+- [X] T021 `make check` passes; FR → test map below complete
+- [X] T022 Manual checks from quickstart.md steps 1–8 on vLLM; record results (including whether the villagers talk to each other and the mayor mentions the festival, SC-006) in a "Manual check results" section of this file
 
 ---
 
@@ -172,3 +172,27 @@ Task: "Turns in backend/src/agent_lab/village/turn.py"
 | SC-004 | test_village_runner.py (invalid answers) |
 | SC-005 | test_village_runner.py (load after restart); quickstart step 8 |
 | SC-006 | quickstart step 3 (real model) |
+
+## Manual check results (T022, 2026-10-31)
+
+vLLM `qwen3.5-9b`; backend on copies of the owner's database (a fresh copy for steps 1–5, so the
+villager agents were created with the final rules); UI driven headless (Chromium, Playwright).
+
+| Quickstart step | Result |
+|---|---|
+| 1. Open the Village view | map with six labelled places, the four villagers at home, "Day 1, 06:00, morning" |
+| 2. Step, then Start | first tick finished 1.0 s after opening the view (SC-001); Start ran ticks at the set interval (1 s for this check) |
+| 3. 36 ticks | 23 speeches; Hilde mentioned the festival to Lina, Greta and Jonas; Hilde and Lina talked to each other (ticks 21–23: "Did you sleep well?" / "I slept like a petal on the breeze!"), Greta spoke to Hilde and Lina (SC-006); 9 of 148 turns became `wait` with a readable reason (e.g. "unknown villager 'self'", "already at the town hall") |
+| 4. Villager panel and a turn | persona, place, last 10 events and turns; a turn opened in the run view with its graph (decide → answer-is-json), observation and answer |
+| 5. Edit Jonas's agent | "Edit its agent" opened "Jonas the fisher" in the builder; after adding "talk about nothing but the weather", his next turn had a new `config_version` and said "Look at these clouds, they are heavy with rain soon." |
+| 6. Close the tab while running | paused 61 s later, "no viewer for 60 s" |
+| 7. Model server down | backend pointed at a closed port: paused after 3 ticks, "every turn failed 3 ticks in a row", shown in the view; turns recorded "turn failed: run ended error" |
+| 8. Restart the backend | same tick (38) and positions, paused (SC-005) |
+
+Fixed during the checks: figures covered the place labels (villagers now start in the middle of
+their home); setting off was not remembered (new `set_off` event); speech to someone far away
+went unheard (the rules now say only nearby villagers hear and to walk to them first); a `wait`
+stopped a walk (walks now go on until arrival, FR-009); the state after a tick still said
+"Ticking…" (published after the flag clears); turn lists could misorder under clock steps
+(ordered by insertion); a deleted villager agent was recreated by Step (now only by Reset, as
+the spec says); long run titles are clamped to three lines.

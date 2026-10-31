@@ -170,6 +170,7 @@ class Village:
                 await self._tick()
             finally:
                 self.ticking = False
+            self._publish()  # after `ticking` is cleared, so the view does not stay "Ticking…"
 
     async def _tick(self) -> None:
         world = self.world
@@ -227,7 +228,6 @@ class Village:
         all_failed = all(reason and reason.startswith("turn failed") for _, _, reason in turns)
         world["failed_ticks"] = world["failed_ticks"] + 1 if all_failed else 0
         world["tick"] = tick + 1
-        self._publish()
 
     # --- controls ---
 

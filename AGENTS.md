@@ -29,6 +29,8 @@ report; keep every gate at its current strictness.
   `decide`; `registry.py`: the six templates by id; `config_fields.py`: shared field rules),
   `workflows/` (chain, routing, parallel, orchestrator, evaluator), `blocks/` (block agents:
   `model.py` types and layout rules, `graph.py`, `run.py`, `convert.py` templates as blocks),
+  `village/` (`world.py` map, clock and villagers, `turn.py` observations and actions,
+  `runner.py` the tick loop),
   `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
@@ -65,6 +67,9 @@ report; keep every gate at its current strictness.
    Block agents are custom agents with `template_id` `"blocks"`: `blocks/run.py` reaches the
    model and the tools only through `steps.chat`, `call_tool` and `decide`, and every node that
    can stop a run has an edge to `end` in `blocks/graph.py`.
+   Village turns are ordinary runs of the villagers' block agents, tagged with `village_tick`
+   and `villager`; the village never calls the model directly, and model answers become a
+   validated action (anything else is `wait` with a reason).
 6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
    `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
    forward-looking abstractions.

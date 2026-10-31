@@ -84,6 +84,7 @@ def test_stream_sends_state_on_connect_and_after_a_step(store: Store) -> None:
         events = [ws.receive_json() for _ in range(2)]
     assert events[0] == {"type": "tick_started", "tick": 0}
     assert events[1]["type"] == "state" and events[1]["state"]["tick"] == 1
+    assert events[1]["state"]["ticking"] is False  # the published state is after the tick
 
 
 def test_stream_refuses_foreign_origin(store: Store) -> None:

@@ -50,6 +50,21 @@ in the outline in the settings panel (+ adds a block after another; ↑ ↓ move
 Prompts refer to `{input}` (the user's prompt), `{previous}` (the previous block's output),
 `{name}` (an earlier block's output), and inside loops and per-item groups to `{feedback}` and
 `{item}`. Up to 30 blocks, nested 3 levels deep; the server checks the layout on every save.
+
+### The village
+
+Switch the header to "Village" to watch four villagers live on a small map: Mayor Hilde (town
+hall), Jonas the fisher (pier), Greta the farmer (fields) and Lina the flower girl (flower
+garden). Each tick is 10 minutes of village time: every villager reads what it sees and hears
+and picks one action (walk to a place, say something, optionally to one villager, or wait).
+Start, Pause, Step and Reset control the clock; the interval sets the seconds between ticks.
+The village pauses itself 60 seconds after the last Village tab closes, and after three ticks in
+which every turn failed (e.g. the model server is down).
+
+Each villager is a block agent under "My agents", created on the first Start; "Edit its agent"
+opens it in the builder, and an edit applies from the next tick. Click a villager for what it
+remembers and every turn it took; a turn opens in the usual run view (graph, prompt, answer).
+Village turns stay out of the past-runs list.
 The run header and the past-runs list show model calls, tool calls, tokens and wall time. Past
 runs replay from the database (`backend/data/agent_lab.db`).
 
@@ -92,6 +107,8 @@ make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
 |---|---|
 | `GET /agents` | templates, then custom agents, with config, sample prompt and graph |
 | `GET /tools` | tools an agent can be given, with their parameter schema |
+| `GET /village`, `POST /village/start`, `/pause`, `/step`, `/reset`, `PUT /village/interval` | the village and its controls; `WS /village/stream` sends the state after every tick |
+| `GET /village/villagers/{name}/turns` | a villager's turns, newest first |
 | `GET /blocks/new`, `GET /agents/{id}/blocks` | an unsaved block agent: new, or converted from a template or customized agent |
 | `GET /models` | configured models: provider, id, external, available, default (never keys) |
 | `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent (`model`: `{"provider", "model"}` or `null` for Default) |
