@@ -35,7 +35,10 @@ inside the existing stack. Code references are to the M4 tree (commit `1cfcecf`)
   carries the loc of the offending field, e.g. `("blocks", 2, "routes", 0, "blocks", 1,
   "message")`. `validate_config` raises `LayoutError(errors)` for block agents; the API turns
   both pydantic errors and `LayoutError` into the usual 422 under `("body", "config", ...)`;
-  `resolve` (run start) runs the same check.
+  `resolve` (run start) runs the same check. Pydantic puts the union tag into locs
+  (`("blocks", 0, "model", "system")`); the API removes a kind name that follows a list index,
+  so every loc is a path into the draft. A stored agent that no longer validates (pydantic or
+  layout) is rejected at run start with 422, not a server error.
 - **Rationale**: a pydantic `model_validator` can only report at the model's own loc; the walk
   gives every error the exact path the builder maps to a field (FR-016, FR-017).
 - **Alternatives**: one model validator with the path in the message text (the UI could not
