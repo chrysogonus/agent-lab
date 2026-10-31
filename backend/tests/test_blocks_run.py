@@ -10,9 +10,15 @@ from helpers import (
     answer,
     assert_trace_valid,
     blocks_config,
+    branches_block,
+    check_block,
     ended,
+    json_answer,
+    loop_block,
     make_tracer,
     model_block,
+    per_item_block,
+    router_block,
     tool_block,
     tool_call,
 )
@@ -20,6 +26,7 @@ from helpers import (
 from agent_lab.agents.steps import Outcome
 from agent_lab.blocks.graph import build_graph
 from agent_lab.blocks.run import BlockAgent
+from agent_lab.llm.base import ChatResponse
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.tracing.span import Span
 
@@ -117,3 +124,194 @@ async def test_reasoning_setting_reaches_every_call() -> None:
     tracer, _ = make_tracer()
     await BlockAgent(llm=llm, config=config, tracer=tracer).run("hi")
     assert [r["reasoning"] for r in llm.requests] == [True, True]
+
+
+# --- US2: control blocks ---
+
+
+def echo(messages: list[Any]) -> ChatResponse:
+    """Answers with the user message, so concurrent branches get predictable outputs."""
+    return answer(f"done: {messages[-1]['content']}")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("rule", "value", "text", "passes"),
+    [
+        ("min_bullets", 2, "- a\n- b", True),
+        ("min_bullets", 3, "- a\n- b", False),
+        ("max_words", 3, "one two three", True),
+        ("max_words", 2, "one two three", False),
+        ("contains", "391", "it is 391", True),
+        ("contains", "391", "it is 390", False),
+        ("valid_json", None, '{"a": 1}', True),
+        ("valid_json", None, "not json", False),
+    ],
+)
+async def test_check_rules(rule: str, value: Any, text: str, passes: bool) -> None:
+    blocks = [model_block("draft"), check_block("enough", rule, value), model_block("after")]
+    script = [answer(text), answer("final")] if passes else [answer(text)]
+    outcome, spans, llm = await run_blocks(blocks, script)
+    if passes:
+        assert (outcome.status, outcome.answer) == ("completed", "final")
+        assert user_message(llm.calls[1]) == text  # a passing check passes its input on
+    else:
+        assert (
+            outcome.status == "error" and outcome.error and "check enough failed" in outcome.error
+        )
+        assert len(llm.calls) == 1 and end_from(spans) == ["enough"]
+
+
+@pytest.mark.anyio
+async def test_router_picks_a_route_of_two_blocks() -> None:
+    routes = {
+        "math": [model_block("m1"), model_block("m2", message="{m1}!")],
+        "other": [model_block("o")],
+    }
+    blocks = [router_block("route", routes), model_block("say", message="{route}")]
+    outcome, spans, llm = await run_blocks(
+        blocks, [json_answer({"label": "math"}), answer("a"), answer("b"), answer("c")]
+    )
+    assert outcome.answer == "c"
+    assert [user_message(c) for c in llm.calls[1:]] == [PROMPT, "a!", "b"]
+    assert llm.requests[0]["response_format"]["json_schema"]["schema"]["properties"]["label"][
+        "enum"
+    ] == ["math", "other"]
+    assert "o" not in {s.node_id for s in spans}
+
+
+@pytest.mark.anyio
+async def test_router_invalid_label_uses_fallback() -> None:
+    routes = {"other": [model_block("o")], "math": [model_block("m")]}
+    blocks = [router_block("route", routes, fallback="other")]
+    outcome, spans, _ = await run_blocks(
+        blocks, [json_answer({"label": "sports"}), answer("fallback")]
+    )
+    assert (outcome.status, outcome.answer) == ("completed", "fallback")
+    route_span = next(s for s in spans if s.node_id == "route" and s.kind == "route")
+    assert route_span.error  # the unusable decision stays visible
+
+
+@pytest.mark.anyio
+async def test_parallel_branches_run_together() -> None:
+    blocks = [
+        branches_block(
+            "reviews",
+            {"a": [model_block("ra")], "b": [model_block("rb")], "c": [model_block("rc")]},
+        ),
+        model_block("merge", message="{reviews}"),
+    ]
+    outcome, spans, llm = await run_blocks(blocks, [echo, echo, echo, echo], delay=0.05)
+    reviews = [s for s in spans if s.node_id in ("ra", "rb", "rc")]
+    assert max(s.started_at for s in reviews) < min(s.ended_at or 0 for s in reviews)  # overlap
+    assert user_message(llm.calls[-1]) == "\n\n".join(f"{b}:\ndone: {PROMPT}" for b in "abc")
+    assert next(s for s in spans if s.node_id == "merge").attributes["lab.came_from"] == [
+        "ra",
+        "rb",
+        "rc",
+    ]
+    assert outcome.status == "completed"
+
+
+@pytest.mark.anyio
+async def test_failing_branch_ends_run_after_the_others_finish() -> None:
+    blocks = [branches_block("p", {"a": [model_block("ok")], "b": [model_block("bad")]})]
+
+    llm_script: list[ScriptItem] = [answer("fine"), RuntimeError("model down")]
+    config = blocks_config(*blocks)
+    llm = FakeLLM(llm_script, delay=0.02)
+    tracer, events = make_tracer()
+    with pytest.raises(RuntimeError):
+        await BlockAgent(llm=llm, config=config, tracer=tracer).run(PROMPT)
+    ended_nodes = {s.node_id for s in ended(events)}
+    assert {"ok", "bad"} <= ended_nodes  # both branches finished and are in the trace
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("items", [1, 6])
+async def test_per_item_runs_body_once_per_item(items: int) -> None:
+    parts = [f"part {i}" for i in range(items)]
+    blocks = [
+        per_item_block("plan", [model_block("work", message="{input} / {item}")], max_items=items),
+        model_block("sum"),
+    ]
+    script: list[ScriptItem] = [
+        json_answer({"subtasks": parts}),
+        *([echo] * items),
+        answer("summary"),
+    ]
+    outcome, spans, llm = await run_blocks(blocks, script, delay=0.01)
+    assert outcome.answer == "summary"
+    assert sorted(user_message(c) for c in llm.calls[1:-1]) == sorted(
+        f"{PROMPT} / {p}" for p in parts
+    )
+    assert user_message(llm.calls[-1]) == "\n\n".join(f"{p}:\ndone: {PROMPT} / {p}" for p in parts)
+    assert len([s for s in spans if s.node_id == "work"]) == items
+
+
+@pytest.mark.anyio
+async def test_plan_above_the_limit_stops_from_the_planner() -> None:
+    blocks = [per_item_block("plan", [model_block("work")], max_items=2)]
+    outcome, spans, _ = await run_blocks(blocks, [json_answer({"subtasks": ["a", "b", "c"]})])
+    assert outcome.status == "error" and end_from(spans) == ["plan"]
+
+
+@pytest.mark.anyio
+async def test_loop_feedback_reaches_the_next_round() -> None:
+    blocks = [
+        loop_block("improve", [model_block("gen", message="{input}|{feedback}")], max_rounds=3)
+    ]
+    script: list[ScriptItem] = [
+        answer("v1"),
+        json_answer({"approved": False, "feedback": "shorter"}),
+        answer("v2"),
+        json_answer({"approved": True, "feedback": ""}),
+    ]
+    outcome, _, llm = await run_blocks(blocks, script)
+    assert (outcome.status, outcome.answer) == ("completed", "v2")
+    assert user_message(llm.calls[0]) == f"{PROMPT}|"
+    assert user_message(llm.calls[2]) == f"{PROMPT}|Previous answer:\nv1\n\nFeedback:\nshorter"
+    assert user_message(llm.calls[1]) == "v1"  # the judge reads the body's output
+
+
+@pytest.mark.anyio
+async def test_unreadable_verdict_counts_as_rejection() -> None:
+    blocks = [loop_block("improve", [model_block("gen", message="{feedback}")])]
+    script: list[ScriptItem] = [
+        answer("v1"),
+        answer("not json"),
+        answer("v2"),
+        json_answer({"approved": True, "feedback": ""}),
+    ]
+    outcome, _, llm = await run_blocks(blocks, script)
+    assert (outcome.status, outcome.answer) == ("completed", "v2")
+    assert "invalid verdict" in user_message(llm.calls[2])  # its error became the feedback
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("rounds", [1, 5])
+async def test_loop_round_cap(rounds: int) -> None:
+    blocks = [loop_block("improve", [model_block("gen")], max_rounds=rounds), model_block("after")]
+    script: list[ScriptItem] = []
+    for i in range(rounds):
+        script += [answer(f"v{i}"), json_answer({"approved": False, "feedback": "again"})]
+    outcome, spans, _ = await run_blocks(blocks, script)
+    assert (outcome.status, outcome.answer) == ("max_iterations", f"v{rounds - 1}")
+    assert end_from(spans) == ["improve"]
+
+
+@pytest.mark.anyio
+async def test_loop_with_check_exit() -> None:
+    blocks = [loop_block("until", [model_block("gen")], exit="check", check={"rule": "valid_json"})]
+    outcome, _, llm = await run_blocks(blocks, [answer("nope"), answer('{"ok": true}')])
+    assert (outcome.status, outcome.answer) == ("completed", '{"ok": true}')
+    assert len(llm.calls) == 2  # the failed check sent the body round again
+
+
+@pytest.mark.anyio
+async def test_stop_inside_a_nested_container() -> None:
+    inner = [model_block("gen"), check_block("short", "max_words", 1)]
+    blocks = [branches_block("p", {"a": [loop_block("l", inner)]}), model_block("never")]
+    outcome, spans, llm = await run_blocks(blocks, [answer("far too many words")])
+    assert outcome.status == "error" and end_from(spans) == ["short"]
+    assert len(llm.calls) == 1
