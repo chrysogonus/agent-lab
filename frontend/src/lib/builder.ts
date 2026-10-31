@@ -1,6 +1,7 @@
 // Builder state: a draft custom agent and the edits on it. Pure; components stay thin.
 // Field names match the API's, so a 422 `loc` is a path into the draft.
 import type { AgentConfig, AgentFields, AgentInfo, FieldErrorDetail, ModelRef } from "./api";
+import { blockAt, findBlock } from "./blocks";
 
 export type Draft = {
   agentId: string | null; // null until the first save
@@ -24,7 +25,8 @@ export type Section =
   | { kind: "route"; index: number }
   | { kind: "aspect"; index: number }
   | { kind: "gate" }
-  | { kind: "tool"; name: string };
+  | { kind: "tool"; name: string }
+  | { kind: "block"; path: Path }; // block agents: the block at that draft path
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -98,6 +100,10 @@ type Named = { name: string };
 export function nodeSettings(templateId: string, config: AgentConfig, nodeId: string | null): Section {
   if (nodeId == null || nodeId === "start" || nodeId === "end") return { kind: "agent" };
   if (nodeId.startsWith("tool:")) return { kind: "tool", name: nodeId.slice("tool:".length) };
+  if (templateId === "blocks") {
+    const path = findBlock(config, nodeId);
+    return path ? { kind: "block", path } : { kind: "agent" };
+  }
   if (templateId === "react" && nodeId === "llm") {
     return { kind: "prompt", path: ["config", "system_prompt"], title: "System prompt" };
   }
@@ -155,6 +161,8 @@ export function sectionNode(section: Section, config: AgentConfig): string | nul
       return "gate";
     case "tool":
       return `tool:${section.name}`;
+    case "block":
+      return blockAt(config, section.path)?.name ?? null;
   }
 }
 

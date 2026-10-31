@@ -90,9 +90,14 @@ const NODE_WIDTH = 150;
 const NODE_HEIGHT = 44;
 
 function handlesFor(source: GraphNode, target: GraphNode, back: boolean) {
-  // Tools sit below their caller, possibly to either side: vertical handles regardless of x.
-  if (source.kind === "llm" && target.kind === "tool") return { sourceHandle: "b-out", targetHandle: "t-in" };
-  if (source.kind === "tool" && target.kind === "llm") return { sourceHandle: "t-out", targetHandle: "b-in" };
+  // A model's tools sit below it, possibly to either side: vertical handles regardless of x.
+  // (A block agent's tool-call block sits in the row and keeps the left-to-right handles.)
+  if (source.kind === "llm" && target.kind === "tool" && target.y > source.y) {
+    return { sourceHandle: "b-out", targetHandle: "t-in" };
+  }
+  if (source.kind === "tool" && target.kind === "llm" && source.y > target.y) {
+    return { sourceHandle: "t-out", targetHandle: "b-in" };
+  }
   if (back) return { sourceHandle: "b-out", targetHandle: "b-in" }; // loop drawn below
   return { sourceHandle: "r", targetHandle: "l" };
 }

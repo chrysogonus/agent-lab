@@ -11,7 +11,9 @@ import {
   deleteAgent,
   listAgents,
   listRuns,
+  blocksFrom,
   listModels,
+  newBlockAgent,
   listTools,
   startRun,
   updateAgent,
@@ -21,7 +23,7 @@ import {
   type ModelInfo,
   type ToolInfo,
 } from "@/lib/api";
-import { draftFields, draftFrom, draftFromAgent, fieldErrors, type Draft } from "@/lib/builder";
+import { copyName, draftFields, draftFrom, draftFromAgent, fieldErrors, type Draft } from "@/lib/builder";
 import { agentPreview } from "@/lib/run-state";
 
 export default function Home() {
@@ -63,6 +65,9 @@ export default function Home() {
   }, [draft?.dirty]);
 
   const preview = agentPreview(agents, agentId);
+  // An unsaved block agent (new, or opened from a template) has no listed agent to show.
+  const [blockSource, setBlockSource] = useState<AgentInfo | null>(null);
+  const builderAgent = blockSource ?? preview;
 
   /** Asks before unsaved builder changes are thrown away; true when it is fine to go on. */
   const mayLeave = () =>
@@ -71,10 +76,28 @@ export default function Home() {
   const edit = (agent: AgentInfo | null) => {
     setDraft(agent?.kind === "custom" ? draftFromAgent(agent) : null);
     setSaveErrors({});
+    setBlockSource(null);
+  };
+
+  /** Opens an unsaved block agent from the server: a new one, or a block copy of `fromId`. */
+  const openBlocks = async (fromId: string | null) => {
+    if (!mayLeave()) return;
+    try {
+      const source = fromId ? await blocksFrom(fromId) : await newBlockAgent();
+      setCurrent(null);
+      setSaveErrors({});
+      setBlockSource(source);
+      const names = agents.map((a) => a.name);
+      const name = names.includes(source.name) ? copyName(source.name, names) : source.name;
+      setDraft(fromId ? draftFrom(source, agents) : { ...draftFromAgent(source), agentId: null, dirty: true, name });
+      setPicks((n) => n + 1);
+    } catch {
+      setSaveErrors({ "": "Can't reach the backend to open a block agent." });
+    }
   };
 
   const select = (id: string) => {
-    if (id === agentId && !current) return;
+    if (id === agentId && !current && !blockSource) return;
     if (!mayLeave()) return;
     setAgentId(id);
     setPicks((n) => n + 1);
@@ -110,6 +133,7 @@ export default function Home() {
       setAgentId(saved.id);
       setDraft(draftFromAgent(saved));
       setSaveErrors({});
+      setBlockSource(null); // now a listed agent
       return saved;
     } catch (e) {
       setSaveErrors(
@@ -163,7 +187,12 @@ export default function Home() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
         <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Agent Lab</h1>
         <div className="flex flex-1 flex-col gap-2">
-          <AgentPicker agents={agents} selected={agentId} onSelect={select} />
+          <AgentPicker
+            agents={agents}
+            selected={blockSource ? "" : agentId}
+            onSelect={select}
+            onNewBlockAgent={() => void openBlocks(null)}
+          />
           <PromptForm
             key={preview ? picks : "loading"}
             samplePrompt={draft?.sample_prompt ?? preview?.sample_prompt ?? ""}
@@ -193,10 +222,10 @@ export default function Home() {
                 runAgent?.kind === "custom" ? () => editAgain(runAgent.id) : undefined
               }
             />
-          ) : preview ? (
+          ) : builderAgent ? (
             <AgentBuilder
-              key={`${preview.id}:${draft?.agentId ?? (draft ? "new" : "view")}`}
-              agent={preview}
+              key={`${builderAgent.id}:${draft?.agentId ?? (draft ? "new" : "view")}:${blockSource ? "blocks" : ""}`}
+              agent={builderAgent}
               draft={draft}
               tools={tools}
               models={models}
@@ -206,11 +235,16 @@ export default function Home() {
                 setDraft(d);
                 setSaveErrors({});
               }}
-              onCustomize={() => setDraft(draftFrom(preview, agents))}
+              onCustomize={() => setDraft(draftFrom(builderAgent, agents))}
               onSave={() => void save()}
               onDiscard={() => edit(preview)}
               onDuplicate={() => void duplicate()}
               onDelete={() => void remove()}
+              onOpenAsBlocks={
+                !blockSource && builderAgent.template_id !== "blocks"
+                  ? () => void openBlocks(builderAgent.id)
+                  : undefined
+              }
             />
           ) : (
             <p className="text-sm text-muted">

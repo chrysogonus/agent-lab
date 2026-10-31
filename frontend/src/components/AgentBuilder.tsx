@@ -13,6 +13,7 @@ import {
 } from "@/lib/builder";
 import { useGraphPreview } from "@/lib/use-graph-preview";
 import { AgentSettings } from "./builder/AgentSettings";
+import { BlockOutline } from "./builder/BlockOutline";
 import type { Form } from "./builder/fields";
 import { NodeSettings } from "./builder/NodeSettings";
 import { GraphView } from "./GraphView";
@@ -43,6 +44,8 @@ function sectionTitle(section: Section, node: string | null): string {
       return "Gate";
     case "tool":
       return `Tool: ${section.name}`;
+    case "block":
+      return `Block: ${node}`;
   }
 }
 
@@ -66,6 +69,7 @@ export function AgentBuilder({
   onDiscard,
   onDuplicate,
   onDelete,
+  onOpenAsBlocks,
 }: {
   agent: AgentInfo;
   draft: Draft | null;
@@ -79,6 +83,7 @@ export function AgentBuilder({
   onDiscard: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onOpenAsBlocks?: () => void; // templates and template-based agents
 }) {
   const [opened, setSection] = useState<Section>({ kind: "agent" });
   const preview = useGraphPreview(agent.template_id, draft?.config ?? null);
@@ -113,6 +118,11 @@ export function AgentBuilder({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {onOpenAsBlocks && !draft?.dirty && (
+            <button type="button" onClick={onOpenAsBlocks} disabled={busy} className={`${BUTTON} text-ink hover:bg-paper`}>
+              Open as blocks
+            </button>
+          )}
           {draft?.dirty && (
             <span className="text-sm text-signal-ink" role="status">
               {draft.agentId == null ? "Not saved yet" : "Unsaved changes"}
@@ -180,12 +190,20 @@ export function AgentBuilder({
               </button>
             )}
           </div>
+          {agent.template_id === "blocks" && (
+            <BlockOutline
+              form={form}
+              tools={tools}
+              selected={section.kind === "block" ? section.path : null}
+              onOpen={setSection}
+            />
+          )}
           {section.kind === "agent" ? (
             <AgentSettings form={form} tools={tools} models={models} onOpen={setSection} />
           ) : (
             <NodeSettings form={form} section={section} tools={tools} />
           )}
-          {section.kind === "agent" && (
+          {section.kind === "agent" && agent.template_id !== "blocks" && (
             <p className="text-sm text-muted">Click a node in the graph to see its settings.</p>
           )}
           {errors.length > 0 && (

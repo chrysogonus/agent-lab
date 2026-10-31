@@ -5,7 +5,8 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from helpers import BlockDict, fake_models, model_block, router_block, tool_block
+from helpers import BlockDict, answer, fake_models, model_block, router_block, tool_block
+from test_agents_api import LUNA, run_to_end, two_models
 from test_api import BASE
 
 from agent_lab.api import create_app
@@ -125,3 +126,37 @@ def test_run_rejected_when_stored_agent_invalid(store: Store) -> None:
     assert response.status_code == 422
     assert response.json()["detail"][0]["loc"] == ["body", "agent_id"]
     assert runs == []
+
+
+def test_build_and_run_three_blocks(store: Store) -> None:
+    blocks = [
+        model_block("expr", system="Reply with only the expression."),
+        tool_block("calc", expression="{previous}"),
+        model_block("explain", message="Question: {input}\nResult: {calc}"),
+    ]
+    client, llm = client_for(store, [answer("17*23"), answer("It is 391.")])
+    with client:
+        agent = save(client, block_agent(*blocks))
+        preview = client.post("/graph", json={"template_id": "blocks", "config": agent["config"]})
+        run, spans = run_to_end(client, agent["id"], "What is 17 times 23?")
+    assert (run["status"], run["answer"]) == ("completed", "It is 391.")
+    assert (run["template_id"], run["agent_name"]) == ("blocks", "Mine")
+    assert [b["name"] for b in run["config"]["blocks"]] == ["expr", "calc", "explain"]
+    assert run["graph"] == preview.json() == agent["graph"]
+    assert [s["node_id"] for s in spans if s["kind"] in ("llm", "tool")] == [
+        "expr",
+        "calc",
+        "explain",
+    ]
+    assert llm.calls[1][1]["content"] == "Question: What is 17 times 23?\nResult: 391"
+
+
+def test_block_agent_on_pinned_model(store: Store) -> None:
+    client, local, openai = two_models(store, openai_script=[answer("a"), answer("b")])
+    with client:
+        agent = save(client, block_agent(model_block("one"), model_block("two"), model=LUNA))
+        run, spans = run_to_end(client, agent["id"], "hi")
+    assert run["status"] == "completed" and local.calls == [] and len(openai.calls) == 2
+    assert {s["attributes"]["gen_ai.provider.name"] for s in spans if s["kind"] == "llm"} == {
+        "openai"
+    }

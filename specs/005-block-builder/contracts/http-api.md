@@ -4,7 +4,7 @@ Block agents use the M3/M4 agent endpoints with `template_id: "blocks"`.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/blocks/new` | – | `200` unsaved `AgentInfo` draft: `id: ""`, `kind: "custom"`, `template_id: "blocks"`, name "New block agent", the default `BlocksConfig` (without model), `model: null`, its graph |
+| GET | `/blocks/new` | – | `200` unsaved `AgentInfo` draft: `id: ""`, `kind: "custom"`, `template_id: "blocks"`, name "Block agent", the default `BlocksConfig` (without model), `model: null`, its graph |
 | GET | `/agents/{agent_id}/blocks` | – | `200` unsaved `AgentInfo` draft converting a template or template-based custom agent: same name, description, sample prompt and model, `config` = the converted blocks; `404` unknown id; `409` the agent is already a block agent |
 | GET | `/agents` | – | as M4; block agents are listed with the custom agents (`template_id: "blocks"`) |
 | GET | `/tools` | – | as M3, each tool gains `parameters` (its JSON Schema), so the builder can show one argument field per parameter |

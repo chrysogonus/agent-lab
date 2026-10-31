@@ -32,15 +32,17 @@ export function AgentPicker({
   agents,
   selected,
   onSelect,
+  onNewBlockAgent,
 }: {
   agents: AgentInfo[];
   selected: string;
   onSelect: (id: string) => void;
+  onNewBlockAgent?: () => void;
 }) {
   const groups = [
     { title: "Templates", agents: agents.filter((a) => a.kind === "template") },
     { title: "My agents", agents: agents.filter((a) => a.kind === "custom") },
-  ].filter((g) => g.agents.length > 0);
+  ].filter((g) => g.agents.length > 0 || (g.title === "My agents" && onNewBlockAgent && agents.length > 0));
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="sr-only">Agent or workflow</legend>
@@ -52,6 +54,15 @@ export function AgentPicker({
           {group.agents.map((agent) => (
             <Choice key={agent.id} agent={agent} selected={agent.id === selected} onSelect={onSelect} />
           ))}
+          {group.title === "My agents" && onNewBlockAgent && (
+            <button
+              type="button"
+              onClick={onNewBlockAgent}
+              className="rounded-full border border-dashed border-llm px-3 py-1 text-sm text-llm hover:bg-llm/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-llm"
+            >
+              New block agent
+            </button>
+          )}
         </div>
       ))}
     </fieldset>

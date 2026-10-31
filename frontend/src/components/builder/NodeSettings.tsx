@@ -1,5 +1,6 @@
 import type { ToolInfo } from "@/lib/api";
 import { getField, pathKey, type Section } from "@/lib/builder";
+import { BlockSettings } from "./BlockSettings";
 import { NameField, NumberField, TextField, Toggle, type Form } from "./fields";
 
 function ToolSelect({ form, index, tools }: { form: Form; index: number; tools: ToolInfo[] }) {
@@ -132,5 +133,7 @@ export function NodeSettings({
       const tool = tools.find((t) => t.name === section.name);
       return <p className="text-sm text-ink">{tool?.description ?? "Unknown tool."}</p>;
     }
+    case "block":
+      return <BlockSettings form={form} path={section.path} tools={tools} />;
   }
 }

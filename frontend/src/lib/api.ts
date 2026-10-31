@@ -84,7 +84,51 @@ export type AgentInfo = {
   graph: Graph;
 };
 
-export type ToolInfo = { name: string; description: string };
+export type ToolInfo = {
+  name: string;
+  description: string;
+  // JSON Schema of the arguments: a tool block shows one field per property.
+  parameters: { properties?: Record<string, { description?: string }> };
+};
+
+// Block agents (M5): custom agents with template_id "blocks". See specs/005-block-builder.
+export type BlockKind = "model" | "tool" | "check" | "router" | "parallel" | "loop";
+export type CheckRule = {
+  rule: "min_bullets" | "max_words" | "contains" | "valid_json";
+  value: number | string | null;
+};
+export type ModelBlock = {
+  kind: "model";
+  name: string;
+  system: string;
+  message: string;
+  tools: string[];
+  max_iterations: number;
+};
+export type ToolBlock = { kind: "tool"; name: string; tool: string; arguments: Record<string, string> };
+export type CheckBlock = CheckRule & { kind: "check"; name: string };
+export type Route = { name: string; description: string; blocks: Block[] };
+export type RouterBlock = { kind: "router"; name: string; prompt: string; routes: Route[]; fallback: string };
+export type Branch = { name: string; blocks: Block[] };
+export type ParallelBlock = {
+  kind: "parallel";
+  name: string;
+  mode: "branches" | "per_item";
+  branches: Branch[] | null;
+  planner: string | null;
+  max_items: number | null;
+  body: Block[] | null;
+};
+export type LoopBlock = {
+  kind: "loop";
+  name: string;
+  body: Block[];
+  exit: "judge" | "check";
+  judge: string | null;
+  check: CheckRule | null;
+  max_rounds: number;
+};
+export type Block = ModelBlock | ToolBlock | CheckBlock | RouterBlock | ParallelBlock | LoopBlock;
 
 /** What the builder saves; `template_id` only when creating. */
 export type AgentFields = {
@@ -142,6 +186,16 @@ export async function listModels(): Promise<ModelInfo[]> {
   const response = await fetch(`${API_URL}/models`);
   if (!response.ok) throw new Error(`Loading models failed (HTTP ${response.status}).`);
   return response.json();
+}
+
+/** An unsaved block agent with one model block. */
+export function newBlockAgent(): Promise<AgentInfo> {
+  return send("GET", "/blocks/new");
+}
+
+/** An unsaved block copy of a template or template-based agent. */
+export function blocksFrom(agentId: string): Promise<AgentInfo> {
+  return send("GET", `/agents/${encodeURIComponent(agentId)}/blocks`);
 }
 
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {

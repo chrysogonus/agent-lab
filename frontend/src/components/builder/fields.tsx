@@ -11,11 +11,11 @@ export type Form = {
   errors: Record<string, string>;
 };
 
-const FIELD =
+export const FIELD =
   "w-full rounded-md border border-rule bg-panel px-2.5 py-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-llm aria-invalid:border-fault";
-const INPUT = `${FIELD} read-only:bg-paper read-only:text-muted`;
+export const INPUT = `${FIELD} read-only:bg-paper read-only:text-muted`;
 
-function FieldError({ id, message }: { id: string; message?: string }) {
+export function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
     <p id={id} className="text-sm text-fault">
