@@ -3,9 +3,13 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from agent_lab.llm.base import LLMError
 from agent_lab.llm.openai_compat import OpenAICompatClient
+from agent_lab.workflows.evaluator import Verdict
+from agent_lab.workflows.orchestrator import plan_model
+from agent_lab.workflows.routing import route_model
 
 TOOLS: list[dict[str, Any]] = [
     {"type": "function", "function": {"name": "calculator", "parameters": {}}}
@@ -188,3 +192,134 @@ async def test_reasoning_off_fields_are_configurable() -> None:
         {"model": "m1", "messages": [], "stream": False},
         {"model": "m1", "messages": [], "stream": False, "reasoning_effort": "low"},
     ]
+
+
+# --- M4: OpenAI request shapes (US2) ---
+
+
+def openai_client(
+    transport: httpx.MockTransport, reasoning_off: str = "none"
+) -> OpenAICompatClient:
+    return client_with(
+        transport,
+        provider="openai",
+        reasoning_off={"reasoning_effort": reasoning_off} if reasoning_off else {},
+        strict_schema=True,
+    )
+
+
+def decision(model_cls: type[BaseModel], name: str) -> dict[str, Any]:
+    """The response format `steps.decide` sends."""
+    schema = model_cls.model_json_schema()
+    return {"type": "json_schema", "json_schema": {"name": name, "schema": schema, "strict": True}}
+
+
+@pytest.mark.anyio
+async def test_openai_thinking_off() -> None:
+    transport, bodies = recording()
+    await openai_client(transport).chat([], [], reasoning=False)
+    await openai_client(transport, reasoning_off="").chat([], [], reasoning=False)
+    assert bodies[0]["reasoning_effort"] == "none"
+    assert "chat_template_kwargs" not in bodies[0]
+    assert "reasoning_effort" not in bodies[1] and "chat_template_kwargs" not in bodies[1]
+
+
+@pytest.mark.anyio
+async def test_openai_reasoning_on_adds_nothing() -> None:
+    transport, bodies = recording()
+    for reasoning in (True, None):
+        await openai_client(transport).chat([], [], reasoning=reasoning)
+    assert bodies == [{"model": "m1", "messages": [], "stream": False}] * 2
+
+
+@pytest.mark.anyio
+async def test_openai_strict_schema() -> None:
+    transport, bodies = recording()
+    client = openai_client(transport)
+    for model_cls, name in [
+        (route_model(["math", "general"]), "route"),
+        (plan_model(3), "plan"),
+        (Verdict, "verdict"),
+    ]:
+        await client.chat([], [], response_format=decision(model_cls, name))
+
+    route, plan, verdict = (b["response_format"]["json_schema"] for b in bodies)
+    assert route == {
+        "name": "route",
+        "strict": True,
+        "schema": {
+            "properties": {
+                "label": {"enum": ["math", "general"], "title": "Label", "type": "string"}
+            },
+            "required": ["label"],
+            "title": "Route",
+            "type": "object",
+            "additionalProperties": False,
+        },
+    }
+    assert plan["schema"] == {
+        "properties": {
+            "subtasks": {
+                "items": {"type": "string"},  # length bounds dropped; pydantic still checks them
+                "maxItems": 3,
+                "minItems": 1,
+                "title": "Subtasks",
+                "type": "array",
+            }
+        },
+        "required": ["subtasks"],
+        "title": "Plan",
+        "type": "object",
+        "additionalProperties": False,
+    }
+    assert verdict["schema"]["additionalProperties"] is False
+    assert verdict["schema"]["required"] == ["approved", "feedback"]
+
+
+@pytest.mark.anyio
+async def test_local_schema_unchanged() -> None:
+    transport, bodies = recording()
+    format_ = decision(plan_model(3), "plan")
+    await client_with(transport).chat([], [], response_format=format_)
+    assert bodies[0]["response_format"] == format_
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider", ["local", "openai"])
+async def test_only_known_parameters(provider: str) -> None:
+    """Each provider gets only the fields it accepts (SC-003)."""
+    transport, bodies = recording()
+    client = client_with(transport) if provider == "local" else openai_client(transport)
+    thinking_off = {
+        "local": {"reasoning_effort", "chat_template_kwargs"},
+        "openai": {"reasoning_effort"},
+    }[provider]
+    format_ = decision(route_model(["a", "b"]), "route")
+    for reasoning in (False, True, None):
+        await client.chat([], TOOLS, reasoning=reasoning)
+        await client.chat([], [], response_format=format_, reasoning=reasoning)
+    allowed = {"model", "messages", "stream", "tools", "response_format"} | thinking_off
+    assert all(set(body) <= allowed for body in bodies)
+    assert any(set(body) & thinking_off == thinking_off for body in bodies)
+
+
+@pytest.mark.anyio
+async def test_tool_call_parsing_openai() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        call = {
+            "id": "call_9",
+            "type": "function",
+            "function": {"name": "calculator", "arguments": '{"expression": "2*3"}'},
+        }
+        message = {"role": "assistant", "content": None, "tool_calls": [call]}
+        usage = {"prompt_tokens": 5, "completion_tokens": 3}
+        return httpx.Response(
+            200,
+            json={"model": "gpt-6-luna-2026", "choices": [{"message": message}], "usage": usage},
+        )
+
+    result = await openai_client(httpx.MockTransport(handler)).chat([], TOOLS)
+    assert [(c.id, c.name, c.arguments) for c in result.tool_calls] == [
+        ("call_9", "calculator", '{"expression": "2*3"}')
+    ]
+    assert (result.tokens_in, result.tokens_out, result.model) == (5, 3, "gpt-6-luna-2026")

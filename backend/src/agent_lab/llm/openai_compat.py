@@ -1,6 +1,6 @@
 """Thin client for OpenAI-compatible `POST /chat/completions` (vLLM, Ollama, OpenAI, ...)."""
 
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -25,11 +25,13 @@ class OpenAICompatClient:
         timeout: float = 120.0,
         provider: str = "local",
         reasoning_off: dict[str, Any] | None = None,
+        strict_schema: bool = False,
     ) -> None:
         self.provider = provider
         self.model = model
         # Body fields that turn thinking off; each provider has its own (research.md §5).
         self._reasoning_off = LOCAL_REASONING_OFF if reasoning_off is None else reasoning_off
+        self._strict_schema = strict_schema  # OpenAI's strict mode needs a stricter schema
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._http = http or httpx.AsyncClient(timeout=timeout)
@@ -49,7 +51,9 @@ class OpenAICompatClient:
         if tools:
             body["tools"] = tools
         if response_format is not None:
-            body["response_format"] = response_format
+            body["response_format"] = (
+                _strict_format(response_format) if self._strict_schema else response_format
+            )
         if reasoning is False:
             body |= self._reasoning_off
         try:
@@ -62,6 +66,32 @@ class OpenAICompatClient:
             return _parse(response.json())
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"unexpected response shape: {exc!r}") from exc
+
+
+def _strict_format(response_format: dict[str, Any]) -> dict[str, Any]:
+    """The same request with a schema OpenAI's strict mode accepts (research.md §6)."""
+    json_schema: dict[str, Any] = response_format.get("json_schema") or {}
+    if response_format.get("type") != "json_schema" or "schema" not in json_schema:
+        return response_format
+    schema = _strict(json_schema["schema"])
+    return {**response_format, "json_schema": {**json_schema, "schema": schema}}
+
+
+def _strict(schema: Any) -> Any:
+    """Close every object and require all its properties; drop the string length bounds.
+
+    The answer is still validated against the full pydantic model, bounds included.
+    """
+    if isinstance(schema, list):
+        return [_strict(v) for v in cast(list[Any], schema)]
+    if not isinstance(schema, dict):
+        return schema
+    mapping = cast(dict[str, Any], schema)
+    out = {k: _strict(v) for k, v in mapping.items() if k not in ("minLength", "maxLength")}
+    if out.get("type") == "object":
+        out["additionalProperties"] = False
+        out["required"] = list(out.get("properties") or {})
+    return out
 
 
 def _parse(data: dict[str, Any]) -> ChatResponse:

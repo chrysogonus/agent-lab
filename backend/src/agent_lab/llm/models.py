@@ -96,6 +96,7 @@ def models_from_settings(s: Settings) -> Models:
                     http=openai_http,
                     provider="openai",
                     reasoning_off=off,
+                    strict_schema=True,
                 ),
             )
             for model in dict.fromkeys(s.openai_models)
