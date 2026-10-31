@@ -25,6 +25,20 @@ applies unchanged: every model and tool call is a span on a node of the run's gr
 `config_version` come from the server; secrets are redacted; servers bind to 127.0.0.1; tests
 never call a real model; the agent's model (M4) applies to every model call of the agent.
 
+## Clarifications
+
+### Session 2026-10-31
+
+- Q: Should block agents be a new kind next to templates and M3 agents, or should everything
+  become blocks? → A: A new kind. Templates and M3 agents stay as they are; "Open as blocks"
+  makes an editable block copy.
+- Q: Should a parallel group also run its blocks once per item a model plans at run time? → A:
+  Yes, as a second mode of the parallel group (no separate block kind), so all six templates
+  open as blocks.
+- Q: Where are blocks added and arranged: an outline in the settings panel, "+" buttons on the
+  graph, or both? → A: An outline in the settings panel (add menu after any block and inside each
+  container, remove, move up/down); the graph is a live view whose nodes open block settings.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is the project owner, a senior engineer studying agent behavior on a local machine.
@@ -202,9 +216,10 @@ field, and nothing is stored.
 **Builder UI**
 
 - **FR-015**: The builder MUST show a block agent as its graph plus an outline of its blocks
-  (with nesting) in the settings panel; the owner can add a block of any kind after any block or
-  inside any container, remove it, move it up or down within its list, and open its settings by
-  clicking its node or outline entry; the graph redraws from the server before saving.
+  (with nesting) in the settings panel. All editing happens in the outline: an add menu (any
+  block kind) after any block and inside each container, remove, and move up or down within its
+  list; the graph has no editing controls. Clicking a node or an outline entry opens that block's
+  settings; the graph redraws from the server before saving.
 - **FR-016**: Validation errors MUST be shown at the block and field they belong to.
 
 **Limits and validation**
@@ -255,8 +270,9 @@ field, and nothing is stored.
 
 ## Assumptions
 
-- Block agents are a new kind next to templates and M3 custom agents; templates and M3 agents are
-  not migrated. "Open as blocks" makes a block copy and leaves the original as it is.
+- Block agents are a new kind next to templates and M3 custom agents (clarified); templates and
+  M3 agents are not migrated and the template editor stays. "Open as blocks" makes a block copy
+  and leaves the original as it is.
 - A converted template's requests need not be byte-identical to the template's (for example the
   router prompt may list routes slightly differently); equivalence means same prompts and
   settings, same status, answer and call counts on the same script.
