@@ -109,7 +109,7 @@ def test_sleeping_hours_and_routines() -> None:
 
 def test_new_world_has_everyone_asleep_at_home() -> None:
     world = new_world()
-    assert (world["version"], world["tick"], world["running"]) == (2, 0, False)
+    assert (world["version"], world["tick"], world["running"]) == (3, 0, False)
     assert world["interval"] == 5
     assert world["conversations"] == world["talked_out"] == world["log"] == []
     names = [v["name"] for v in world["villagers"]]
@@ -117,3 +117,4 @@ def test_new_world_has_everyone_asleep_at_home() -> None:
     for v in world["villagers"]:
         assert v["asleep"] and (v["x"], v["y"]) == door(v["name"])
         assert v["goal"] is None and v["beliefs"] == {} and v["events"] == []
+        assert v["memories"] == v["learnings"] == [] and v["views"] == {}

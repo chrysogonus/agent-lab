@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
+from agent_lab.village.memory import recall, when
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -176,6 +177,11 @@ def observation(world: dict[str, Any], name: str) -> str:
     places = [f"{label(p)} {steps_to(x, y, place_cells(p))} steps" for p in PLACES if p != here]
     places.append(f"your home {steps_to(x, y, [door(name)])} steps")
     goal = goal_text(me["goal"])
+    matters = {*next_to, *talking}  # whose memories matter right now
+    if me["goal"] and me["goal"]["kind"] == "find":
+        matters.add(me["goal"]["villager"])
+    remembered = recall(me["memories"], world["tick"], matters, here)
+    views = me["views"]
     lines = [
         f"Day {day}, {time}, {period}. {where_text(world, me)}",
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
@@ -192,7 +198,16 @@ def observation(world: dict[str, Any], name: str) -> str:
         "Said to you since your last turn:",
         *([_heard(e, name) for e in me["inbox"]] or ["- nothing"]),
         "Where the others are, as far as you know:",
-        *[f"- {o}: {belief_text(world, name, o)}" for o in VILLAGERS if o != name],
+        *[
+            f"- {o}: {belief_text(world, name, o)}"
+            + (f"; you think: {views[o]['text']}" if o in views else "")
+            for o in VILLAGERS
+            if o != name
+        ],
+        "What you have learned:",
+        *([f"- {item['text']}" for item in me["learnings"]] or ["- nothing yet"]),
+        "What you remember:",
+        *([f"- {when(m['tick'])} {m['text']}" for m in remembered] or ["- nothing yet"]),
         f"Places: {', '.join(places)}.",
         "Your last events:",
         *([f"- {clock(e['tick'])[1]} {e['text']}" for e in me["events"]] or ["- none yet"]),

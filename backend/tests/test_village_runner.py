@@ -31,6 +31,7 @@ from agent_lab.village.world import (
 )
 
 WAIT = '{"action": "wait"}'
+NOTHING_LEARNED = '{"learnings": [], "views": {}}'
 MORNING = 30  # tick of 09:30: everyone is awake
 
 
@@ -46,20 +47,29 @@ def find(name: str) -> str:
     return json.dumps({"action": "find", "villager": name})
 
 
+def is_reflection(messages: list[Message]) -> bool:
+    return '"learnings"' in (messages[0]["content"] or "")
+
+
 def speaker(messages: list[Message]) -> str:
-    system = messages[0]["content"] or ""
-    return next(n for n in VILLAGERS if f"You are {n}," in system)
+    """The villager a call is for: its persona opens the system prompt of a decision and the
+    prompt of a reflection."""
+    text = messages[1 if is_reflection(messages) else 0]["content"] or ""
+    return next(n for n in VILLAGERS if f"You are {n}," in text)
 
 
 def responder(
     plan: dict[str, list[str | Exception]],
 ) -> Callable[[list[Message]], ChatResponse | Exception]:
-    """Answers each villager from its own list (then waits), whatever order decisions run in."""
+    """Answers each villager from its own list (then waits), whatever order decisions run in;
+    reflections come from the list "<name>:reflect" (then an empty reflection)."""
     queues = {n: list(a) for n, a in plan.items()}
 
     def respond(messages: list[Message]) -> ChatResponse | Exception:
-        queue = queues.get(speaker(messages)) or []
-        item = queue.pop(0) if queue else WAIT
+        reflecting = is_reflection(messages)
+        key = f"{speaker(messages)}:reflect" if reflecting else speaker(messages)
+        queue = queues.get(key) or []
+        item = queue.pop(0) if queue else (NOTHING_LEARNED if reflecting else WAIT)
         return item if isinstance(item, Exception) else answer(item)
 
     return respond
@@ -99,7 +109,12 @@ def put(v: Village, name: str, x: int, y: int, **changes: Any) -> dict[str, Any]
 
 
 def calls_of(llm: FakeLLM, name: str) -> list[str]:
-    return [c[1]["content"] or "" for c in llm.calls if speaker(c) == name]
+    """The prompts of a villager's decisions."""
+    return [c[1]["content"] or "" for c in llm.calls if not is_reflection(c) and speaker(c) == name]
+
+
+def reflections_of(llm: FakeLLM, name: str) -> list[str]:
+    return [c[1]["content"] or "" for c in llm.calls if is_reflection(c) and speaker(c) == name]
 
 
 def kinds(v: Village, name: str) -> list[str]:
@@ -160,7 +175,8 @@ async def test_bedtime_walks_home_without_decisions_and_ends_conversations(
     for _ in range(steps_to(mx, my, [door("Jonas")])):
         await v.step()
     assert jonas["asleep"] and (jonas["x"], jonas["y"]) == door("Jonas")
-    assert kinds(v, "Jonas")[-1] == "slept" and calls_of(llm, "Jonas") == []
+    assert kinds(v, "Jonas")[-2:] == ["slept", "reflected"]  # he talked today, so he reflects
+    assert calls_of(llm, "Jonas") == [] and len(reflections_of(llm, "Jonas")) == 1
 
 
 @pytest.mark.anyio
@@ -213,7 +229,7 @@ async def test_an_m6_world_starts_fresh_with_its_agents_updated(tmp_path: Path) 
         {"tick": 40, "villagers": [{"name": "Hilde", "agent_id": agent.agent_id, "x": 1, "y": 1}]}
     )
     v = Village(store=store, models=fake_models(FakeLLM([])), bus=Bus())
-    assert v.world["version"] == 2 and v.world["tick"] == 0
+    assert v.world["version"] == 3 and v.world["tick"] == 0
     assert v.world["paused_reason"] == FRESH_START
     assert villager(v, "Hilde")["agent_id"] == agent.agent_id
     updated = store.get_agent(agent.agent_id)
@@ -388,7 +404,13 @@ async def test_a_line_reaches_the_addressee_only(tmp_path: Path) -> None:
     assert jonas["triggers"] == ["spoken to"]  # decides on the next step (paused: not now)
     assert calls_of(llm, "Jonas") == []
     assert v.world["conversations"] == [
-        {"a": "Hilde", "b": "Jonas", "lines": 1, "last_tick": MORNING + 1}
+        {
+            "a": "Hilde",
+            "b": "Jonas",
+            "lines": 1,
+            "last_tick": MORNING + 1,
+            "transcript": ["Hilde: Fish for the festival?"],
+        }
     ]
     assert v.state()["log"][-1] == {
         "tick": MORNING + 1,
@@ -661,3 +683,236 @@ async def test_agent_names_beyond_the_first_fallback(tmp_path: Path) -> None:
     v.ensure_agents()
     agent = store.get_agent(villager(v, "Hilde")["agent_id"])
     assert agent is not None and agent.name == "Mayor Hilde (village 2)"
+
+
+# --- M8: memory and reflection ---
+
+
+def bedtime_tick(name: str, minutes_before: int = 10) -> int:
+    return (VILLAGERS[name].bed - minutes_before - 270) // 10
+
+
+@pytest.mark.anyio
+async def test_a_conversation_becomes_a_memory_of_both(tmp_path: Path) -> None:
+    goodbye = json.dumps({"action": "goodbye", "text": "Bye!"})
+    v, _ = village_for(
+        tmp_path, {"Hilde": [say("Fish?", "Jonas"), goodbye], "Jonas": [say("Yes!")]}
+    )
+    neighbours_at_market(v)
+    villager(v, "Hilde")["triggers"] = ["met"]
+    for _ in range(3):
+        await v.step()
+    for me, other in (("Hilde", "Jonas"), ("Jonas", "Hilde")):
+        [memory] = [m for m in villager(v, me)["memories"] if m["kind"] == "conversation"]
+        assert memory["about"] == [other] and memory["place"] == "market"
+        assert memory["text"] == f"Talked with {other}: Hilde: Fish? / Jonas: Yes! / Hilde: Bye!"
+    assert v.state()["villagers"][0]["memories"][0]["kind"] == "conversation"
+
+
+@pytest.mark.anyio
+async def test_found_missed_and_one_meeting_memory_a_day(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [find("Lina")]})
+    morning(v)
+    put(v, "Lina", 2, 15)  # not where her routine says
+    villager(v, "Hilde")["triggers"] = ["woke"]
+    for _ in range(25):
+        await v.step()
+        if "missed" in kinds(v, "Hilde"):
+            break
+    [missed] = [m for m in villager(v, "Hilde")["memories"] if m["kind"] == "missed"]
+    assert missed["about"] == ["Lina"] and missed["importance"] == 2
+
+    v2, _ = village_for(":memory:")
+    morning(v2)
+    mx, my = label_cell("market")
+    put(v2, "Jonas", mx, my)
+    put(v2, "Greta", mx + 1, my)
+    await v2.step()
+    put(v2, "Greta", mx + 5, my)  # apart
+    await v2.step()
+    put(v2, "Greta", mx + 1, my)  # together again, same day
+    await v2.step()
+    met = [m for m in villager(v2, "Jonas")["memories"] if m["kind"] == "met"]
+    assert [m["about"] for m in met] == [["Greta"]]
+
+
+@pytest.mark.anyio
+async def test_a_morning_talk_is_recalled_in_the_afternoon(tmp_path: Path) -> None:
+    goodbye = json.dumps({"action": "goodbye", "text": "See you!"})
+    plan: dict[str, list[str | Exception]] = {
+        "Hilde": [say("Sunflowers for the festival?", "Lina"), goodbye],
+        "Lina": [say("I will bring some!")],
+    }
+    v, llm = village_for(tmp_path, plan)
+    morning(v)
+    mx, my = label_cell("square")
+    put(v, "Hilde", mx, my, triggers=["met"])
+    put(v, "Lina", mx + 1, my)
+    for _ in range(3):
+        await v.step()
+    for name, (x, y) in (("Hilde", (2, 15)), ("Lina", (26, 4))):  # apart for hours
+        put(v, name, x, y)
+    for _ in range(3):
+        await v.step()
+    for x in v.world["villagers"]:  # 20 short-term events later, in the afternoon
+        x["events"] = [{"tick": 50, "kind": "waited", "text": "You waited."}] * 10
+    morning(v, tick=60)
+    put(v, "Hilde", mx, my, triggers=["met"])
+    put(v, "Lina", mx + 1, my, triggers=["met"])
+    await v.step()
+    for name in ("Hilde", "Lina"):
+        prompt = calls_of(llm, name)[-1]
+        remembered = prompt.split("What you remember:")[1]
+        assert "I will bring some!" in remembered, name
+
+
+@pytest.mark.anyio
+async def test_reflection_on_falling_asleep_after_an_eventful_day(tmp_path: Path) -> None:
+    reflection = json.dumps(
+        {
+            "learnings": ["Hilde needs fish for the festival."],
+            "views": {"Hilde": "Pushy, but kind."},
+        }
+    )
+    v, llm = village_for(tmp_path, {"Jonas:reflect": [reflection]})
+    morning(v, tick=bedtime_tick("Jonas"))
+    jonas = villager(v, "Jonas")  # at his door, so he sleeps as soon as it is bedtime
+    jonas["memories"] = [
+        {
+            "tick": 30,
+            "kind": "conversation",
+            "about": ["Hilde"],
+            "place": "market",
+            "text": "Talked with Hilde: Hilde: Fish? / Jonas: Yes!",
+            "importance": 3,
+        }
+    ]
+    await v.step()
+    assert jonas["asleep"]
+    [prompt] = reflections_of(llm, "Jonas")
+    assert "- Day 1 09:30 Talked with Hilde: Hilde: Fish? / Jonas: Yes!" in prompt
+    assert jonas["learnings"] == [
+        {"tick": v.world["tick"], "text": "Hilde needs fish for the festival."}
+    ]
+    assert jonas["views"] == {"Hilde": {"tick": v.world["tick"], "text": "Pushy, but kind."}}
+    assert jonas["memories"][-1]["kind"] == "reflection"
+    assert reflections_of(llm, "Greta") == []  # uneventful day: no reflection
+    turn = v.store.list_turns("Jonas")[0]
+    assert turn.village_action == {
+        "action": "reflect",
+        "learnings": ["Hilde needs fish for the festival."],
+        "views": {"Hilde": "Pushy, but kind."},
+    }
+    state = v.state()["villagers"][1]
+    assert state["learnings"] == [{"day": 1, "text": "Hilde needs fish for the festival."}]
+    assert state["beliefs"][0]["view"] == "Pushy, but kind."
+
+    for _ in range((VILLAGERS["Jonas"].wake + 1440 - VILLAGERS["Jonas"].bed) // 10):
+        await v.step()  # through the night to 05:00
+    prompt = calls_of(llm, "Jonas")[-1]
+    assert "What you have learned:\n- Hilde needs fish for the festival." in prompt
+    assert "; you think: Pushy, but kind." in prompt
+
+
+@pytest.mark.anyio
+async def test_an_invalid_reflection_changes_nothing(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina:reflect": ['{"views": {"Bob": "who?"}}']})
+    morning(v, tick=bedtime_tick("Lina"))
+    lina = villager(v, "Lina")
+    lina["memories"] = [
+        {
+            "tick": 30,
+            "kind": "met",
+            "about": ["Greta"],
+            "place": None,
+            "text": "Met.",
+            "importance": 1,
+        }
+    ]
+    await v.step()
+    assert lina["learnings"] == [] and lina["views"] == {} and len(lina["memories"]) == 1
+    assert v.store.list_turns("Lina")[0].village_action == {
+        "action": "reflect",
+        "reason": "unknown villager 'Bob'",
+    }
+
+
+@pytest.mark.anyio
+async def test_reflections_of_one_villager_never_overlap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    v, _ = village_for(tmp_path)
+    active, most = 0, 0
+    run = v._run  # pyright: ignore[reportPrivateUsage]
+
+    async def counting(*args: Any) -> tuple[str | None, str | None, str | None]:
+        nonlocal active, most
+        active += 1
+        most = max(most, active)
+        await asyncio.sleep(0.02)
+        try:
+            return await run(*args)
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(v, "_run", counting)
+    v._start_reflection("Hilde")  # pyright: ignore[reportPrivateUsage]
+    v._start_reflection("Hilde")  # pyright: ignore[reportPrivateUsage]
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert most == 1 and v.reflections == {}
+
+
+@pytest.mark.anyio
+async def test_failing_reflections_do_not_pause_the_village(tmp_path: Path) -> None:
+    down = RuntimeError("model down")
+    v, _ = village_for(tmp_path, {n: [down] for n in (f"{x}:reflect" for x in VILLAGERS)})
+    morning(v, tick=bedtime_tick("Jonas"))
+    villager(v, "Jonas")["memories"] = [
+        {
+            "tick": 30,
+            "kind": "met",
+            "about": ["Greta"],
+            "place": None,
+            "text": "Met.",
+            "importance": 1,
+        }
+    ]
+    await v.step()
+    await v.step()
+    assert v.world["failed_ticks"] == 0
+    assert v.store.list_turns("Jonas")[0].village_action == {
+        "action": "reflect",
+        "reason": "turn failed: run ended error",
+    }
+
+
+@pytest.mark.anyio
+async def test_reset_clears_memory_and_keeps_the_reflection_agent(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    reflection_agent_id = v.world["reflection_agent_id"]
+    assert v.store.get_agent(reflection_agent_id) is not None
+    hilde = villager(v, "Hilde")
+    hilde |= {"learnings": [{"tick": 1, "text": "x"}], "views": {"Lina": {"tick": 1, "text": "y"}}}
+    await v.reset()
+    hilde = villager(v, "Hilde")
+    assert hilde["learnings"] == [] and hilde["views"] == {} and hilde["memories"] == []
+    assert v.world["reflection_agent_id"] == reflection_agent_id
+
+
+@pytest.mark.anyio
+async def test_an_m7_world_keeps_going_with_empty_memory(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    world = v.store.load_village()
+    assert world is not None
+    for x in world["villagers"]:
+        for key in ("memories", "learnings", "views"):
+            del x[key]
+    del world["reflection_agent_id"]
+    world |= {"version": 2, "tick": 40}
+    v.store.save_village(world)
+    reloaded = Village(store=v.store, models=v.models, bus=Bus())
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (3, 40)
+    assert reloaded.world["paused_reason"] is None
+    assert all(x["memories"] == [] for x in reloaded.world["villagers"])
+    reloaded.ensure_agents()
+    assert reloaded.world["reflection_agent_id"]

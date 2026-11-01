@@ -77,6 +77,8 @@ def test_start_creates_the_villager_agents_once(store: Store) -> None:
         client.post("/village/start")
         client.post("/village/pause")
         agents = village_agents(client)
+        reflection = [a for a in client.get("/agents").json() if a["name"] == "Village reflection"]
+    assert len(reflection) == 1 and reflection[0]["template_id"] == "blocks"
     assert sorted(a["name"] for a in agents) == [
         "Greta the farmer",
         "Jonas the fisher",

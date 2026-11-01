@@ -20,6 +20,14 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
+from agent_lab.village.memory import (
+    LEARNINGS_KEPT,
+    parse_reflection,
+    reflection_agent,
+    reflection_prompt,
+    remember,
+    unreflected,
+)
 from agent_lab.village.turn import (
     SPEECH_SHOWN,
     awake_neighbours,
@@ -53,6 +61,7 @@ from agent_lab.village.world import (
     place_cells,
     sees,
     step_towards,
+    upgrade,
     usual_place,
 )
 
@@ -92,6 +101,7 @@ class Village:
         self.ticking = False
         self.task: asyncio.Task[None] | None = None
         self.decisions: dict[str, asyncio.Task[None]] = {}
+        self.reflections: dict[str, asyncio.Task[None]] = {}  # never count as decisions
         self.outcomes: list[bool] = []  # decisions finished since the last step: succeeded?
         self.in_step = False  # inside Step: its own decisions may start while paused
         self.resetting = False
@@ -104,6 +114,10 @@ class Village:
         stored = self.store.load_village()
         if stored and stored.get("version") == VERSION:
             return stored
+        if stored and stored.get("version") == 2:  # an M7 world keeps going, memory empty
+            world = upgrade(stored)
+            self.store.save_village(world)
+            return world
         world = new_world()
         if stored:  # an M6 world: start fresh, but keep (and update) the villagers' agents
             world["paused_reason"] = FRESH_START
@@ -161,14 +175,34 @@ class Village:
                 "goal": goal_text(goal),
                 "talking_with": partners(self.world, name),
                 "beliefs": [
-                    {"villager": o, "text": belief_text(self.world, name, o)}
+                    {
+                        "villager": o,
+                        "text": belief_text(self.world, name, o),
+                        "view": v["views"][o]["text"] if o in v["views"] else None,
+                    }
                     for o in VILLAGERS
                     if o != name
+                ],
+                "learnings": [
+                    {"day": clock(item["tick"])[0], "text": item["text"]} for item in v["learnings"]
+                ],
+                "views": [
+                    {"villager": o, "text": view["text"], "day": clock(view["tick"])[0]}
+                    for o, view in v["views"].items()
+                ],
+                "memories": [
+                    {
+                        "day": clock(m["tick"])[0],
+                        "time": clock(m["tick"])[1],
+                        "kind": m["kind"],
+                        "text": m["text"],
+                    }
+                    for m in reversed(v["memories"])
                 ],
             }
             for internal in ("inbox", "triggers", "neighbours", "last_decided"):
                 del v[internal]
-        for internal in ("conversations", "talked_out", "version"):
+        for internal in ("conversations", "talked_out", "version", "reflection_agent_id"):
             del world[internal]
         return {
             **world,
@@ -199,27 +233,33 @@ class Village:
     # --- villager agents ---
 
     def ensure_agents(self, *, recreate: bool = False) -> None:
-        """Creates each villager's block agent; with `recreate` (Reset), also deleted ones.
+        """Creates each villager's block agent and the shared reflection agent; with `recreate`
+        (Reset), also deleted ones.
 
         Without it a villager whose agent was deleted waits until the owner resets.
         """
+
+        def missing(agent_id: str | None) -> bool:
+            return not agent_id or (recreate and self.store.get_agent(agent_id) is None)
+
         for v in self.world["villagers"]:
-            if v["agent_id"] and (not recreate or self.store.get_agent(v["agent_id"])):
-                continue
-            body = villager_agent(v["name"])
-            fields = {k: body[k] for k in ("template_id", "description", "sample_prompt", "config")}
-            title = body["name"]
-            # The title, then "(village)", "(village 2)", … lazily, until one is free.
-            names = chain(
-                [title], (f"{title} (village{f' {n}' if n > 1 else ''})" for n in count(1))
-            )
-            for name in names:
-                try:
-                    v["agent_id"] = self.store.create_agent(name=name, **fields).agent_id
-                    break
-                except NameInUse:
-                    continue
+            if missing(v["agent_id"]):
+                v["agent_id"] = self._create_agent(villager_agent(v["name"]))
+        if missing(self.world["reflection_agent_id"]):
+            self.world["reflection_agent_id"] = self._create_agent(reflection_agent())
         self.store.save_village(self.world)
+
+    def _create_agent(self, body: dict[str, Any]) -> str:
+        fields = {k: body[k] for k in ("template_id", "description", "sample_prompt", "config")}
+        title = body["name"]
+        # The title, then "(village)", "(village 2)", … lazily, until one is free.
+        names = chain([title], (f"{title} (village{f' {n}' if n > 1 else ''})" for n in count(1)))
+        for name in names:
+            try:
+                return self.store.create_agent(name=name, **fields).agent_id
+            except NameInUse:
+                continue
+        raise AssertionError("unreachable: the names never run out")
 
     # --- world changes ---
 
@@ -237,14 +277,21 @@ class Village:
 
     def _end_conversation(self, c: dict[str, Any], reason: str) -> None:
         self.world["conversations"].remove(c)
+        transcript = " / ".join(c.get("transcript", []))
         for me, other in ((c["a"], c["b"]), (c["b"], c["a"])):
             v = self._villager(me)
             self._event(v, "ended", f"Your conversation with {other} ended: {reason}.", to=other)
             self._trigger(v, "conversation ended")
+            self._remember(v, "conversation", f"Talked with {other}: {transcript}", [other])
+
+    def _remember(self, v: Villager, kind: str, text: str, about: list[str]) -> None:
+        remember(v, self.world["tick"], kind, text, about, place_at(v["x"], v["y"]))
 
     def _fall_asleep(self, v: Villager) -> None:
         v |= {"asleep": True, "bedtime": False, "goal": None, "triggers": [], "neighbours": []}
         self._event(v, "slept", "You went to bed.")
+        if unreflected(v["memories"]) and not self.resetting:
+            self._start_reflection(v["name"])
 
     def _schedule(self, v: Villager, minute: int) -> None:
         """Wakes a villager at its wake-up time and sends it home to bed at its bedtime."""
@@ -310,6 +357,12 @@ class Village:
                 if name not in v["neighbours"]:
                     self._event(v, "met", f"{VILLAGERS[name].title} is next to you.", to=name)
                     self._trigger(v, "met")
+                    day = clock(tick)[0]
+                    if not any(
+                        m["kind"] == "met" and m["about"] == [name] and clock(m["tick"])[0] == day
+                        for m in v["memories"]
+                    ):  # the first meeting of the day
+                        self._remember(v, "met", f"You met {VILLAGERS[name].title}.", [name])
             v["neighbours"] = now
         for v in awake:
             goal = v["goal"]
@@ -320,6 +373,7 @@ class Village:
                 v["goal"] = None
                 self._event(v, "found", f"You found {other['name']}.", to=other["name"])
                 self._trigger(v, "found")
+                self._remember(v, "found", f"You found {other['name']}.", [other["name"]])
             elif not other["asleep"] and sees(cell(v), cell(other)):
                 goal["target"] = [[other["x"], other["y"]]]
             elif cell(v) in self._targets(v):
@@ -331,6 +385,9 @@ class Village:
                 v["goal"] = None
                 self._event(v, "missed", f"You did not find {other['name']}: {why}.")
                 self._trigger(v, "missed")
+                self._remember(
+                    v, "missed", f"You did not find {other['name']}: {why}.", [other["name"]]
+                )
 
     def _upkeep(self) -> None:
         """Ends conversations whose villagers are apart or silent; forgets talked-out pairs."""
@@ -362,28 +419,27 @@ class Village:
             if self._due(v):
                 self.decisions[v["name"]] = asyncio.create_task(self._decide(v["name"]))
 
-    async def _turn(
-        self, v: Villager, prompt: str, tick: int
-    ) -> tuple[str | None, dict[str, Any], str | None]:
-        """(run id, action, reason it became wait) for one decision."""
-        wait: dict[str, Any] = {"action": "wait"}
+    async def _run(
+        self, agent_id: str | None, name: str, prompt: str, tick: int
+    ) -> tuple[str | None, str | None, str | None]:
+        """(run id, answer, why it failed) for one run of a village agent for `name`."""
         try:
             run, config, spec, llm = new_run(
                 prompt,
-                v["agent_id"] or "",
+                agent_id or "",
                 self.models,
                 self.store,
                 self.secrets,
                 village_tick=tick,
-                villager=v["name"],
+                villager=name,
             )
         except UnknownAgent:
-            return None, wait, "turn failed: unknown agent"
+            return None, None, "turn failed: unknown agent"
         except (UnavailableModel, LayoutError, ValidationError) as exc:
-            return None, wait, f"turn failed: {exc}"
+            return None, None, f"turn failed: {exc}"
         self.store.create_run(run)
         self.bus.publish(
-            CHANNEL, {"type": "decision_started", "villager": v["name"], "run_id": run.run_id}
+            CHANNEL, {"type": "decision_started", "villager": name, "run_id": run.run_id}
         )
         await execute_run(
             run=run,
@@ -397,11 +453,54 @@ class Village:
         )
         done = self.store.get_run(run.run_id)
         if done is None or done.status != "completed":
-            return run.run_id, wait, f"turn failed: run ended {done.status if done else 'missing'}"
+            return run.run_id, None, f"turn failed: run ended {done.status if done else 'missing'}"
+        return run.run_id, done.answer, None
+
+    async def _turn(
+        self, v: Villager, prompt: str, tick: int
+    ) -> tuple[str | None, dict[str, Any], str | None]:
+        """(run id, action, reason it became wait) for one decision."""
+        run_id, answer, failed = await self._run(v["agent_id"], v["name"], prompt, tick)
+        if failed:
+            return run_id, {"action": "wait"}, failed
         # Parsed against the world as it is now, when the answer is applied.
-        action, reason = parse_action(done.answer, self.world, v["name"])
-        # Decoding JSON can undo redaction of the raw answer (e.g. "sk-…"): redact again.
-        return run.run_id, redact(action, self.secrets), redact(reason, self.secrets)
+        action, reason = parse_action(answer, self.world, v["name"])
+        # Decoding JSON can undo redaction of the raw answer (e.g. "\u0073k-…"): redact again.
+        return run_id, redact(action, self.secrets), redact(reason, self.secrets)
+
+    def _start_reflection(self, name: str) -> None:
+        previous = self.reflections.get(name)  # one villager's reflections never overlap
+        self.reflections[name] = asyncio.create_task(self._reflect(name, previous))
+
+    async def _reflect(self, name: str, previous: asyncio.Task[None] | None) -> None:
+        if previous:
+            await asyncio.gather(previous, return_exceptions=True)
+        tick = self.world["tick"]
+        prompt = reflection_prompt(self._villager(name), tick)
+        try:
+            run_id, answer, failed = await self._run(
+                self.world["reflection_agent_id"], name, prompt, tick
+            )
+        finally:
+            if self.reflections.get(name) is asyncio.current_task():
+                del self.reflections[name]
+        if self.resetting:
+            return
+        result, reason = (None, failed) if failed else parse_reflection(answer, name)
+        result, reason = redact(result, self.secrets), redact(reason, self.secrets)
+        v = self._villager(name)
+        if result:
+            for text in result["learnings"]:
+                v["learnings"] = [*v["learnings"], {"tick": tick, "text": text}][-LEARNINGS_KEPT:]
+            for other, text in result["views"].items():
+                v["views"][other] = {"tick": tick, "text": text}
+            text = f"You looked back on your day: {' '.join(result['learnings']) or 'nothing new'}"
+            self._remember(v, "reflection", text, list(result["views"]))
+            self._event(v, "reflected", text)
+        action = {"action": "reflect", **(result or {"reason": reason})}
+        if run_id:
+            self.store.set_village_action(run_id, action)
+        self._publish()
 
     async def _decide(self, name: str) -> None:
         v = self._villager(name)
@@ -492,25 +591,33 @@ class Village:
                     "source": "heard",
                     "from": name,
                 }
-            self._add_line(name, h)
+            self._add_line(name, h, text)
 
-    def _add_line(self, a: str, b: str) -> None:
+    def _add_line(self, a: str, b: str, text: str) -> None:
         conversation: dict[str, Any] | None = next(
             (c for c in self.world["conversations"] if {c["a"], c["b"]} == {a, b}), None
         )
         if conversation is None:
-            conversation = {"a": a, "b": b, "lines": 0, "last_tick": self.world["tick"]}
+            conversation = {
+                "a": a,
+                "b": b,
+                "lines": 0,
+                "last_tick": self.world["tick"],
+                "transcript": [],
+            }
             self.world["conversations"].append(conversation)
         conversation["lines"] += 1
+        conversation["transcript"].append(f"{a}: {text}")
         conversation["last_tick"] = self.world["tick"]
         if conversation["lines"] >= CONVERSATION_LINES:
             self._end_conversation(conversation, "you talked a long time")
             self.world["talked_out"].append(sorted([a, b]))
 
     async def _settle(self) -> None:
-        """Waits until no decision is in flight."""
-        while self.decisions:
-            await asyncio.gather(*self.decisions.values(), return_exceptions=True)
+        """Waits until no decision or reflection is in flight."""
+        while self.decisions or self.reflections:
+            tasks = [*self.decisions.values(), *self.reflections.values()]
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     # --- one step ---
 
@@ -611,7 +718,8 @@ class Village:
             finally:
                 self.resetting = False
             agents = {v["name"]: v["agent_id"] for v in self.world["villagers"]}
-            self.world = new_world()
+            reflection_agent_id = self.world["reflection_agent_id"]
+            self.world = new_world() | {"reflection_agent_id": reflection_agent_id}
             self.outcomes = []
             for v in self.world["villagers"]:
                 v["agent_id"] = agents.get(v["name"])

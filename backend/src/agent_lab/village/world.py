@@ -238,7 +238,7 @@ def usual_place(name: str, minute: int) -> str:
     return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
 
 
-VERSION = 2  # the world's shape; another version starts the village fresh
+VERSION = 3  # the world's shape: 2 is upgraded in place, anything else starts the village fresh
 
 
 def new_world() -> dict[str, Any]:
@@ -259,6 +259,9 @@ def new_world() -> dict[str, Any]:
                 "last_decided": 0,
                 "neighbours": [],
                 "beliefs": {},
+                "memories": [],
+                "learnings": [],
+                "views": {},
                 "last_action": None,
                 "speech": None,
                 "inbox": [],
@@ -276,4 +279,14 @@ def new_world() -> dict[str, Any]:
         "conversations": [],
         "talked_out": [],
         "log": [],
+        "reflection_agent_id": None,
     }
+
+
+def upgrade(world: dict[str, Any]) -> dict[str, Any]:
+    """An M7 world (version 2) with empty memory, so the village keeps going (M8)."""
+    for v in world["villagers"]:
+        v |= {"memories": [], "learnings": [], "views": {}}
+    for c in world["conversations"]:
+        c.setdefault("transcript", [])
+    return world | {"version": VERSION, "reflection_agent_id": None}
