@@ -48,9 +48,10 @@ the villagers' models are the same before and after.
 
 1. **Given** the village view, **When** the owner looks at the controls, **Then** they see Slow,
    Normal and Fast with the current pace marked, and no seconds field.
-2. **Given** Normal, **When** the owner picks Slow, **Then** each 10-minute step takes 15 seconds,
-   so a village day takes about 36 minutes; Normal takes 5 seconds (12 minutes a day) and Fast 2
-   seconds (about 5 minutes a day).
+2. **Given** Normal, **When** the owner picks Slow, **Then** each 10-minute step takes 15 seconds
+   while anyone is awake; Normal takes 5 seconds and Fast 2 seconds. Nights, when everyone sleeps,
+   still pass quickly at every pace, so a village day takes about 28 minutes at Slow, 9 at Normal
+   and 4 at Fast.
 3. **Given** a villager agent set to a particular model, **When** the owner changes the pace,
    **Then** the villager's next decision uses the same model as before.
 
@@ -299,8 +300,9 @@ usual place in the evening; villagers on the square that evening get a festival 
 
 ### Measurable Outcomes
 
-- **SC-001**: At each pace, a scripted village advances one 10-minute step every 15, 5 or 2
-  seconds (within 10%), and the villagers' models are unchanged.
+- **SC-001**: At each pace, a scripted village with someone awake advances one 10-minute step
+  every 15, 5 or 2 seconds (within 10%), nights still pass quickly, and the villagers' models are
+  unchanged.
 - **SC-002**: Over a scripted 28-day year, every day has exactly one allowed weather, all four
   seasons occur in order, the festival occurs exactly once, and a second run of the same year
   produces the same weather on every day.
@@ -319,8 +321,9 @@ usual place in the evening; villagers on the square that evening get a festival 
 
 ## Assumptions
 
-- Seasons of 7 days make a year of 28 village days: about 5½ hours at Normal pace, 2¼ hours at
-  Fast and 17 hours at Slow.
+- Seasons of 7 days make a year of 28 village days: about 4½ hours at Normal pace, 2 hours at
+  Fast and 13 hours at Slow (someone is awake about 18 of the 24 village hours; nights pass in
+  seconds).
 - Weather per season (rough shares): spring sun, clouds, rain; summer mostly sun, some clouds,
   rare storms; autumn clouds, rain, fog, storms; winter clouds, snow, fog, some sun. The festival
   day has sun or clouds.

@@ -35,7 +35,7 @@ pass `move_gap=0`. A scripted year is tested on `end_day` directly (28 calls), n
 
 ## Phase 2: User Story 1 — Three paces (P1) 🎯 MVP
 
-- [ ] T002 [P] [US1] frontend/src/lib/village.ts: `PACES` (Slow 15, Normal 5, Fast 2), `paceOf(interval)` (null for other values), `stateText` "Running at Normal pace" (seconds when no pace matches); frontend/src/components/village/VillageView.tsx: three toggle buttons with `aria-pressed` replace the seconds field and call `setVillageInterval`; tests in frontend/src/lib/village.test.ts (paces, `paceOf` for 15/5/2/7, status text); backend test in test_village_api.py that changing the interval leaves every villager agent's model unchanged (SC-001, FR-002)
+- [ ] T002 [P] [US1] frontend/src/lib/village.ts: `PACES` (Slow 15, Normal 5, Fast 2), `paceOf(interval)` (null for other values), `statusLine(state)` "Running at Normal pace" ("Running, a step every 7 s" when no pace matches; stepping and paused texts unchanged); frontend/src/components/village/VillageView.tsx: three toggle buttons with `aria-pressed` replace the seconds field and call `setVillageInterval`; tests in frontend/src/lib/village.test.ts (paces, `paceOf` for 15/5/2/7, `statusLine` running at a pace, at an unmatched interval, stepping and paused); backend test in test_village_runner.py that the running loop waits the interval between steps while someone is awake (scaled to 0.05 s) and keeps `NIGHT_STEP` while everyone sleeps (the existing night test covers the latter); backend test in test_village_api.py that changing the interval leaves every villager agent's model unchanged (SC-001, FR-002)
 
 ## Phase 3: User Story 2 — The village chronicle (P1)
 
@@ -101,7 +101,7 @@ up. Then seasons and weather, growth, the festival; each phase is shippable on i
 
 | SC | Test / check |
 |---|---|
-| SC-001 | village.test.ts; test_village_api.py; quickstart step 1 |
+| SC-001 | village.test.ts; test_village_runner.py (loop timing); test_village_api.py; quickstart step 1 |
 | SC-002 | test_village_seasons.py |
 | SC-003 | test_village_seasons.py |
 | SC-004 | test_village_runner.py |
