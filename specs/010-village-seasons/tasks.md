@@ -123,7 +123,7 @@ pace:
 
 | Check | Result |
 |---|---|
-| Two days from day 1 (SC-006) | 288 steps in 474 s; one chronicle entry per night, each built from things in its day record (Hilde asking for lilies, Jonas promising trout, the rain on day 2); 40 of 586 decisions mention the weather or season, e.g. Jonas: "The rain keeps the mud deep, Mayor." |
+| Two days from day 1 (SC-006) | 288 steps in 474 s; one chronicle entry per night, each built from things in its day record (Hilde asking for lilies, Jonas promising trout, the rain on day 2); 39 of the run's 343 decisions mention the weather or season (counted by run start time, reflections excluded), e.g. Jonas: "The rain keeps the mud deep, Mayor." |
 | Festival, from day 20 (SC-007), first run | Only Lina reached the square (21:40); the others stayed in long conversations about a storm they had talked themselves into on a sunny day. Fixed: the festival's start is now an event and a trigger for every awake villager |
 | Festival, second run (fresh copy) | All four on the square by 18:30 (Lina 18:00, Greta 18:20, Hilde and Jonas 18:30); each remembers "The harvest festival on the square with …" naming the other three; the chronicle of day 21 ends "By evening, all four villagers joined forces on the square" |
 
