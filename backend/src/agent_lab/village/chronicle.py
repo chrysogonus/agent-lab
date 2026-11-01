@@ -52,11 +52,11 @@ CHRONICLE = (
     "You keep the chronicle of a small village with four villagers: Mayor Hilde, Jonas the "
     "fisher, Greta the farmer and Lina the flower girl. You get one day: its date and weather, "
     "how the fields and the flower garden are doing, and what happened, with times. Reply with "
-    "only one JSON object and nothing else:\n"
-    '{"title": "Rain and a promise", "text": "It rained all day. ..."}\n'
-    '"title": a few words naming the day. "text": three to five sentences in the warm voice of '
-    "a village chronicle about what really happened that day: who met whom, what they said or "
-    "promised, the weather and the places. Do not invent events."
+    'only one JSON object and nothing else: {"title": "...", "text": "..."}\n'
+    '"title": a few words of your own naming what made this day different from the others. '
+    '"text": three to five sentences in the warm voice of a village chronicle about what really '
+    "happened that day: who met whom, what they said or promised, the weather and the places. "
+    "Do not invent events."
 )
 
 
