@@ -37,6 +37,7 @@ from agent_lab.village.memory import (
 from agent_lab.village.seasons import (
     dark,
     date,
+    end_day,
     festival_in,
     neglected,
     sky,
@@ -380,7 +381,10 @@ class Village:
             if awake:
                 v |= {"asleep": False, "beliefs": {}}  # a new day: yesterday's sightings are old
                 if self.world["day_record"] is None:  # the first to wake opens the day's record
-                    self.world["day_record"] = {"day": clock(self.world["tick"])[0], "items": []}
+                    day = clock(self.world["tick"])[0]
+                    self.world["day_record"] = {"day": day, "items": []}
+                    for news in end_day(self.world, day - 1) if day > 1 else []:
+                        self._note(f"Overnight: {news}")  # yesterday's work shows by morning
                 self._event(v, "woke", "You woke up at home.")
                 self._trigger(v, "woke")
             return
@@ -779,6 +783,9 @@ class Village:
                 self._publish()
         self._look()
         self._upkeep()
+        tended = world["tended"]
+        for place in {place_at(v["x"], v["y"]) for v in villagers if not v["asleep"]} & set(tended):
+            tended[place] += 1  # steps with an awake villager on the fields or the garden
         if self.outcomes:
             all_failed = not any(self.outcomes)
             world["failed_ticks"] = world["failed_ticks"] + 1 if all_failed else 0

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.memory import recall, when
-from agent_lab.village.seasons import WEATHER_TEXT, date_text, weather
+from agent_lab.village.seasons import WEATHER_TEXT, date_text, growth_text, weather
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -150,6 +150,15 @@ def _heard(entry: dict[str, Any], listener: str) -> str:
     return f'- {who}: "{entry["text"]}"'
 
 
+GROWING = ("fields", "flower_garden")
+
+
+def _knows(world: dict[str, Any], name: str, place: str) -> bool:
+    """A villager knows how a growing place is doing if it works there or can see it."""
+    me = cell(villager_of(world, name))
+    return VILLAGERS[name].work == place or any(sees(me, c) for c in place_cells(place))
+
+
 def observation(world: dict[str, Any], name: str) -> str:
     """The changing world as one villager sees it; persona and rules live in its agent."""
     me = villager_of(world, name)
@@ -188,6 +197,7 @@ def observation(world: dict[str, Any], name: str) -> str:
     lines = [
         f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}.",
         where_text(world, me),
+        *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
         + _usually(name, world["tick"]),
         *([f"You are {goal}."] if goal else []),

@@ -118,3 +118,78 @@ def growth_text(place: str, growth: dict[str, Any]) -> str:
             else (f"; nobody has tended them for {untended} days")
         )
     return text + "."
+
+
+FIELD_NEWS = {
+    "tilled": "The fields were tilled.",
+    "sown": "The fields were sown.",
+    "sprouting": "The fields sprouted.",
+    "growing": "The crops are growing well.",
+    "ripe": "The crops are ripe for harvest.",
+    "harvested": "The harvest was brought in.",
+}
+GARDEN_NEWS = {
+    "blooming": "The flower garden is in bloom.",
+    "wilting": "The flowers in the garden are wilting.",
+}
+
+
+def _grow_fields(fields: dict[str, Any], tended: bool, wet: bool, season: str) -> str:
+    stage = fields["stage"]
+    if not tended:
+        fields["untended"] += 1
+        return stage
+    fields["untended"] = 0
+    if stage in ("resting", "tilled"):
+        return FIELD_STAGES[FIELD_STAGES.index(stage) + 1]
+    if stage in GROWS:
+        fields["progress"] += 2 if wet else 1
+        if fields["progress"] >= GROWS[stage]:
+            fields["progress"] = 0
+            return FIELD_STAGES[FIELD_STAGES.index(stage) + 1]
+    if stage == "ripe" and season == "autumn":
+        return "harvested"
+    return stage
+
+
+def _grow_garden(garden: dict[str, Any], watered: bool) -> str:
+    stage = garden["stage"]
+    if watered:
+        garden["watered"] += 1
+        garden["dry"] = 0
+        if stage == "wilting" or (stage == "budding" and garden["watered"] >= 2):
+            return "blooming"
+    else:
+        garden["dry"] += 1
+        if stage == "blooming" and garden["dry"] >= 2:
+            return "wilting"
+    return stage
+
+
+def end_day(world: dict[str, Any], day: int) -> list[str]:
+    """Grows the fields and the flower garden for `day`, from how long awake villagers stood on
+    them and the day's rain, then turns the season; returns the news for the chronicle."""
+    growth, tended = world["growth"], world["tended"]
+    fields, garden = growth["fields"], growth["flower_garden"]
+    season, wet = date(day)[1], weather(day) in WET
+    news: list[str] = []
+    if season != "winter":
+        stage = _grow_fields(fields, tended["fields"] >= TENDED_STEPS, wet, season)
+        if stage != fields["stage"]:
+            fields["stage"] = stage
+            news.append(FIELD_NEWS[stage])
+        stage = _grow_garden(garden, tended["flower_garden"] >= TENDED_STEPS or wet)
+        if stage != garden["stage"]:
+            garden |= {"stage": stage, "watered": 0, "dry": 0}
+            news.append(GARDEN_NEWS[stage])
+    world["tended"] = {"fields": 0, "flower_garden": 0}
+    coming = date(day + 1)[1]
+    if coming == "winter" and season != "winter":
+        if fields["stage"] == "ripe":
+            news.append("The unharvested crop was lost to the frost.")
+        growth |= new_growth("winter")
+        news.append("Winter came: the fields and the flower garden rest.")
+    elif coming == "spring" and season == "winter":
+        growth |= new_growth("spring")
+        news.append("Spring came: the flower garden is budding.")
+    return news

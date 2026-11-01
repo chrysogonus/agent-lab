@@ -8,7 +8,7 @@ The village stays one JSON row; `VERSION = 4`.
 |---|---|---|
 | `growth.fields` | `{stage, progress, untended}` | stage: `resting`, `tilled`, `sown`, `sprouting`, `growing`, `ripe`, `harvested`; progress 0–5; untended: days in a row |
 | `growth.flower_garden` | `{stage, watered, dry}` | stage: `resting`, `budding`, `blooming`, `wilting`; counters in days |
-| `tended` | `{fields: int, flower_garden: int}` | steps today with an awake villager on the place; reset at midnight |
+| `tended` | `{fields: int, flower_garden: int}` | steps with an awake villager on the place since the last growth update; reset each morning |
 | `day_record` | `{day, items: [{tick, text}]} \| null` | open from the first waking until everyone sleeps; items ≤ 120, text ≤ 300 |
 | `festival` | `{day, present: [name]} \| null` | the festival evening's guests |
 | `chronicle` | `[{day, year, season, day_of_season, weather, title, text, run_id}]` | oldest first, ≤ 28; title ≤ 60, text ≤ 800 |

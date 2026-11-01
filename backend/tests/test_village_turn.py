@@ -245,3 +245,22 @@ def test_the_observation_names_date_season_and_weather(day: int) -> None:
     first = observation(world, "Greta").split("\n")[0]
     expected = f"Day {day} (day {day_of_season} of {season}, year {year}), 09:30, morning."
     assert first == f"{expected} {WEATHER_TEXT[weather(day)]}."
+
+
+def test_villagers_are_told_how_the_places_they_work_at_or_see_are_doing() -> None:
+    world = new_world()
+    world["tick"] = 30
+    world["growth"]["fields"] |= {"stage": "sprouting", "untended": 2}
+    world["growth"]["flower_garden"]["stage"] = "wilting"
+    for v in world["villagers"]:
+        v["asleep"] = False
+    fields_line = "The fields are sprouting; nobody has tended them for 2 days."
+    garden_line = "The flower garden is wilting."
+    assert fields_line in observation(world, "Greta")  # her work, wherever she is
+    assert garden_line in observation(world, "Lina")
+    hilde = next(v for v in world["villagers"] if v["name"] == "Hilde")
+    hilde |= dict(zip(("x", "y"), label_cell("town_hall"), strict=True))
+    far = observation(world, "Hilde")
+    assert fields_line not in far and garden_line not in far
+    hilde |= dict(zip(("x", "y"), place_cells("fields")[0], strict=True))
+    assert fields_line in observation(world, "Hilde")  # standing on them

@@ -34,8 +34,10 @@
 
 - **Decision**: `world["growth"]` holds `{fields: {stage, progress, untended}, flower_garden:
   {stage, watered, dry}}` and `world["tended"]` counts, per place, the steps of the current day
-  in which at least one awake villager stood on it. At midnight the runner calls
-  `end_day(world, day)`:
+  in which at least one awake villager stood on it. When the first villager wakes (the moment the
+  next day's record opens) the runner calls `end_day(world, yesterday)` and notes its news as
+  "Overnight: …", so growth news reaches the chronicle of the day it shows on the map; nobody
+  is awake between midnight and the first waking, so nothing is counted twice:
   - A place is tended with `tended >= 6` (one village hour in total); the garden is watered if
     tended or the weather was rain or storm.
   - Fields (outside winter): tended → resting→tilled, tilled→sown; in sown, sprouting and growing,

@@ -1269,3 +1269,33 @@ async def test_reset_clears_the_chronicle_and_keeps_the_chronicler(tmp_path: Pat
     assert v.world["chronicle"]
     await v.reset()
     assert v.world["chronicle"] == [] and v.world["chronicler_agent_id"] == chronicler
+
+
+@pytest.mark.anyio
+async def test_awake_villagers_on_the_fields_and_garden_count_as_tending(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick=6)  # 05:30: Lina sleeps until 06:30
+    fx, fy = place_cells("fields")[0]
+    gx, gy = place_cells("flower_garden")[0]
+    put(v, "Greta", fx, fy)
+    put(v, "Jonas", fx + 1, fy)  # two on the fields still count once per step
+    put(v, "Lina", gx, gy, asleep=True)  # asleep: no help
+    await v.step()
+    await v.step()
+    assert v.world["tended"] == {"fields": 2, "flower_garden": 0}
+
+
+@pytest.mark.anyio
+async def test_yesterdays_work_shows_when_the_first_villager_wakes(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.world["tick"] = 144 + 2  # day 2, 04:50: everyone asleep, Jonas wakes at 05:00
+    v.world["tended"] = {"fields": 8, "flower_garden": 0}
+    await v.step()
+    await v.step()
+    assert not villager(v, "Jonas")["asleep"]
+    assert v.world["growth"]["fields"]["stage"] == "tilled"
+    assert v.world["tended"] == {"fields": 0, "flower_garden": 0}
+    record = v.world["day_record"]
+    assert record["day"] == 2
+    assert "Overnight: The fields were tilled." in [i["text"] for i in record["items"]]
+    assert v.state()["growth"]["fields"] == {"stage": "tilled", "neglected": False}

@@ -56,8 +56,8 @@ Post-design re-check: unchanged, all pass.
 - `runner.py`:
   - `_load` upgrades version 2 and 3.
   - `ensure_agents` creates the chronicler; Reset keeps its id.
-  - `_advance` counts `tended` after the moves, records festival guests, and at midnight runs
-    `end_day` and notes its changes.
+  - `_advance` counts `tended` after the moves, records festival guests; the first waking of a day runs
+    `end_day` for the day before and notes its changes.
   - `_note` writes the day record: opened in `_schedule` on the first waking, filled from
     `_look`, `_end_conversation`, `_set_off`, goodbye and the festival.
   - `_fall_asleep` starts the chronicle when everyone sleeps; `_chronicle` runs it;
