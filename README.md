@@ -8,6 +8,9 @@ and tool call shows up live as a span on the agent's graph, and every run can be
 On top of that sits a small pixel-art village where four AI villagers live their days on their
 own.
 
+Status: a personal learning project that runs on your own machine (both servers bind to
+127.0.0.1). MIT licensed.
+
 ![The village: four villagers on a pixel-art map in autumn, with their conversation below and the clock and controls on the right](docs/images/village.png)
 
 ## What you can do
@@ -104,3 +107,8 @@ other agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
 - [docs/api.md](docs/api.md) — HTTP and WebSocket endpoints
 - [docs/development.md](docs/development.md) — layout, rules every change follows, the Spec Kit workflow
 - [AGENTS.md](AGENTS.md) — the same rules, written for coding agents
+
+## Security and license
+
+Found a vulnerability? Please report it privately: see [SECURITY.md](SECURITY.md).
+Agent Lab is released under the [MIT License](LICENSE).
