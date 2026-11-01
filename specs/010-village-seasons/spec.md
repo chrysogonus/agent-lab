@@ -321,7 +321,7 @@ usual place in the evening; villagers on the square that evening get a festival 
 
 ## Assumptions
 
-- Seasons of 7 days make a year of 28 village days: about 4½ hours at Normal pace, 2 hours at
+- Seasons of 7 days make a year of 28 village days: about 4¼ hours at Normal pace, 2 hours at
   Fast and 13 hours at Slow (someone is awake about 18 of the 24 village hours; nights pass in
   seconds).
 - Weather per season (rough shares): spring sun, clouds, rain; summer mostly sun, some clouds,
