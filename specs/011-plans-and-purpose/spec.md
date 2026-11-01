@@ -270,7 +270,8 @@ only steps spent working.
 - **SC-005**: On the real model, starting at autumn day 1 with ripe fields and a blooming garden,
   at least two of the three goods are on the stalls by the festival evening (manual check).
 - **SC-006**: In the real-model runs, repeated lines refused are counted and reported; no
-  conversation shows the same line from the same villager twice (manual check).
+  villager's heard lines contain the same line twice within any three of its own lines in a row
+  (manual check).
 
 ## Assumptions
 
