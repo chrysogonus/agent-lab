@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Agent Lab: hand-built agent fundamentals (ReAct, five workflow patterns and a builder for
-custom agents now; MCP, harness, memory, RAG later) with a live trace view. Rules for every
-change: `.specify/memory/constitution.md`. Current feature spec, plan and tasks:
-`specs/003-agent-builder/` (M2: `specs/002-workflow-patterns/`, M1:
-`specs/001-react-walking-skeleton/`).
+Agent Lab: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
+builder, per-agent models) with a live trace view, plus a village of four villager agents
+(M6–M10). Rules for every change: `.specify/memory/constitution.md`. Current feature:
+`specs/011-plans-and-purpose/`; earlier milestones in `specs/001-…` to `specs/010-…`. Human
+documentation: `README.md` and `docs/` (keep both in step with user-visible changes).
 
 ## Commands
 
@@ -90,6 +90,6 @@ report; keep every gate at its current strictness.
 - Tests use `FakeLLM` or `httpx.MockTransport`, never a real model or provider.
 - Each milestone is one Spec Kit feature: `speckit-specify` → `clarify` → `plan` → `tasks` →
   `implement`. Map every requirement to a test in `tasks.md`. Commit after each phase and task
-  group; never push.
+  group; push to `origin` only when the owner asks.
 - `.env` holds `LLM_API_KEY` and `OPENAI_API_KEY`; keep it out of git. Both are passed to the
   tracer as secrets; never return a key or provider URL from the API.

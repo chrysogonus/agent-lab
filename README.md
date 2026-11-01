@@ -1,164 +1,106 @@
 # Agent Lab
 
-Learn agent fundamentals by building them by hand, and watch every step live. M1 shipped a
-traced ReAct agent with two tools (`calculator`, `get_weather`), an API, and a one-page UI
-with the agent graph, a span waterfall, span details and replay of past runs. M2 adds the
-five workflow patterns: prompt chaining, routing, parallelization, orchestrator-workers and
-evaluator-optimizer. M3 adds a builder: the six agents are templates, and custom agents made
-from them can be edited, saved and run.
+**Build AI agents by hand and watch every step they take.**
 
-## Requirements
+Agent Lab is a local playground for learning how agents work. No agent frameworks: the ReAct
+loop, the workflow patterns, tool calling and tracing are plain, readable Python. Every model
+and tool call shows up live as a span on the agent's graph, and every run can be replayed.
+On top of that sits a small pixel-art village where four AI villagers live their days on their
+own.
 
-- Python 3.12 and [uv](https://docs.astral.sh/uv/)
-- Node 22 and pnpm
-- make
-- For real runs (tests don't need them): an NVIDIA GPU with ~11 GiB free VRAM, Docker with the
-  NVIDIA container runtime, and the `vllm/vllm-openai:v0.31.0` image
+![The village: four villagers on a pixel-art map in autumn, with their conversation below and the clock and controls on the right](docs/images/village.png)
 
-## Run
+## What you can do
 
-```bash
-make install
-cp .env.example .env      # point LLM_BASE_URL / LLM_MODEL elsewhere if you like
-make dev-llm              # vLLM on http://127.0.0.1:8001, detached (first start downloads ~11 GB)
-make dev                  # backend on http://127.0.0.1:8000 and frontend on http://127.0.0.1:3000
+| | |
+|---|---|
+| **Run and trace agents**<br>Pick one of six agents (ReAct plus five workflow patterns), ask something and watch the graph light up node by node. Click a span to see its prompt, answer, tokens and latency. → [docs/agents.md](docs/agents.md) | <img src="docs/images/run-view.png" alt="run view" width="420"> |
+| **Build your own**<br>Customize any template by clicking its nodes, or snap together a block agent (model calls, tools, checks, routers, parallel groups, loops). Saved agents run like the built-in ones. → [docs/builder.md](docs/builder.md) | <img src="docs/images/builder.png" alt="builder" width="420"> |
+| **Watch a village live**<br>Four villagers wake, work, talk face to face, remember, reflect at night and live through seasons and weather. A chronicler writes a diary entry every night. → [docs/village.md](docs/village.md) | <img src="docs/images/chronicle.png" alt="the village chronicle" width="420"> |
+
+## How it works
+
+```mermaid
+flowchart LR
+    UI["Browser<br/>Next.js on :3000"] -- "HTTP + WebSocket" --> API["FastAPI on :8000"]
+    API --> Agents["Agents & workflows<br/>hand-written Python"]
+    Agents -- "every call is a span" --> Tracer["Tracer"]
+    Agents --> LLM["Model server<br/>vLLM on :8001 (or Ollama / OpenAI)"]
+    Agents --> Tools["Tools<br/>calculator, get_weather"]
+    Tracer --> DB[("SQLite")]
+    Tracer -- "live spans" --> API
+    Village["Village loop"] -- "each decision is an agent run" --> Agents
 ```
 
-Open http://127.0.0.1:3000, pick a template (its graph, settings and a sample prompt appear),
-press Run, and click spans for their input, output, tokens and latency.
+- Every agent declares its graph as data; every span points at a node of it.
+- Spans are saved to SQLite *and* streamed, so the live view and a replay are the same thing.
+- The village never calls the model itself: each villager decision is an ordinary, traced run
+  of that villager's agent, which you can open and edit.
 
-To build your own agent, pick a template and press Customize. Click a node to edit its prompt
-and settings; add, remove or reorder chain steps, routes and parallel aspects, pick ReAct's
-tools and change limits in the agent settings. The graph redraws as you edit. Save stores the
-agent under "My agents"; Run saves first. Duplicate and Delete work on saved agents; past runs
-keep the name, config and graph they ran with.
+## Quick start
 
-For more freedom, build a block agent: press "New block agent", or "Open as blocks" on any
-template or customized agent. A block agent is a list of blocks that run top to bottom, edited
-in the outline in the settings panel (+ adds a block after another; ↑ ↓ move it; ✕ removes it):
+You need Python 3.12 with [uv](https://docs.astral.sh/uv/), Node 22 with pnpm, and make.
 
-- **Model call**: a system prompt and a message; optionally tools and a limit on model calls
-  (the ReAct loop as one block).
-- **Tool call**: one tool with its arguments.
-- **Check**: at least N bullet lines, at most N words, contains a text, or valid JSON; failing
-  ends the run.
-- **Router**: a model decision picks one of 2–6 routes, each a list of blocks.
-- **Parallel group**: fixed branches, or the same blocks once per item a model plans, all at the
-  same time.
-- **Loop**: repeats its blocks until a judge approves or a check passes, up to 5 rounds.
+```bash
+make install          # backend and frontend dependencies
+cp .env.example .env  # model settings
+make dev-llm          # local model in Docker (needs an NVIDIA GPU, ~11 GiB VRAM; first start downloads ~11 GB)
+make dev              # backend on :8000 and frontend on :3000
+```
 
-Prompts refer to `{input}` (the user's prompt), `{previous}` (the previous block's output),
-`{name}` (an earlier block's output), and inside loops and per-item groups to `{feedback}` and
-`{item}`. Up to 30 blocks, nested 3 levels deep; the server checks the layout on every save.
+Open **http://127.0.0.1:3000**, pick an agent, press **Run**. Switch to **Village** and press
+**Start** to bring the village to life.
 
-### The village
-
-Switch the header to "Village" to watch four villagers live in a small pixel-art village: Mayor
-Hilde (town hall), Jonas the fisher (pier), Greta the farmer (fields) and Lina the flower girl
-(flower garden). Each has a house next to its work and its own sleeping hours: Jonas is up at
-05:00, Greta at 05:30, Lina at 06:30 and Hilde at 07:30; at bedtime they walk home by
-themselves, and once everyone sleeps the night passes in seconds.
-
-The clock moves in steps of 10 village minutes; a walker covers up to three cells a step, gliding
-from cell to cell, and walkers take turns within a step.
-A villager only asks its model what to do when something happens: it woke, arrived, met
-someone, was spoken to, found (or missed) someone it was looking for, or half an hour passed.
-It can walk to a place or home, go and find another villager where it thinks they are, talk to
-someone standing right next to it, say goodbye (and where it goes next), or wait. Villagers talk
-only face to face and stay together until one of them says goodbye, and
-each one keeps an idea of where the others are (seen, heard, or their usual routine), which can
-be out of date. Start, Pause, Step and Reset control the clock; the pace (Slow, Normal, Fast)
-sets a step to 15, 5 or 2 seconds while anyone is awake, so a village day takes about 28, 9 or 4
-minutes; the pace never changes a villager's model. The village pauses itself 60 seconds after
-the last Village tab closes, and after three steps in which every decision failed (e.g. the
-model server is down); leave the tab open and it keeps living.
-
-Standing villagers breathe, blink and look around; at their own place they work: Jonas fishes
-from the pier, Greta hoes the field, Lina waters the flowers, Hilde reads her papers. Chimneys
-smoke while their owners are home, butterflies cross the garden, fish ring the lake, the light
-turns golden and dusky towards the evening, and fireflies come out at night. With reduced motion
-turned on, all of it stays still.
-
-The village lives through a year of four seasons of 7 days, starting in spring: trees blossom,
-turn green, then gold and red, and stand bare in winter; days are longer in summer. Every day
-has its own weather (sun, clouds, rain, storm, fog or snow, fitting the season), shown on the
-map and told to the villagers with the date. The fields grow only on days someone spends an
-hour on them (rain helps): tilled, sown, sprouting, growing, ripe, harvested in autumn, and weeds
-show when they are left alone; the flower garden blooms while it is watered or rained on and
-wilts when it dries out. On the last day of autumn Hilde's harvest festival decorates the square;
-the villagers hear about it for days, are expected there in the evening, and remember it.
-
-Villagers remember: every conversation, search and first meeting of the day becomes a lasting
-memory (60 per villager), and when a villager decides it is reminded of the memories about who
-is next to it, who it is looking for and where it is. When it goes to bed after an eventful
-day, it looks back on it: it writes down up to three learnings ("Jonas is at the market around
-midday") and what it now thinks of the others, and both are part of every decision from then
-on. The reflections run on the shared "Village reflection" agent, which you can edit like any
-other.
-
-Each night, once everyone is asleep, the shared "Village chronicler" agent writes a diary entry
-about the day: who met whom, what they said, the weather, the fields and flowers. "Read the
-chronicle" shows the last 28 entries, newest first, marks those written since you last looked,
-and opens the run behind each entry.
-
-Each villager is a block agent under "My agents", created on the first Start; "Edit its agent"
-opens it in the builder, and an edit applies from its next decision. Click a villager for its
-sleeping hours, what it has learned, where it thinks the others are and what it thinks of them,
-what it remembers, and every turn and reflection it took; each opens in the usual run view
-(graph, prompt, answer).
-Village turns stay out of the past-runs list.
-The run header and the past-runs list show model calls, tool calls, tokens and wall time. Past
-runs replay from the database (`backend/data/agent_lab.db`).
-
-`make dev-llm` serves `RedHatAI/Qwen3.5-9B-quantized.w4a16` (4-bit Qwen3.5 9B) as `qwen3.5-9b`.
-It keeps running in the background and comes back with Docker; follow it with
-`docker logs -f agent-lab-vllm`, remove it with `make stop-llm`. `make dev-backend` and
-`make dev-frontend` start the two servers separately.
-vLLM batches concurrent requests, so parallel branches and workers really run at the same
-time. Any OpenAI-compatible endpoint works instead (Ollama: `LLM_BASE_URL=http://localhost:11434/v1`,
-`LLM_MODEL=qwen3:8b`): set `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`.
-
-### Models
-
-A custom agent runs on "Default" or on a model you pick in its agent settings; templates always
-run on the default. The run header, past runs and span details show which model answered.
-Configure the list in `.env` (see `.env.example`) and restart the backend after changes:
-
-- `LLM_MODELS`: further model ids served by the local endpoint, comma-separated.
-- `OPENAI_MODELS` and `OPENAI_API_KEY`: OpenAI models, e.g. `OPENAI_MODELS=gpt-6-luna`. Without
-  the key they are listed but can't be picked. An agent on an OpenAI model sends its prompts and
-  tool results to OpenAI. The key stays in `.env` and is redacted from every span.
-- `OPENAI_REASONING_OFF`: the `reasoning_effort` sent when an agent's thinking is off (default
-  `none`). If a model rejects it, the run fails with OpenAI's message on the span; set the value
-  that model accepts, or leave it empty to send nothing.
-  Some models refuse tools while thinking on Chat Completions (`gpt-6-luna`: "Function tools
-  with reasoning_effort are not supported"); turn "Model thinking" off for tool-calling agents on
-  them.
-- `DEFAULT_MODEL`: `provider/model`, e.g. `openai/gpt-6-luna` (default: the local `LLM_MODEL`).
-  The backend refuses to start when it names a model that isn't configured or has no key.
+**No GPU?** Point `.env` at any OpenAI-compatible server, e.g. Ollama
+(`LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=qwen3:8b`), or add OpenAI models — see
+[docs/models.md](docs/models.md). The tests need no model at all.
 
 ## Check
 
 ```bash
-make check   # ruff, ruff format --check, pyright, pytest, eslint, tsc, vitest
+make check   # ruff, pyright (strict), pytest, eslint, tsc, vitest — all must pass
 ```
 
-## API
+## Where things are
 
-| | |
-|---|---|
-| `GET /agents` | templates, then custom agents, with config, sample prompt and graph |
-| `GET /tools` | tools an agent can be given, with their parameter schema |
-| `GET /village`, `POST /village/start`, `/pause`, `/step`, `/reset`, `PUT /village/interval` | the village and its controls; `WS /village/stream` sends the state after every move, step and decision |
-| `GET /village/villagers/{name}/turns` | a villager's turns, newest first |
-| `GET /blocks/new`, `GET /agents/{id}/blocks` | an unsaved block agent: new, or converted from a template or customized agent |
-| `GET /models` | configured models: provider, id, external, available, default (never keys) |
-| `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent (`model`: `{"provider", "model"}` or `null` for Default) |
-| `POST /graph` `{"template_id", "config"}` | the graph for an unsaved config (validation errors as `422`) |
-| `POST /runs` `{"prompt": "...", "agent_id": "react"}` | start a run of a template or custom agent (`202`) |
-| `GET /runs` | past runs with totals, newest first |
-| `GET /runs/{id}` | run and its spans |
-| `WS /runs/{id}/stream` | stored spans, then live span events, then `run_ended` |
+```text
+backend/src/agent_lab/
+  agents/      ReAct agent, traced steps (chat, call_tool, decide), the template registry
+  workflows/   chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer
+  blocks/      block agents: layout rules, graph, runner
+  village/     map and clock, observations and actions, memory, seasons, chronicle, step loop
+  tracing/     spans, tracer, redaction of secrets
+  llm/         model client, configured models, FakeLLM for tests
+  api.py       HTTP and WebSocket endpoints
+frontend/src/
+  app/page.tsx           the one page
+  components/            run viewer, graph, builder, village
+  lib/                   pure view logic, tested with vitest
+specs/                   one folder per milestone: spec, plan, tasks (Spec Kit)
+```
 
-Design and requirements: `specs/001-react-walking-skeleton/` (M1),
-`specs/002-workflow-patterns/` (M2), `specs/003-agent-builder/` (M3).
+## Milestones
+
+| | Agents | | Village |
+|---|---|---|---|
+| ✅ M1 | ReAct agent, tools, tracing, replay | ✅ M6 | First villagers on a map |
+| ✅ M2 | Five workflow patterns | ✅ M7 | Daily life: sleep, walk, talk face to face |
+| ✅ M3 | Agent builder from templates | ✅ M8 | Memories and nightly reflection |
+| ✅ M4 | Model choice per agent (local, OpenAI) | ✅ M9 | Smooth motion, work animations, light |
+| ✅ M5 | Block builder | ✅ M10 | Seasons, weather, growth, festival, chronicle |
+| | | 📝 M11 | Plans and purpose (specified and planned) |
+| | | ⏳ M12 | Building together |
+| | | ⏳ M13 | Daily happenings |
+
+After M13 come MCP, an evaluation harness, memory for the lab's
+other agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
+
+## More
+
+- [docs/agents.md](docs/agents.md) — the six agents and how to read a trace
+- [docs/builder.md](docs/builder.md) — customizing templates and building block agents
+- [docs/village.md](docs/village.md) — how the villagers think, move, remember and live through the year
+- [docs/models.md](docs/models.md) — local models, Ollama and OpenAI
+- [docs/api.md](docs/api.md) — HTTP and WebSocket endpoints
+- [docs/development.md](docs/development.md) — layout, rules every change follows, the Spec Kit workflow
+- [AGENTS.md](AGENTS.md) — the same rules, written for coding agents
