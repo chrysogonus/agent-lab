@@ -230,7 +230,7 @@ async def test_an_m6_world_starts_fresh_with_its_agents_updated(tmp_path: Path) 
         {"tick": 40, "villagers": [{"name": "Hilde", "agent_id": agent.agent_id, "x": 1, "y": 1}]}
     )
     v = Village(store=store, models=fake_models(FakeLLM([])), bus=Bus())
-    assert v.world["version"] == 3 and v.world["tick"] == 0
+    assert v.world["version"] == 4 and v.world["tick"] == 0
     assert v.world["paused_reason"] == FRESH_START
     assert villager(v, "Hilde")["agent_id"] == agent.agent_id
     updated = store.get_agent(agent.agent_id)
@@ -933,7 +933,7 @@ async def test_an_m7_world_keeps_going_with_empty_memory(tmp_path: Path) -> None
     world |= {"version": 2, "tick": 40}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (3, 40)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (4, 40)
     assert reloaded.world["paused_reason"] is None
     assert all(x["memories"] == [] for x in reloaded.world["villagers"])
     reloaded.ensure_agents()
@@ -1110,3 +1110,24 @@ async def test_moves_are_spread_evenly_over_the_step(tmp_path: Path) -> None:
         assert len(at) == CELLS_PER_STEP, name
         spacing = [b - a for a, b in pairwise(at)]
         assert all(abs(s - 1.2 / CELLS_PER_STEP) < 0.08 for s in spacing), (name, spacing)
+
+
+# --- M10: seasons ---
+
+
+@pytest.mark.anyio
+async def test_an_m9_world_keeps_going_with_the_seasons(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    world = v.store.load_village()
+    assert world is not None
+    for key in ("growth", "tended", "day_record", "festival", "chronicle", "chronicler_agent_id"):
+        del world[key]
+    world |= {"version": 3, "tick": 144 * 9 + 30}  # day 10: summer
+    v.store.save_village(world)
+    reloaded = Village(store=v.store, models=v.models, bus=Bus())
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (4, 144 * 9 + 30)
+    assert reloaded.world["paused_reason"] is None
+    assert reloaded.world["growth"]["fields"]["stage"] == "growing"
+    assert reloaded.world["growth"]["flower_garden"]["stage"] == "blooming"
+    assert reloaded.world["chronicle"] == [] and reloaded.world["day_record"] is None
+    assert reloaded.state()["calendar"]["season"] == "summer"

@@ -44,8 +44,8 @@ watered: tended (≥ 6 steps) or rain or storm
 
 `upgrade()` chains: version 2 → 3 (M8, unchanged) → 4. Version 4 adds the fields above with
 `day_record`, `festival` = null, `chronicle` = [], `tended` = 0s, and growth from the current
-season: spring fields `sown`, summer `growing`, autumn `ripe`, winter `resting`; the garden
-`blooming` outside winter, else `resting`; all counters 0.
+season: spring fields `resting`, summer `growing`, autumn `ripe`, winter `resting`; the garden
+`budding` in spring, `blooming` in summer and autumn, `resting` in winter; all counters 0.
 
 ## Reset
 

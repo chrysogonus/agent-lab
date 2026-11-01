@@ -28,6 +28,15 @@ from agent_lab.village.memory import (
     remember,
     unreflected,
 )
+from agent_lab.village.seasons import (
+    dark,
+    date,
+    festival_in,
+    neglected,
+    sky,
+    snow_cover,
+    weather,
+)
 from agent_lab.village.turn import (
     PREVIOUS_RULES,
     RULES,
@@ -118,7 +127,7 @@ class Village:
         stored = self.store.load_village()
         if stored and stored.get("version") == VERSION:
             return stored
-        if stored and stored.get("version") == 2:  # an M7 world keeps going, memory empty
+        if stored and stored.get("version") in (2, 3):  # an M7 or M8/M9 world keeps going
             world = upgrade(stored)
             self.store.save_village(world)
             return world
@@ -227,13 +236,33 @@ class Village:
             }
             for internal in ("inbox", "triggers", "neighbours", "last_decided"):
                 del v[internal]
-        for internal in ("conversations", "talked_out", "version", "reflection_agent_id"):
+        internals = ("conversations", "talked_out", "version", "reflection_agent_id")
+        internals += ("tended", "day_record", "festival", "chronicler_agent_id")
+        for internal in internals:
             del world[internal]
+        year, season, day_of_season = date(day)
+        minute = minute_of_day(world["tick"])
+        growth = world["growth"]
         return {
             **world,
             "day": day,
             "time": hhmm_now,
             "period": period,
+            "calendar": {
+                "year": year,
+                "season": season,
+                "day_of_season": day_of_season,
+                "festival_in": festival_in(day),
+            },
+            "weather": weather(day),
+            "snow_cover": snow_cover(day),
+            "sky": sky(day, minute),
+            "dark": dark(day, minute),
+            "growth": {
+                "fields": {"stage": growth["fields"]["stage"], "neglected": neglected(growth)},
+                "flower_garden": {"stage": growth["flower_garden"]["stage"]},
+            },
+            "chronicle": world["chronicle"][::-1],
             "ticking": self.ticking,
             "log": [{**line, "time": clock(line["tick"])[1]} for line in world["log"]],
             "map": {

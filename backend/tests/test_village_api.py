@@ -50,6 +50,21 @@ def test_state_and_controls(store: Store) -> None:
         assert (jonas["state"], jonas["wake"], jonas["bed"]) == ("asleep", "05:00", "21:00")
         assert {b["villager"] for b in jonas["beliefs"]} == {"Hilde", "Greta", "Lina"}
         assert state["log"] == [] and "inbox" not in jonas and "conversations" not in state
+        assert state["calendar"] == {
+            "year": 1,
+            "season": "spring",
+            "day_of_season": 1,
+            "festival_in": None,
+        }
+        assert state["weather"] in ("sun", "clouds", "rain") and state["snow_cover"] is False
+        assert (state["sky"], state["dark"]) == ("night", True)
+        assert state["growth"] == {
+            "fields": {"stage": "resting", "neglected": False},
+            "flower_garden": {"stage": "budding"},
+        }
+        assert state["chronicle"] == []
+        for internal in ("tended", "day_record", "festival", "chronicler_agent_id"):
+            assert internal not in state
 
         steps(client, 3)  # 05:00: Jonas wakes and decides
         stepped = client.get("/village").json()

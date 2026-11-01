@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Any
 
+from agent_lab.village.seasons import date, new_growth
+
 # 32 x 22 cells. Walkable: . grass, = path, the place letters. Not walkable: ~ water, B the town
 # hall building, h j g l the villagers' houses, t trees, i lamps.
 ROWS = (
@@ -238,7 +240,7 @@ def usual_place(name: str, minute: int) -> str:
     return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
 
 
-VERSION = 3  # the world's shape: 2 is upgraded in place, anything else starts the village fresh
+VERSION = 4  # the world's shape: 2 and 3 are upgraded in place, anything else starts fresh
 
 
 def new_world() -> dict[str, Any]:
@@ -280,13 +282,31 @@ def new_world() -> dict[str, Any]:
         "talked_out": [],
         "log": [],
         "reflection_agent_id": None,
+        "growth": new_growth(),
+        "tended": {"fields": 0, "flower_garden": 0},
+        "day_record": None,
+        "festival": None,
+        "chronicle": [],
+        "chronicler_agent_id": None,
     }
 
 
 def upgrade(world: dict[str, Any]) -> dict[str, Any]:
-    """An M7 world (version 2) with empty memory, so the village keeps going (M8)."""
-    for v in world["villagers"]:
-        v |= {"memories": [], "learnings": [], "views": {}}
-    for c in world["conversations"]:
-        c.setdefault("transcript", [])
-    return world | {"version": VERSION, "reflection_agent_id": None}
+    """An older world brought to the current shape, so the village keeps going: version 2 (M7)
+    gets empty memory (M8), version 3 the seasons with places as the season finds them (M10)."""
+    if world["version"] == 2:
+        for v in world["villagers"]:
+            v |= {"memories": [], "learnings": [], "views": {}}
+        for c in world["conversations"]:
+            c.setdefault("transcript", [])
+        world |= {"version": 3, "reflection_agent_id": None}
+    day = clock(world["tick"])[0]
+    return world | {
+        "version": VERSION,
+        "growth": new_growth(date(day)[1]),
+        "tended": {"fields": 0, "flower_garden": 0},
+        "day_record": None,
+        "festival": None,
+        "chronicle": [],
+        "chronicler_agent_id": None,
+    }
