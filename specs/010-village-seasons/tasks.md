@@ -61,7 +61,7 @@ pass `move_gap=0`. A scripted year is tested on `end_day` directly (28 calls), n
 
 ## Phase 7: Polish
 
-- [ ] T013 README.md (seasons, weather, growth, festival, chronicle, paces), AGENTS.md (`seasons.py`, `chronicle.py` in the layout; the chronicler in the village contracts)
+- [X] T013 README.md (seasons, weather, growth, festival, chronicle, paces), AGENTS.md (`seasons.py`, `chronicle.py` in the layout; the chronicler in the village contracts)
 - [ ] T014 `make check`; quickstart manual steps on the real model with results recorded below (SC-006, SC-007)
 
 ## Dependencies

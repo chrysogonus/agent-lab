@@ -67,15 +67,26 @@ It can walk to a place or home, go and find another villager where it thinks the
 someone standing right next to it, say goodbye (and where it goes next), or wait. Villagers talk
 only face to face and stay together until one of them says goodbye, and
 each one keeps an idea of where the others are (seen, heard, or their usual routine), which can
-be out of date. Start, Pause, Step and Reset control the clock; the interval sets the seconds
-between steps. The village pauses itself 60 seconds after the last Village tab closes, and after
-three steps in which every decision failed (e.g. the model server is down).
+be out of date. Start, Pause, Step and Reset control the clock; the pace (Slow, Normal, Fast)
+sets a step to 15, 5 or 2 seconds while anyone is awake, so a village day takes about 28, 9 or 4
+minutes; the pace never changes a villager's model. The village pauses itself 60 seconds after
+the last Village tab closes, and after three steps in which every decision failed (e.g. the
+model server is down); leave the tab open and it keeps living.
 
 Standing villagers breathe, blink and look around; at their own place they work: Jonas fishes
 from the pier, Greta hoes the field, Lina waters the flowers, Hilde reads her papers. Chimneys
 smoke while their owners are home, butterflies cross the garden, fish ring the lake, the light
 turns golden and dusky towards the evening, and fireflies come out at night. With reduced motion
 turned on, all of it stays still.
+
+The village lives through a year of four seasons of 7 days, starting in spring: trees blossom,
+turn green, then gold and red, and stand bare in winter; days are longer in summer. Every day
+has its own weather (sun, clouds, rain, storm, fog or snow, fitting the season), shown on the
+map and told to the villagers with the date. The fields grow only on days someone spends an
+hour on them (rain helps): tilled, sown, sprouting, growing, ripe, harvested in autumn, and weeds
+show when they are left alone; the flower garden blooms while it is watered or rained on and
+wilts when it dries out. On the last day of autumn Hilde's harvest festival decorates the square;
+the villagers hear about it for days, are expected there in the evening, and remember it.
 
 Villagers remember: every conversation, search and first meeting of the day becomes a lasting
 memory (60 per villager), and when a villager decides it is reminded of the memories about who
@@ -84,6 +95,11 @@ day, it looks back on it: it writes down up to three learnings ("Jonas is at the
 midday") and what it now thinks of the others, and both are part of every decision from then
 on. The reflections run on the shared "Village reflection" agent, which you can edit like any
 other.
+
+Each night, once everyone is asleep, the shared "Village chronicler" agent writes a diary entry
+about the day: who met whom, what they said, the weather, the fields and flowers. "Read the
+chronicle" shows the last 28 entries, newest first, marks those written since you last looked,
+and opens the run behind each entry.
 
 Each villager is a block agent under "My agents", created on the first Start; "Edit its agent"
 opens it in the builder, and an edit applies from its next decision. Click a villager for its

@@ -31,8 +31,9 @@ report; keep every gate at its current strictness.
   `model.py` types and layout rules, `graph.py`, `run.py`, `convert.py` templates as blocks),
   `village/` (`world.py` map, homes, clock, villagers with sleeping hours and routines;
   `turn.py` observations, actions and beliefs text; `memory.py` lasting memories, recall and
-  reflection; `runner.py` the step loop, background decisions and nightly reflections;
-  specs/007-village-life/, specs/008-village-memory/),
+  reflection; `seasons.py` calendar, light, weather and growth; `chronicle.py` the nightly
+  chronicle; `runner.py` the step loop, background decisions, reflections and the chronicle;
+  specs/007-village-life/ to specs/010-village-seasons/),
   `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
@@ -74,7 +75,10 @@ report; keep every gate at its current strictness.
    directly, and model answers become a validated action (anything else is `wait` with a
    reason). Steps hold one lock; decisions apply on the event loop without awaiting in between.
    Reflections are runs of the shared reflection agent, tagged the same way; they never count as
-   decisions, and their answer is validated into learnings and views.
+   decisions, and their answer is validated into learnings and views. The chronicle is a run of
+   the shared chronicler agent, tagged with `village_tick` and no villager, once a night for the
+   day its record began; it never counts as a decision. Calendar, light and weather are derived
+   from the day, never stored.
 6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
    `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
    forward-looking abstractions.
