@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { Run, VillageEvent, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Run, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
@@ -184,6 +184,9 @@ export function turnLabel(turn: Run): string {
   const time = turn.village_tick == null ? "" : `${tickTime(turn.village_tick)} `;
   const action = turn.village_action;
   if (!action) return `${time}${turn.status === "running" ? "thinking…" : "no action recorded"}`;
+  if (action.action === "chronicle") {
+    return action.reason ? `${time}could not write the chronicle: ${action.reason}` : `${time}writes the chronicle of day ${action.day}`;
+  }
   if (action.action === "reflect") {
     const day = turn.village_tick == null ? "" : ` on day ${dayOf(turn.village_tick)}`;
     return action.reason ? `${time}could not reflect: ${action.reason}` : `${time}reflects${day}`;
@@ -194,4 +197,15 @@ export function turnLabel(turn: Run): string {
   if (action.action === "goodbye") return `${time}says goodbye${action.text ? `: ${action.text}` : ""}`;
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
   return `${time}waits`;
+}
+
+/** "Day 3 of autumn, year 1" */
+export function calendarText({ calendar }: Pick<VillageState, "calendar">): string {
+  return `Day ${calendar.day_of_season} of ${calendar.season}, year ${calendar.year}`;
+}
+
+/** Entries written since the owner last looked: newer than the one seen, all if it is gone. */
+export function newEntries(chronicle: ChronicleEntry[], seenRunId: string | null): number {
+  const seen = chronicle.findIndex((e) => e.run_id === seenRunId);
+  return seen === -1 ? chronicle.length : seen;
 }

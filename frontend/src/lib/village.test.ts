@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Run, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Run, VillageState, Villager } from "./api";
 import {
   activity,
   cellKind,
@@ -20,6 +20,8 @@ import {
   tickTime,
   turnLabel,
   whereText,
+  calendarText,
+  newEntries,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -62,6 +64,13 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   log: [],
   map: { width: 32, height: 22, rows: [], places: [], homes: [] },
   villagers: [],
+  calendar: { year: 1, season: "spring", day_of_season: 1, festival_in: null },
+  weather: "sun",
+  snow_cover: false,
+  sky: "morning",
+  dark: false,
+  growth: { fields: { stage: "resting", neglected: false }, flower_garden: { stage: "budding" } },
+  chronicle: [],
   ...fields,
 });
 
@@ -176,6 +185,10 @@ describe("panel", () => {
       "05:00 waited: unknown place 'harbour'",
     );
     expect(turnLabel(turn({ status: "running" }))).toBe("05:00 thinking…");
+    expect(turnLabel(turn({ village_action: { action: "chronicle", day: 3, title: "Rain" } }))).toBe("05:00 writes the chronicle of day 3");
+    expect(turnLabel(turn({ village_action: { action: "chronicle", day: 3, reason: "no answer" } }))).toBe(
+      "05:00 could not write the chronicle: no answer",
+    );
     expect(turnLabel(turn({ village_tick: 105, village_action: { action: "reflect", learnings: ["x"], views: {} } }))).toBe(
       "22:00 reflects on day 1",
     );
@@ -196,5 +209,20 @@ describe("paces", () => {
     ]);
     expect(paceOf(2)?.label).toBe("Fast");
     expect(paceOf(7)).toBeNull();
+  });
+});
+
+describe("seasons and the chronicle", () => {
+  it("names the date", () => {
+    expect(calendarText(state({ calendar: { year: 2, season: "autumn", day_of_season: 3, festival_in: 4 } }))).toBe("Day 3 of autumn, year 2");
+  });
+
+  it("counts the entries written since the owner last looked", () => {
+    const entry = (run_id: string): ChronicleEntry => ({ day: 1, year: 1, season: "spring", day_of_season: 1, weather: "sun", title: "t", text: "x", run_id });
+    const chronicle = [entry("c"), entry("b"), entry("a")]; // newest first
+    expect(newEntries(chronicle, "a")).toBe(2);
+    expect(newEntries(chronicle, "c")).toBe(0);
+    expect(newEntries(chronicle, null)).toBe(3);
+    expect(newEntries(chronicle, "gone")).toBe(3); // e.g. after a reset
   });
 });

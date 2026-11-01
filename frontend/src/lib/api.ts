@@ -69,7 +69,8 @@ export type VillageAction =
   | { action: "say"; text: string; to: string | null; reason?: string }
   | { action: "goodbye"; text: string | null; place?: string; villager?: string; ignored?: string; reason?: string }
   | { action: "wait"; reason?: string }
-  | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string };
+  | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string }
+  | { action: "chronicle"; day: number; title?: string; text?: string; reason?: string };
 
 export type VillageEvent = {
   tick: number;
@@ -103,7 +104,23 @@ export type Villager = {
   beliefs: { villager: string; text: string; view: string | null }[];
   learnings: { day: number; text: string }[]; // oldest first (M8)
   views: { villager: string; text: string; day: number }[];
-  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection"; text: string }[]; // newest first
+  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival"; text: string }[]; // newest first
+};
+
+// M10: seasons, weather, growth and the chronicle. See specs/010-village-seasons/contracts/http-api.md.
+export type Season = "spring" | "summer" | "autumn" | "winter";
+export type Weather = "sun" | "clouds" | "rain" | "storm" | "fog" | "snow";
+export type FieldStage = "resting" | "tilled" | "sown" | "sprouting" | "growing" | "ripe" | "harvested";
+export type GardenStage = "resting" | "budding" | "blooming" | "wilting";
+export type ChronicleEntry = {
+  day: number;
+  year: number;
+  season: Season;
+  day_of_season: number;
+  weather: Weather;
+  title: string;
+  text: string;
+  run_id: string;
 };
 
 export type VillageLine = { tick: number; time: string; from: string; to: string | null; text: string };
@@ -113,6 +130,13 @@ export type VillageState = {
   day: number;
   time: string;
   period: "morning" | "midday" | "afternoon" | "evening" | "night";
+  calendar: { year: number; season: Season; day_of_season: number; festival_in: number | null };
+  weather: Weather;
+  snow_cover: boolean;
+  sky: "morning" | "midday" | "afternoon" | "evening" | "night"; // the light, shifted by the season
+  dark: boolean; // lamps and windows lit
+  growth: { fields: { stage: FieldStage; neglected: boolean }; flower_garden: { stage: GardenStage } };
+  chronicle: ChronicleEntry[]; // newest first, at most 28
   running: boolean;
   ticking: boolean;
   interval: number;
@@ -238,6 +262,9 @@ export const setVillageInterval = (seconds: number): Promise<VillageState> =>
   send("PUT", "/village/interval", { seconds });
 export const villagerTurns = (name: string): Promise<Run[]> =>
   send("GET", `/village/villagers/${encodeURIComponent(name)}/turns`);
+
+export const getRun = (runId: string): Promise<Run> =>
+  send<{ run: Run }>("GET", `/runs/${runId}`).then((detail) => detail.run);
 
 export function streamUrl(runId: string): string {
   return `${API_URL.replace(/^http/, "ws")}/runs/${runId}/stream`;

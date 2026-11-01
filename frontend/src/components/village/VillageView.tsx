@@ -13,10 +13,29 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { PACES, PERIOD_SKY, activity, clockText, glideMs, figures, logLines, narration, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
+import { PACES, PERIOD_SKY, activity, clockText, glideMs, figures, logLines, narration, newEntries, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
+import { ChroniclePanel } from "./ChroniclePanel";
 import { VillagerPanel } from "./VillagerPanel";
+
+const SEEN_KEY = "village-chronicle-seen";
+
+function readSeen(): string | null {
+  try {
+    return localStorage.getItem(SEEN_KEY);
+  } catch {
+    return null; // storage blocked: every entry counts as new
+  }
+}
+
+function writeSeen(runId: string | null) {
+  try {
+    if (runId) localStorage.setItem(SEEN_KEY, runId);
+  } catch {
+    // storage blocked: nothing to remember
+  }
+}
 
 type VillageStream = {
   state: VillageState | null;
@@ -237,6 +256,10 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
   const [selected, setSelected] = useState<string | null>(null);
   const [turn, setTurn] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chronicleOpen, setChronicleOpen] = useState(false);
+  // The newest chronicle entry the owner saw; read on the client only (the map renders after load).
+  const [seen, setSeen] = useState<string | null>(readSeen);
+  const [seenAtOpen, setSeenAtOpen] = useState<string | null>(null);
 
   const act = async (call: () => Promise<VillageState>) => {
     setError(null);
@@ -251,6 +274,18 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
     return <p className="text-sm text-muted">{streamError ?? "Loading the village…"}</p>;
   }
   const villager = state.villagers.find((v) => v.name === selected) ?? null;
+  const markSeen = () => {
+    const newest = state.chronicle[0]?.run_id ?? null;
+    setSeen(newest);
+    writeSeen(newest);
+  };
+  const openChronicle = () => {
+    setSeenAtOpen(seen);
+    markSeen();
+    setSelected(null);
+    setChronicleOpen(true);
+  };
+  const fresh = newEntries(state.chronicle, seen);
 
   const night = state.period === "evening" || state.period === "night";
 
@@ -343,7 +378,17 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
           </p>
         )}
         <hr className="border-t-2 border-dashed border-dusk-rule" />
-        {villager ? (
+        {chronicleOpen ? (
+          <ChroniclePanel
+            chronicle={state.chronicle}
+            seen={seenAtOpen}
+            onClose={() => {
+              markSeen();
+              setChronicleOpen(false);
+            }}
+            onOpenTurn={setTurn}
+          />
+        ) : villager ? (
           <VillagerPanel
             turnsStarted={turnsStarted}
             villager={villager}
@@ -368,6 +413,9 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
               ))}
             </ul>
             <p className="text-sm text-dusk-muted">Pick a villager to see what it remembers and every turn it took.</p>
+            <button type="button" onClick={openChronicle} className="village-button self-start">
+              Read the chronicle{fresh > 0 ? ` (${fresh} new)` : ""}
+            </button>
           </>
         )}
       </aside>
