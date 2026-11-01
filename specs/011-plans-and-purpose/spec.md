@@ -10,7 +10,8 @@
 villagers?" — after comparing Agent Lab with Stanford's Generative Agents, a16z AI Town,
 DeepMind Concordia, Microsoft TinyTroupe and Altera Project Sid. The owner chose the
 recommendation: daily plans, facts kept apart from claims, no repeated lines, and festival
-deliveries with a work action.
+deliveries with a work action. Later the owner added: "more people can work on the field or the
+flower shop or go fishing" — work done together adds up.
 
 ## Context
 
@@ -33,9 +34,11 @@ never calls the model directly; invalid answers change nothing and record why; t
 scripted fake model only; no new dependency; reduced motion is respected; the village still
 pauses 60 seconds after the last viewer leaves.
 
-The roadmap moves back by two: M12 Visitors (whispers to villagers, village events), M13 MCP,
-M14 Harness (including daily village health metrics), M15 Agent memory for the lab's other
-agents, M16 RAG.
+The roadmap moves back by three: M12 Building together (painting houses, planting trees, market
+stands, new buildings from a catalogue that take several days, boat trips), M13 Daily happenings
+(a different event each day: the postman, a visiting friend, a travelling merchant, …; and
+whispers to villagers), M14 MCP, M15 Harness (including daily village health metrics), M16 Agent
+memory for the lab's other agents, M17 RAG.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -128,7 +131,9 @@ lists its last lines.
 Villagers work on purpose. A villager at the fields or the flower garden can work there (it
 tends them; only working counts now, standing does not). Jonas fishing at the pier catches fish,
 Greta takes vegetables from ripe or harvested fields, and Lina picks flowers from a blooming
-garden; each carries one basket at a time. A villager can give its basket to someone next to it,
+garden; each carries one basket at a time. Villagers can work together: anyone can work the
+fields or the garden alongside others, or fish with Jonas while he works at the pier, and the
+work of everyone there adds up, so a place is tended and baskets come sooner. A villager can give its basket to someone next to it,
 or set it out on the festival stalls while standing on the square. The square shows what has
 been delivered, the villagers are told what the festival still lacks, and the festival and the
 chronicle show what made it.
@@ -157,6 +162,12 @@ only steps spent working.
    or show the gaps, and the chronicle and the festival memories name what was there.
 6. **Given** an invalid work or give (wrong place, empty hands, full hands, nobody there, the
    other asleep), **When** it is applied, **Then** the villager waits with the reason.
+7. **Given** Greta and Lina both working at the fields, **When** half a village hour passes,
+   **Then** their work adds up to a village hour: the fields count as tended that day and one
+   basket goes to whichever of them has empty hands.
+8. **Given** Jonas working at the pier, **When** another villager there answers work, **Then** it
+   fishes with him and its work adds to his; without Jonas working there, work at the pier is
+   refused with the reason.
 
 ### Edge Cases
 
@@ -174,6 +185,11 @@ only steps spent working.
   stalls are cleared for the next year.
 - Fish, vegetables and flowers can also be given to anyone (e.g. traded at the market); only the
   stalls on the square count for the festival.
+- Several villagers work on one place and more than one has empty hands → the basket goes to the
+  one who worked there longest since its last basket; nobody with empty hands → the work is kept
+  and the basket comes once someone there has empty hands.
+- Jonas stops working at the pier while others fish with him → they keep fishing until they
+  decide something else; only starting needs Jonas there.
 - Reset → no plans, empty hands, empty stalls.
 - A village saved by M10 → loads with no plans, empty hands and empty stalls.
 
@@ -216,11 +232,14 @@ only steps spent working.
 **Work and deliveries**
 
 - **FR-010**: A new action work MUST be valid at the fields and the flower garden for anyone, and
-  at the pier for Jonas; the villager keeps working until it decides something else or leaves;
-  tending counts only steps in which someone works on the place.
-- **FR-011**: A villager working for a village hour MUST get a basket: fish at the pier, vegetables
-  at ripe or harvested fields, flowers at a blooming garden; nothing otherwise; at most one basket
-  per villager.
+  at the pier for Jonas or for anyone while Jonas works there; the villager keeps working until it
+  decides something else or leaves; tending counts only working steps, and the working steps of
+  everyone on a place add up (two villagers working half an hour tend it like one working an
+  hour).
+- **FR-011**: Every village hour of work added up at a place MUST give a basket to a villager
+  working there with empty hands (the one who worked there longest since its last basket): fish at
+  the pier, vegetables at ripe or harvested fields, flowers at a blooming garden; nothing
+  otherwise; at most one basket per villager.
 - **FR-012**: A new action give MUST move the giver's basket to a named awake villager next to it
   with empty hands, or, without a name while on the square, onto the festival stalls; both sides
   are told and it is noted in the day record.
@@ -237,8 +256,9 @@ only steps spent working.
   Reset clears plans, baskets and stalls and keeps the planner agent.
 - **FR-016**: Tests MUST use the scripted fake model only and cover: plan on waking, valid and
   invalid plans, the marked entries, revisions and their limit, the facts and claims parts, the
-  rules refresh, the chronicle's claim marking, repeated lines refused, work and tending, baskets
-  from each place and none from empty ones, give to a villager and to the stalls, every invalid
+  rules refresh, the chronicle's claim marking, repeated lines refused, work and tending, shared work
+  adding up (tending and baskets), fishing with Jonas, baskets from each place and none from empty
+  ones, give to a villager and to the stalls, every invalid
   work and give, the stalls in observations, the festival with and without goods, loading an M10
   village.
 - **FR-017**: All quality gates MUST pass; every requirement maps to a test or a manual check in
@@ -250,7 +270,9 @@ only steps spent working.
 - **Basket**: per villager — fish, vegetables, flowers or empty.
 - **Festival stalls**: per year — the goods set out (fish, vegetables, flowers).
 - **Working**: per villager — the place it works at until it does something else, and the steps
-  worked there.
+  worked there since its last basket.
+- **Work done**: per place per day — the working steps of everyone there, added up, for tending
+  and baskets.
 
 ## Success Criteria *(mandatory)*
 
@@ -263,7 +285,8 @@ only steps spent working.
   lines are refused and never heard.
 - **SC-003**: In a scripted autumn where Jonas, Greta and Lina work their places and set their
   baskets out on the square, the festival stalls hold all three goods by the festival; with no
-  deliveries they hold none; standing without working never tends a place.
+  deliveries they hold none; standing without working never tends a place; two villagers working
+  together tend a place and fill a basket in half the time one needs.
 - **SC-004**: On the real model over two village days at Fast pace, at least three of the four
   villagers are at their plan's first place or with its villager within an hour of its time on
   at least one day, and no chronicle entry reports a weather other than the day's (manual check).
