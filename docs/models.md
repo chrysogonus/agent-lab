@@ -8,9 +8,11 @@ Agent Lab talks to any **OpenAI-compatible** chat endpoint. Settings live in `.e
 ```mermaid
 flowchart LR
     A[Agent] --> D{its model}
-    D -- "Default" --> L["Local server<br/>LLM_BASE_URL / LLM_MODEL"]
+    D -- "Default" --> DM{"DEFAULT_MODEL<br/>(unset: local LLM_MODEL)"}
+    DM --> L["Local server<br/>LLM_BASE_URL / LLM_MODEL"]
+    DM --> O["OpenAI<br/>OPENAI_MODELS + OPENAI_API_KEY"]
     D -- "picked in agent settings" --> L
-    D -- "picked in agent settings" --> O["OpenAI<br/>OPENAI_MODELS + OPENAI_API_KEY"]
+    D -- "picked in agent settings" --> O
 ```
 
 ## Pick a model server

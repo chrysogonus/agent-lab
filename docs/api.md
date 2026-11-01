@@ -21,10 +21,11 @@ so everything the UI does can be scripted.
 | `WS /runs/{id}/stream` | stored spans, then live span events, then `run_ended` |
 
 ```bash
-# start a run of the ReAct template and fetch it
-curl -s -X POST http://127.0.0.1:8000/runs -H 'content-type: application/json' \
-  -d '{"prompt": "What is 17*23 plus the current temperature in Berlin?", "agent_id": "react"}'
-curl -s http://127.0.0.1:8000/runs/<run_id>
+# start a run of the ReAct template, keep its id, then fetch the run with its spans
+RUN_ID=$(curl -s -X POST http://127.0.0.1:8000/runs -H 'content-type: application/json' \
+  -d '{"prompt": "What is 17*23 plus the current temperature in Berlin?", "agent_id": "react"}' \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)["run_id"])')
+curl -s "http://127.0.0.1:8000/runs/$RUN_ID"
 ```
 
 ## Village
