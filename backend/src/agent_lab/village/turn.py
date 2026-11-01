@@ -7,8 +7,9 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.memory import recall, when
-from agent_lab.village.seasons import WEATHER_TEXT, date_text, growth_text, weather
+from agent_lab.village.seasons import WEATHER_TEXT, date_text, festival_in, growth_text, weather
 from agent_lab.village.world import (
+    FESTIVAL_EVENING,
     PLACES,
     VILLAGERS,
     adjacent,
@@ -112,7 +113,7 @@ def belief_text(world: dict[str, Any], name: str, other: str) -> str:
         if belief["source"] == "seen":
             return f"{where} (seen {when})"
         return f"{where} (heard from {belief['from']} at {when})"
-    usual = usual_place(other, minute_of_day(world["tick"]))
+    usual = usual_place(other, world["tick"])
     if usual == "home":
         return "at home asleep at this hour (their routine)"
     return f"usually at the {label(usual)} around now (their routine)"
@@ -140,7 +141,7 @@ def goal_text(goal: dict[str, Any] | None) -> str | None:
 
 
 def _usually(name: str, tick: int) -> str:
-    usual = usual_place(name, minute_of_day(tick))
+    usual = usual_place(name, tick)
     return f" At this hour you are usually at the {label(usual)}." if usual != "home" else ""
 
 
@@ -157,6 +158,17 @@ def _knows(world: dict[str, Any], name: str, place: str) -> bool:
     """A villager knows how a growing place is doing if it works there or can see it."""
     me = cell(villager_of(world, name))
     return VILLAGERS[name].work == place or any(sees(me, c) for c in place_cells(place))
+
+
+def _festival(tick: int) -> list[str]:
+    days = festival_in(clock(tick)[0])
+    if days is None:
+        return []
+    if days:
+        return [f"The harvest festival is on the square in {days} day{'s' if days > 1 else ''}."]
+    if minute_of_day(tick) < FESTIVAL_EVENING:
+        return ["Today is the harvest festival, this evening on the square."]
+    return ["The harvest festival is on now on the square."]
 
 
 def observation(world: dict[str, Any], name: str) -> str:
@@ -196,6 +208,7 @@ def observation(world: dict[str, Any], name: str) -> str:
     views = me["views"]
     lines = [
         f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}.",
+        *_festival(world["tick"]),
         where_text(world, me),
         *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."

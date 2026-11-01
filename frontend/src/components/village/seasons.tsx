@@ -3,6 +3,7 @@
 
 import type { CSSProperties } from "react";
 import type { FieldStage, GardenStage, Season, Weather } from "../../lib/api"; // relative, as in pixels.tsx
+import type { Area } from "../../lib/village";
 import { INK, TILE, type Palette } from "./pixels";
 
 // --- season colours ---
@@ -245,5 +246,50 @@ export function WeatherIcon({ weather, dark }: { weather: Weather; dark: boolean
       {weather === "fog" && <path d="M1 3h10v1H1zM2 6h9v1H2zM1 9h10v1H1z" fill="#9aa3b2" />}
       {weather === "snow" && <path d="M5 1h2v10H5zM1 5h10v2H1zM3 3h1v1H3zM8 3h1v1H8zM3 8h1v1H3zM8 8h1v1H8z" fill="#ffffff" stroke={INK} strokeWidth={0.4} />}
     </svg>
+  );
+}
+
+// --- the harvest festival ---
+
+const FLAGS = ["#e85a4f", "#ffd75e", "#4fa6de", "#7cc35a", "#f7a8cc"];
+
+/** Bunting across the square and lanterns at its corners, lit when dark, on the festival day. */
+export function Festival({ area, lit }: { area: Area; lit: boolean }) {
+  const x0 = area.x0 * TILE;
+  const x1 = (area.x1 + 1) * TILE;
+  const y0 = area.y0 * TILE;
+  const y1 = (area.y1 + 1) * TILE;
+  const strings = [y0 + 10, y0 + (y1 - y0) / 2 + 6];
+  const flags = Math.floor((x1 - x0) / 6);
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {strings.map((y, s) => (
+        <g key={y}>
+          {Array.from({ length: flags }, (_, i) => {
+            const x = x0 + 3 + i * 6;
+            const sag = Math.round(5 * Math.sin((Math.PI * (x - x0)) / (x1 - x0)));
+            return (
+              <g key={i}>
+                <rect x={x - 3} y={y + sag - 1} width={6} height={1} fill="#7e4a24" />
+                <path d={`M${x - 2} ${y + sag}h4l-2 3z`} fill={FLAGS[(i + s) % FLAGS.length]} />
+              </g>
+            );
+          })}
+        </g>
+      ))}
+      {[
+        [x0 + 1, y0 + 2],
+        [x1 - 5, y0 + 2],
+        [x0 + 1, y1 - 12],
+        [x1 - 5, y1 - 12],
+      ].map(([x, y]) => (
+        <g key={`${x},${y}`}>
+          {lit && <rect x={x - 4} y={y - 3} width={12} height={13} fill="#ffb347" opacity={0.25} />}
+          <rect x={x + 1} y={y - 2} width={2} height={2} fill={INK} />
+          <rect x={x} y={y} width={4} height={6} fill={lit ? "#ffcf6a" : "#e85a4f"} stroke={INK} strokeWidth={0.5} />
+          <rect x={x} y={y + 2} width={4} height={1} fill={lit ? "#ff9a3c" : "#b83a32"} />
+        </g>
+      ))}
+    </g>
   );
 }

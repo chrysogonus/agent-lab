@@ -101,10 +101,10 @@ def test_sleeping_hours_and_routines() -> None:
         "Hilde": (450, 1380),
     }
     assert awake_at("Jonas", 300) and not awake_at("Jonas", 299) and not awake_at("Jonas", 1260)
-    assert usual_place("Jonas", 6 * 60) == "pier"
-    assert usual_place("Jonas", 12 * 60) == "market"
-    assert usual_place("Hilde", 6 * 60) == "home"  # still asleep
-    assert usual_place("Lina", 23 * 60) == "home"
+    assert usual_place("Jonas", (6 * 60 - 270) // 10) == "pier"
+    assert usual_place("Jonas", (12 * 60 - 270) // 10) == "market"
+    assert usual_place("Hilde", (6 * 60 - 270) // 10) == "home"  # still asleep
+    assert usual_place("Lina", (23 * 60 - 270) // 10) == "home"
 
 
 def test_new_world_has_everyone_asleep_at_home() -> None:

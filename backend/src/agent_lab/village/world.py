@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Any
 
-from agent_lab.village.seasons import date, new_growth
+from agent_lab.village.seasons import date, festival_in, new_growth
 
 # 32 x 22 cells. Walkable: . grass, = path, the place letters. Not walkable: ~ water, B the town
 # hall building, h j g l the villagers' houses, t trees, i lamps.
@@ -232,10 +232,16 @@ def awake_at(name: str, minute: int) -> bool:
     return character.wake <= minute < character.bed
 
 
-def usual_place(name: str, minute: int) -> str:
-    """Where the village expects a villager at a time of day: a place key, or "home"."""
+FESTIVAL_EVENING = 18 * 60  # the harvest festival on the square, until each villager's bedtime
+
+
+def usual_place(name: str, tick: int) -> str:
+    """Where the village expects a villager at a step: a place key, or "home"."""
+    minute = minute_of_day(tick)
     if not awake_at(name, minute):
         return "home"
+    if festival_in(clock(tick)[0]) == 0 and minute >= FESTIVAL_EVENING:
+        return "square"
     routine = VILLAGERS[name].routine
     return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
 

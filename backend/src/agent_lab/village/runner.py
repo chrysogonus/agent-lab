@@ -59,6 +59,7 @@ from agent_lab.village.turn import (
     villager_agent,
 )
 from agent_lab.village.world import (
+    FESTIVAL_EVENING,
     HEIGHT,
     HOMES,
     PLACES,
@@ -390,10 +391,40 @@ class Village:
             return
         if not awake and not v["bedtime"]:
             v |= {"bedtime": True, "goal": {"kind": "home"}, "triggers": []}
+            self._remember_festival(v)  # the evening is over for this villager
             self._end_conversations(name, f"{name} went home to bed")
             self._event(v, "bedtime", "It is your bedtime; you head home.")
         if v["bedtime"] and cell(v) == door(name):
             self._fall_asleep(v)
+
+    def _festival_guests(self) -> None:
+        """Who came to the square on the festival evening."""
+        tick = self.world["tick"]
+        day = clock(tick)[0]
+        if festival_in(day) != 0 or minute_of_day(tick) < FESTIVAL_EVENING:
+            return
+        festival: dict[str, Any] | None = self.world["festival"]
+        if festival is None or festival["day"] != day:
+            festival = {"day": day, "present": []}
+            self.world["festival"] = festival
+        present: list[str] = festival["present"]
+        for v in self.world["villagers"]:
+            if (
+                not v["asleep"]
+                and place_at(v["x"], v["y"]) == "square"
+                and v["name"] not in present
+            ):
+                present.append(v["name"])
+                self._note(f"{v['name']} joined the harvest festival on the square.")
+
+    def _remember_festival(self, v: Villager) -> None:
+        festival = self.world["festival"]
+        if not festival or festival["day"] != clock(self.world["tick"])[0]:
+            return
+        if v["name"] in festival["present"]:
+            others = [n for n in festival["present"] if n != v["name"]]
+            company = f"with {' and '.join(others)}" if others else "on your own"
+            self._remember(v, "festival", f"The harvest festival on the square {company}.", others)
 
     def _walks(self, v: Villager) -> bool:
         if v["asleep"] or not v["goal"]:
@@ -679,7 +710,7 @@ class Village:
 
     def _find_target(self, v: Villager, other: str) -> list[list[int]]:
         belief = v["beliefs"].get(other)
-        where = belief["where"] if belief else usual_place(other, minute_of_day(self.world["tick"]))
+        where = belief["where"] if belief else usual_place(other, self.world["tick"])
         if belief and belief["source"] == "seen":
             return [belief["cell"]]
         if where == "home":
@@ -786,6 +817,7 @@ class Village:
         tended = world["tended"]
         for place in {place_at(v["x"], v["y"]) for v in villagers if not v["asleep"]} & set(tended):
             tended[place] += 1  # steps with an awake villager on the fields or the garden
+        self._festival_guests()
         if self.outcomes:
             all_failed = not any(self.outcomes)
             world["failed_ticks"] = world["failed_ticks"] + 1 if all_failed else 0

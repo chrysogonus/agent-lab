@@ -17,7 +17,7 @@ import { PACES, PERIOD_SKY, activity, calendarText, clockText, glideMs, figures,
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
-import { Puddles, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
+import { Festival, Puddles, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
 import { VillagerPanel } from "./VillagerPanel";
 
 const SEEN_KEY = "village-chronicle-seen";
@@ -123,6 +123,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
       })}
       <rect width={width * TILE} height={height * TILE} fill="url(#village-sky)" pointerEvents="none" aria-hidden />
       <Lights map={map} on={dark} />
+      {calendar.festival_in === 0 && areas.S && <Festival area={areas.S} lit={dark} />}
       {dark && calendar.season !== "winter" && !wet && <Fireflies map={map} />}
       {homes.map((h) => owners.get(h.villager)?.asleep && areas[h.letter] && <Snores key={h.letter} area={areas[h.letter]} />)}
       {places.map((p) => {

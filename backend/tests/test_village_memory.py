@@ -35,7 +35,14 @@ def test_remember_sets_importance_by_kind_and_cuts_long_text() -> None:
         "text": "x" * 400,
         "importance": IMPORTANCE["conversation"],
     }
-    assert IMPORTANCE == {"conversation": 3, "found": 2, "missed": 2, "met": 1, "reflection": 5}
+    assert IMPORTANCE == {
+        "conversation": 3,
+        "found": 2,
+        "missed": 2,
+        "met": 1,
+        "reflection": 5,
+        "festival": 5,
+    }
 
 
 def test_the_limit_drops_the_least_valuable_old_memory() -> None:

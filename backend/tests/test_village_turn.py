@@ -264,3 +264,31 @@ def test_villagers_are_told_how_the_places_they_work_at_or_see_are_doing() -> No
     assert fields_line not in far and garden_line not in far
     hilde |= dict(zip(("x", "y"), place_cells("fields")[0], strict=True))
     assert fields_line in observation(world, "Hilde")  # standing on them
+
+
+def _at(day: int, hour: int, minute: int = 0) -> int:
+    return (day - 1) * 144 + (hour * 60 + minute - 270) // 10
+
+
+def test_the_festival_is_counted_down_announced_and_expected_on_the_square() -> None:
+    world = new_world()
+    for v in world["villagers"]:
+        v["asleep"] = False
+    lines: list[str] = []
+    for day in (15, 20):
+        world["tick"] = _at(day, 9)
+        lines.append(observation(world, "Jonas"))
+    assert "The harvest festival is on the square in 6 days." in lines[0]
+    assert "The harvest festival is on the square in 1 day." in lines[1]
+    world["tick"] = _at(21, 9)
+    assert "Today is the harvest festival, this evening on the square." in observation(
+        world, "Jonas"
+    )
+    world["tick"] = _at(21, 18, 30)
+    evening = observation(world, "Jonas")
+    assert "The harvest festival is on now on the square." in evening
+    assert "At this hour you are usually at the square." in evening
+    world["tick"] = _at(20, 18, 30)
+    assert "At this hour you are usually at the pier." in observation(world, "Jonas")
+    world["tick"] = _at(10, 9)
+    assert "harvest festival" not in observation(world, "Jonas")

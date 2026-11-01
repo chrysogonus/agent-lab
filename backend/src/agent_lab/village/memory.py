@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from agent_lab.village.world import VILLAGERS, clock
 
-IMPORTANCE = {"conversation": 3, "found": 2, "missed": 2, "met": 1, "reflection": 5}
+IMPORTANCE = {"conversation": 3, "found": 2, "missed": 2, "met": 1, "reflection": 5, "festival": 5}
 MEMORIES_KEPT = 60
 LEARNINGS_KEPT = 12
 MEMORY_TEXT = 400  # characters of a memory

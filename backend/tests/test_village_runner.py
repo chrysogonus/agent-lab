@@ -1299,3 +1299,37 @@ async def test_yesterdays_work_shows_when_the_first_villager_wakes(tmp_path: Pat
     assert record["day"] == 2
     assert "Overnight: The fields were tilled." in [i["text"] for i in record["items"]]
     assert v.state()["growth"]["fields"] == {"stage": "tilled", "neglected": False}
+
+
+async def _festival_evening(v: Village, day: int) -> None:
+    """Jonas and Lina on the square from 20:40 until Jonas's bedtime at 21:00; Greta elsewhere."""
+    morning(v, tick=(day - 1) * 144 + (20 * 60 + 40 - 270) // 10)
+    sx, sy = label_cell("square")
+    put(v, "Jonas", sx, sy)
+    put(v, "Lina", sx + 2, sy + 2)
+    put(v, "Greta", *door("Greta"))
+    v.world["day_record"] = {"day": day, "items": []}
+    await v.step()  # 20:50
+    await v.step()  # 21:00: Jonas's bedtime
+
+
+@pytest.mark.anyio
+async def test_festival_guests_remember_who_else_was_there(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    await _festival_evening(v, 21)
+    assert v.world["festival"] == {"day": 21, "present": ["Jonas", "Lina"]}
+    memory = villager(v, "Jonas")["memories"][-1]
+    assert (memory["kind"], memory["importance"]) == ("festival", 5)
+    assert memory["text"] == "The harvest festival on the square with Lina."
+    assert memory["about"] == ["Lina"]
+    assert not any(m["kind"] == "festival" for m in villager(v, "Greta")["memories"])
+    notes = [i["text"] for i in v.world["day_record"]["items"]]
+    assert "Jonas joined the harvest festival on the square." in notes
+
+
+@pytest.mark.anyio
+async def test_no_festival_on_other_days(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    await _festival_evening(v, 20)
+    assert v.world["festival"] is None
+    assert not any(m["kind"] == "festival" for m in villager(v, "Jonas")["memories"])

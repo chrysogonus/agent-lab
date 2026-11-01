@@ -56,8 +56,8 @@ pass `move_gap=0`. A scripted year is tested on `end_day` directly (28 calls), n
 
 ## Phase 6: User Story 5 — The harvest festival (P3)
 
-- [ ] T011 [US5] world.py `usual_place(name, tick)` (festival day from 18:00: the square for every awake villager), callers in turn.py and runner.py; turn.py festival lines ("in N days", "today, this evening on the square", "on now"); memory.py `IMPORTANCE["festival"] = 5`; runner.py guests recorded in `world["festival"]` each festival-evening step, a festival memory naming the other guests when a guest's bedtime starts, a note in the day record; tests in test_village_turn.py and test_village_runner.py (countdown days 1–6, today, on now, usual place, memory only for guests, not on other days)
-- [ ] T012 [US5] seasons.tsx `Festival`: bunting across the square and lanterns at its corners, lit when dark, on the festival day; screenshot by day and night
+- [X] T011 [US5] world.py `usual_place(name, tick)` (festival day from 18:00: the square for every awake villager), callers in turn.py and runner.py; turn.py festival lines ("in N days", "today, this evening on the square", "on now"); memory.py `IMPORTANCE["festival"] = 5`; runner.py guests recorded in `world["festival"]` each festival-evening step, a festival memory naming the other guests when a guest's bedtime starts, a note in the day record; tests in test_village_turn.py and test_village_runner.py (countdown days 1–6, today, on now, usual place, memory only for guests, not on other days)
+- [X] T012 [US5] seasons.tsx `Festival`: bunting across the square and lanterns at its corners, lit when dark, on the festival day; screenshot by day and night
 
 ## Phase 7: Polish
 
