@@ -107,6 +107,7 @@ else
 	jq -n --argjson checks "$checks" '{
 		name: "main", target: "branch", enforcement: "active",
 		conditions: {ref_name: {include: ["~DEFAULT_BRANCH"], exclude: []}},
+		bypass_actors: [{actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always"}],
 		rules: ([
 			{type: "deletion"},
 			{type: "non_fast_forward"},
@@ -121,7 +122,7 @@ else
 				strict_required_status_checks_policy: false,
 				required_status_checks: $checks}}] else [] end))}' |
 		gh api -X POST "repos/$REPO/rulesets" --input - --silent
-	echo "ruleset 'main' created (required checks: ${REQUIRED_CHECKS:-none})"
+	echo "ruleset 'main' created (repo admins may bypass; required checks: ${REQUIRED_CHECKS:-none})"
 fi
 if grep -qx 'release-tags' <<<"$existing"; then
 	echo "ruleset 'release-tags' exists: skipped"
