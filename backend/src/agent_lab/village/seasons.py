@@ -101,3 +101,20 @@ def new_growth(season: str = "spring") -> dict[str, Any]:
 def neglected(growth: dict[str, Any]) -> bool:
     fields = growth["fields"]
     return fields["stage"] in ("sprouting", "growing", "ripe") and fields["untended"] >= 2
+
+
+def growth_text(place: str, growth: dict[str, Any]) -> str:
+    """How a place is doing, as a villager or the chronicler is told."""
+    if place == "flower_garden":
+        stage = growth["flower_garden"]["stage"]
+        return f"The flower garden is {'resting for the winter' if stage == 'resting' else stage}."
+    fields = growth["fields"]
+    stage, untended = fields["stage"], fields["untended"]
+    text = f"The fields are {'ripe for harvest' if stage == 'ripe' else stage}"
+    if stage in ("sown", "sprouting", "growing", "ripe") and untended:
+        text += (
+            "; nobody tended them yesterday"
+            if untended == 1
+            else (f"; nobody has tended them for {untended} days")
+        )
+    return text + "."

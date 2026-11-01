@@ -20,6 +20,12 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
+from agent_lab.village.chronicle import (
+    CHRONICLE_KEPT,
+    chronicle_prompt,
+    chronicler_agent,
+    parse_entry,
+)
 from agent_lab.village.memory import (
     LEARNINGS_KEPT,
     parse_reflection,
@@ -86,6 +92,8 @@ CONVERSATION_LINES = 10
 NIGHT_STEP = 0.2  # seconds per step while everyone sleeps
 STEP_GAP = 0.1  # seconds between moves in a Step
 CELLS_PER_STEP = 3  # how far a villager walks in 10 village minutes
+RECORD_ITEMS = 120  # happenings kept for the chronicle of one day
+RECORD_TEXT = 300
 FRESH_START = "the village moved to a bigger map and started fresh"
 
 Villager = dict[str, Any]
@@ -115,6 +123,7 @@ class Village:
         self.task: asyncio.Task[None] | None = None
         self.decisions: dict[str, asyncio.Task[None]] = {}
         self.reflections: dict[str, asyncio.Task[None]] = {}  # never count as decisions
+        self.chronicle: asyncio.Task[None] | None = None  # nor does the chronicle
         self.outcomes: list[bool] = []  # decisions finished since the last step: succeeded?
         self.in_step = False  # inside Step: its own decisions may start while paused
         self.resetting = False
@@ -301,6 +310,8 @@ class Village:
                 v["agent_id"] = self._create_agent(villager_agent(v["name"]))
         if missing(self.world["reflection_agent_id"]):
             self.world["reflection_agent_id"] = self._create_agent(reflection_agent())
+        if missing(self.world["chronicler_agent_id"]):
+            self.world["chronicler_agent_id"] = self._create_agent(chronicler_agent())
         self.store.save_village(self.world)
 
     def _create_agent(self, body: dict[str, Any]) -> str:
@@ -321,6 +332,12 @@ class Village:
         entry = {"tick": self.world["tick"], "kind": kind, "text": text, **extra}
         v["events"] = [*v["events"], entry][-EVENTS_KEPT:]
 
+    def _note(self, text: str) -> None:
+        """A happening for tonight's chronicle, while the villagers' day is on."""
+        record = self.world["day_record"]
+        if record is not None and len(record["items"]) < RECORD_ITEMS:
+            record["items"].append({"tick": self.world["tick"], "text": text[:RECORD_TEXT]})
+
     def _trigger(self, v: Villager, reason: str) -> None:
         if reason not in v["triggers"]:
             v["triggers"].append(reason)
@@ -334,6 +351,7 @@ class Village:
         """Both remember it; the one who ended it (`by`) has no reason to decide again."""
         self.world["conversations"].remove(c)
         transcript = " / ".join(c.get("transcript", []))
+        self._note(f"{c['a']} and {c['b']} talked: {transcript}")
         for me, other in ((c["a"], c["b"]), (c["b"], c["a"])):
             v = self._villager(me)
             self._event(v, "ended", f"Your conversation with {other} ended: {reason}.", to=other)
@@ -349,6 +367,10 @@ class Village:
         self._event(v, "slept", "You went to bed.")
         if unreflected(v["memories"]) and not self.resetting:
             self._start_reflection(v["name"])
+        record = self.world["day_record"]
+        if record and all(x["asleep"] for x in self.world["villagers"]) and not self.resetting:
+            self.world["day_record"] = None  # the next waking opens the next day's record
+            self.chronicle = asyncio.create_task(self._chronicle(record, self.chronicle))
 
     def _schedule(self, v: Villager, minute: int) -> None:
         """Wakes a villager at its wake-up time and sends it home to bed at its bedtime."""
@@ -357,6 +379,8 @@ class Village:
         if v["asleep"]:
             if awake:
                 v |= {"asleep": False, "beliefs": {}}  # a new day: yesterday's sightings are old
+                if self.world["day_record"] is None:  # the first to wake opens the day's record
+                    self.world["day_record"] = {"day": clock(self.world["tick"])[0], "items": []}
                 self._event(v, "woke", "You woke up at home.")
                 self._trigger(v, "woke")
             return
@@ -420,6 +444,8 @@ class Village:
                         for m in v["memories"]
                     ):  # the first meeting of the day
                         self._remember(v, "met", f"You met {VILLAGERS[name].title}.", [name])
+                        if v["name"] < name:  # once for the pair
+                            self._note(f"{v['name']} and {name} met.")
             v["neighbours"] = now
         for v in awake:
             goal = v["goal"]
@@ -431,6 +457,7 @@ class Village:
                 self._event(v, "found", f"You found {other['name']}.", to=other["name"])
                 self._trigger(v, "found")
                 self._remember(v, "found", f"You found {other['name']}.", [other["name"]])
+                self._note(f"{v['name']} found {other['name']}.")
             elif not other["asleep"] and sees(cell(v), cell(other)):
                 goal["target"] = [[other["x"], other["y"]]]
             elif cell(v) in self._targets(v):
@@ -445,6 +472,7 @@ class Village:
                 self._remember(
                     v, "missed", f"You did not find {other['name']}: {why}.", [other["name"]]
                 )
+                self._note(f"{v['name']} looked for {other['name']} in vain: {why}.")
 
     def _upkeep(self) -> None:
         """Ends conversations whose villagers are apart or silent; forgets talked-out pairs."""
@@ -477,9 +505,10 @@ class Village:
                 self.decisions[v["name"]] = asyncio.create_task(self._decide(v["name"]))
 
     async def _run(
-        self, agent_id: str | None, name: str, prompt: str, tick: int
+        self, agent_id: str | None, name: str | None, prompt: str, tick: int
     ) -> tuple[str | None, str | None, str | None]:
-        """(run id, answer, why it failed) for one run of a village agent for `name`."""
+        """(run id, answer, why it failed) for one run of a village agent for `name` (None: the
+        whole village, as the chronicle)."""
         try:
             run, config, spec, llm = new_run(
                 prompt,
@@ -559,6 +588,29 @@ class Village:
             self.store.set_village_action(run_id, action)
         self._publish()
 
+    async def _chronicle(self, record: dict[str, Any], previous: asyncio.Task[None] | None) -> None:
+        """Tonight's chronicle entry, for the day the record began even past midnight."""
+        if previous:  # a late chronicle never overtakes the one before
+            await asyncio.gather(previous, return_exceptions=True)
+        tick, day = self.world["tick"], record["day"]
+        prompt = chronicle_prompt(self.world, record)
+        run_id, answer, failed = await self._run(
+            self.world["chronicler_agent_id"], None, prompt, tick
+        )
+        if self.resetting:
+            return
+        entry, reason = (None, failed) if failed else parse_entry(answer)
+        entry, reason = redact(entry, self.secrets), redact(reason, self.secrets)
+        if entry:
+            year, season, day_of_season = date(day)
+            kept = {"day": day, "year": year, "season": season, "day_of_season": day_of_season}
+            kept |= {"weather": weather(day), **entry, "run_id": run_id}
+            self.world["chronicle"] = [*self.world["chronicle"], kept][-CHRONICLE_KEPT:]
+        if run_id:
+            action = {"action": "chronicle", "day": day}
+            self.store.set_village_action(run_id, action | (entry or {"reason": reason}))
+        self._publish()
+
     async def _decide(self, name: str) -> None:
         v = self._villager(name)
         tick = self.world["tick"]
@@ -614,6 +666,7 @@ class Village:
         else:
             v["goal"] = {"kind": "place", "place": place}
             self._event(v, "set_off", f"You set off for the {label(place)}.")
+            self._note(f"{v['name']} set off for the {label(place)}.")
 
     def _seek(self, v: Villager, other: str) -> None:
         v["goal"] = {"kind": "find", "villager": other, "target": self._find_target(v, other)}
@@ -681,8 +734,9 @@ class Village:
 
     async def _settle(self) -> None:
         """Waits until no decision or reflection is in flight."""
-        while self.decisions or self.reflections:
+        while self.decisions or self.reflections or (self.chronicle and not self.chronicle.done()):
             tasks = [*self.decisions.values(), *self.reflections.values()]
+            tasks += [self.chronicle] if self.chronicle else []
             await asyncio.gather(*tasks, return_exceptions=True)
 
     # --- one step ---
@@ -787,8 +841,8 @@ class Village:
             finally:
                 self.resetting = False
             agents = {v["name"]: v["agent_id"] for v in self.world["villagers"]}
-            reflection_agent_id = self.world["reflection_agent_id"]
-            self.world = new_world() | {"reflection_agent_id": reflection_agent_id}
+            agent_ids = {k: self.world[k] for k in ("reflection_agent_id", "chronicler_agent_id")}
+            self.world = new_world() | agent_ids
             self.outcomes = []
             for v in self.world["villagers"]:
                 v["agent_id"] = agents.get(v["name"])

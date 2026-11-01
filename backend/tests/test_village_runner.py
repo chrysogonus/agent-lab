@@ -17,6 +17,7 @@ from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 from agent_lab.village import runner
 from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
+from agent_lab.village.seasons import weather
 from agent_lab.village.turn import villager_agent
 from agent_lab.village.world import (
     PLACES,
@@ -33,6 +34,7 @@ from agent_lab.village.world import (
 
 WAIT = '{"action": "wait"}'
 NOTHING_LEARNED = '{"learnings": [], "views": {}}'
+QUIET_DAY = '{"title": "A quiet day", "text": "Nothing much happened."}'
 MORNING = 30  # tick of 09:30: everyone is awake
 
 
@@ -52,6 +54,10 @@ def is_reflection(messages: list[Message]) -> bool:
     return '"learnings"' in (messages[0]["content"] or "")
 
 
+def is_chronicle(messages: list[Message]) -> bool:
+    return "the chronicle of a small village" in (messages[0]["content"] or "")
+
+
 def speaker(messages: list[Message]) -> str:
     """The villager a call is for: its persona opens the system prompt of a decision and the
     prompt of a reflection."""
@@ -63,10 +69,15 @@ def responder(
     plan: dict[str, list[str | Exception]],
 ) -> Callable[[list[Message]], ChatResponse | Exception]:
     """Answers each villager from its own list (then waits), whatever order decisions run in;
-    reflections come from the list "<name>:reflect" (then an empty reflection)."""
+    reflections come from the list "<name>:reflect" (then an empty reflection), chronicles from
+    "chronicle" (then a quiet day)."""
     queues = {n: list(a) for n, a in plan.items()}
 
     def respond(messages: list[Message]) -> ChatResponse | Exception:
+        if is_chronicle(messages):
+            queue = queues.get("chronicle") or []
+            item = queue.pop(0) if queue else QUIET_DAY
+            return item if isinstance(item, Exception) else answer(item)
         reflecting = is_reflection(messages)
         key = f"{speaker(messages)}:reflect" if reflecting else speaker(messages)
         queue = queues.get(key) or []
@@ -111,11 +122,26 @@ def put(v: Village, name: str, x: int, y: int, **changes: Any) -> dict[str, Any]
 
 def calls_of(llm: FakeLLM, name: str) -> list[str]:
     """The prompts of a villager's decisions."""
-    return [c[1]["content"] or "" for c in llm.calls if not is_reflection(c) and speaker(c) == name]
+    return [
+        c[1]["content"] or ""
+        for c in llm.calls
+        if not is_chronicle(c) and not is_reflection(c) and speaker(c) == name
+    ]
 
 
 def reflections_of(llm: FakeLLM, name: str) -> list[str]:
     return [c[1]["content"] or "" for c in llm.calls if is_reflection(c) and speaker(c) == name]
+
+
+def chronicles_of(llm: FakeLLM) -> list[str]:
+    return [c[1]["content"] or "" for c in llm.calls if is_chronicle(c)]
+
+
+def drain(queue: "asyncio.Queue[dict[str, Any]]") -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    while not queue.empty():
+        events.append(queue.get_nowait())
+    return events
 
 
 def kinds(v: Village, name: str) -> list[str]:
@@ -1144,3 +1170,102 @@ async def test_steps_follow_the_pace_while_anyone_is_awake(tmp_path: Path) -> No
     await asyncio.sleep(1.0)  # steps at 0, 0.4 and 0.8 s; NIGHT_STEP would give 5
     v.pause()
     assert v.world["tick"] - started == 3
+
+
+@pytest.mark.anyio
+async def test_one_chronicle_a_night_for_the_day_it_began(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(runner, "IDLE_STEPS", 10**6)  # decisions only on triggers: a fast week
+    v, llm = village_for(tmp_path, {"Greta": [move("market")]}, calls=2000)
+    for _ in range(7 * 144):  # day 1, 04:30, to day 8, 04:30 (SC-004)
+        await v.step()
+    chronicle = v.world["chronicle"]
+    assert [e["day"] for e in chronicle] == [1, 2, 3, 4, 5, 6, 7]
+    assert len(chronicles_of(llm)) == 7
+    first = chronicle[0]
+    assert (first["year"], first["season"], first["day_of_season"]) == (1, "spring", 1)
+    assert (first["weather"], first["title"]) == (weather(1), "A quiet day")
+    assert "Greta set off for the market." in chronicles_of(llm)[0]
+    run = v.store.get_run(first["run_id"])
+    assert run is not None and run.villager is None and run.village_tick is not None
+    assert run.village_action == {"action": "chronicle", "day": 1, **json.loads(QUIET_DAY)}
+    assert v.state()["chronicle"][0]["day"] == 7  # newest first
+
+
+@pytest.mark.anyio
+async def test_a_chronicle_after_midnight_belongs_to_the_day_before(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    v.world["tick"] = 20 * 144 + (23 * 60 + 50 - 270) // 10  # day 21, 23:50: festival night
+    for x in v.world["villagers"]:
+        x["asleep"] = x["name"] != "Hilde"
+    put(v, "Hilde", 30, 12, bedtime=True, goal={"kind": "home"})  # far from her door
+    v.world["day_record"] = {"day": 21, "items": []}
+    await v.step()
+    assert v.state()["calendar"]["season"] == "winter"  # day 22 now
+    v._note("Hilde was still walking home.")  # pyright: ignore[reportPrivateUsage]
+    while not villager(v, "Hilde")["asleep"]:
+        await v.step()
+    [entry] = v.world["chronicle"]
+    assert (entry["day"], entry["season"], entry["day_of_season"]) == (21, "autumn", 7)
+    assert entry["weather"] == weather(21)
+    assert "Hilde was still walking home." in chronicles_of(llm)[0]
+    assert chronicles_of(llm)[0].startswith("Day 21 (day 7 of autumn, year 1).")
+
+
+async def _night(v: Village) -> str | None:
+    """Hilde, the last one up, goes to bed at her door with a day behind her; the id of the
+    chronicle run that follows."""
+    morning(v, tick=bedtime_tick("Hilde"))
+    for x in v.world["villagers"]:
+        x["asleep"] = x["name"] != "Hilde"
+    v.world["day_record"] = {"day": 1, "items": [{"tick": 30, "text": "Lina met Greta."}]}
+    queue = v.bus.subscribe(CHANNEL)
+    await v.step()
+    assert villager(v, "Hilde")["asleep"] and v.world["day_record"] is None
+    started = [e for e in drain(queue) if e["type"] == "decision_started"]
+    return next((e["run_id"] for e in started if e["villager"] is None), None)
+
+
+@pytest.mark.anyio
+async def test_an_invalid_chronicle_adds_nothing(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, {"chronicle": ['{"title": "A lovely day"}']})
+    run_id = await _night(v)
+    assert v.world["chronicle"] == []
+    assert "- 09:30 Lina met Greta." in chronicles_of(llm)[0]
+    run = v.store.get_run(run_id or "")
+    assert run is not None
+    assert run.village_action == {
+        "action": "chronicle",
+        "day": 1,
+        "reason": "not a valid entry: Field required",
+    }
+
+
+@pytest.mark.anyio
+async def test_a_failing_chronicle_does_not_pause_the_village(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"chronicle": [RuntimeError("model down")]})
+    await _night(v)
+    await v.step()
+    assert v.world["chronicle"] == [] and v.world["failed_ticks"] == 0
+
+
+@pytest.mark.anyio
+async def test_the_chronicle_keeps_one_year(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    old = {"day": 0, "title": "old", "text": "x"}
+    v.world["chronicle"] = [old] * 28
+    await _night(v)
+    assert len(v.world["chronicle"]) == 28 and v.world["chronicle"][-1]["title"] == "A quiet day"
+
+
+@pytest.mark.anyio
+async def test_reset_clears_the_chronicle_and_keeps_the_chronicler(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    chronicler = v.world["chronicler_agent_id"]
+    agent = v.store.get_agent(chronicler)
+    assert agent is not None and agent.name == "Village chronicler"
+    await _night(v)
+    assert v.world["chronicle"]
+    await v.reset()
+    assert v.world["chronicle"] == [] and v.world["chronicler_agent_id"] == chronicler
