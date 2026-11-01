@@ -101,7 +101,7 @@ async def execute_run(
     except Exception:
         # Already recorded on the open spans; keep the server alive for the next run.
         log.exception("run %s failed", run.run_id)
-    store.finish_run(run.run_id, status, redact(answer, secrets), time.time())
+    store.finish_run(run.run_id, status, redact(answer, secrets), tracer.now())
     finished = store.get_run(run.run_id)
     assert finished is not None
     bus.publish(run.run_id, {"type": "run_ended", "run": finished.model_dump(mode="json")})

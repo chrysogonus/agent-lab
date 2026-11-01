@@ -32,6 +32,13 @@ class Tracer:
         self.trace_id = token_hex(16)
         self._sink = sink
         self._secrets = secrets
+        # The wall clock can step back mid-run (NTP, WSL2 sync); monotonic time keeps order.
+        self._wall0 = time.time()
+        self._mono0 = time.monotonic()
+
+    def now(self) -> float:
+        """Wall-clock time that never runs backwards within this run."""
+        return self._wall0 + time.monotonic() - self._mono0
 
     @asynccontextmanager
     async def span(
@@ -59,7 +66,7 @@ class Tracer:
             kind=kind,
             name=name,
             input=input,
-            started_at=time.time(),
+            started_at=self.now(),
             attributes={"gen_ai.agent.id": self.agent_id, **(attributes or {})},
         )
         token = _current.set(span)
@@ -71,7 +78,7 @@ class Tracer:
             raise
         finally:
             _current.reset(token)
-            span.ended_at = time.time()
+            span.ended_at = self.now()
             self._emit("span_ended", span)
 
     def _emit(self, event: str, span: Span) -> None:

@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from agent_lab.tracing.redact import REDACTED, redact
@@ -85,3 +87,18 @@ def test_redact_patterns_in_text() -> None:
 def test_redact_leaves_non_secrets() -> None:
     data = {"tokens_in": 12, "content": "What is 2+2?", "model": None}
     assert redact(data) == data
+
+
+@pytest.mark.anyio
+async def test_spans_stay_in_order_when_the_wall_clock_steps_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wall = time.time
+    tracer = make_tracer([])
+    async with tracer.span(SpanKind.STEP, "outer", node_id="n1") as outer:
+        monkeypatch.setattr(time, "time", lambda: wall() - 5)  # e.g. a WSL2 clock sync
+        async with tracer.span(SpanKind.LLM, "inner", node_id="n2") as inner:
+            pass
+
+    assert outer.ended_at is not None and inner.ended_at is not None
+    assert outer.started_at <= inner.started_at <= inner.ended_at <= outer.ended_at
