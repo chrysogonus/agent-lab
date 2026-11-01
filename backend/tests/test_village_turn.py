@@ -8,6 +8,7 @@ import pytest
 from agent_lab.blocks.model import BlocksConfig, layout_errors
 from agent_lab.village.seasons import WEATHER_TEXT, date, weather
 from agent_lab.village.turn import (
+    SPEECH_SHOWN,
     belief_text,
     heard_places,
     observation,
@@ -368,3 +369,43 @@ def test_seen_text_shows_only_what_a_villager_saw() -> None:
         "usually at the flower garden around now (their routine)"
     )
     assert belief_text(world, "Jonas", "Lina") == "at the pier (heard from Hilde at 09:00)"
+
+
+def test_a_say_repeating_one_of_the_last_three_lines_is_refused() -> None:
+    hx, hy = door("Hilde")
+    said = ["Where are the fish?", "Good morning.", "Nice weather."]
+    world = world_with(Jonas=at(hx + 1, hy), Hilde={"said": said})
+    assert parse_action('{"action": "say", "text": " where ARE the fish "}', world, "Hilde") == (
+        {"action": "wait"},
+        "you already said that",
+    )
+    world = world_with(Jonas=at(hx + 1, hy), Hilde={"said": [*said[1:], "Bye."]})
+    assert parse_action('{"action": "say", "text": "where are the fish"}', world, "Hilde") == (
+        {"action": "say", "text": "where are the fish", "to": None},
+        None,
+    )
+
+
+def test_a_goodbye_repeating_a_line_keeps_the_goodbye_without_the_text() -> None:
+    world = world_with(Hilde={"said": ["See you later!"]})
+    answer = '{"action": "goodbye", "text": "See you later", "place": "market"}'
+    assert parse_action(answer, world, "Hilde") == (
+        {"action": "goodbye", "text": None, "place": "market"},
+        None,
+    )
+
+
+def test_the_observation_lists_what_the_villager_said_lately() -> None:
+    text = observation(world_with(Jonas={"said": ["Fresh fish!", "Anyone?"]}), "Jonas")
+    assert 'What you said lately:\n- "Fresh fish!"\n- "Anyone?"\n' in text
+    assert text.index("Places: ") < text.index("What you said lately:")
+    assert text.index("What you said lately:") < text.index("Where the others are")
+    assert "What you said lately:\n- nothing yet\n" in observation(world_with(), "Jonas")
+
+
+def test_a_long_line_repeats_what_was_spoken_of_it() -> None:
+    hx, hy = door("Hilde")
+    long = "Fish " * 50
+    world = world_with(Jonas=at(hx + 1, hy), Hilde={"said": [long[:SPEECH_SHOWN]]})
+    answer = json.dumps({"action": "say", "text": long})
+    assert parse_action(answer, world, "Hilde")[1] == "you already said that"

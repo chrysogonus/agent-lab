@@ -55,6 +55,7 @@ from agent_lab.village.seasons import (
 from agent_lab.village.turn import (
     OLD_RULES,
     RULES,
+    SAID_KEPT,
     SPEECH_SHOWN,
     awake_neighbours,
     belief_text,
@@ -828,6 +829,7 @@ class Village:
         hearers = [to] if to else awake_neighbours(self.world, name)
         hearers = [h for h in hearers if sorted([name, h]) not in self.world["talked_out"]]
         v["speech"] = {"text": text, "to": to, "tick": tick}
+        v["said"] = [*v["said"], text][-SAID_KEPT:]
         said_to = f" to {to}" if to else ""
         self._event(v, "said", f'You said{said_to}: "{text}"', to=to)
         self.world["log"] = [

@@ -48,7 +48,7 @@ Runner tests pass `move_gap=0`.
 
 ## Phase 4: User Story 3 — No repeated lines (P2)
 
-- [ ] T008 [US3] turn.py (research §3): `same_line(a, b)` comparing `re.sub(r"[\W_]+", "", text.lower())`; `parse_action` turns a say repeating one of the speaker's `said` into a wait with "you already said that" and a goodbye repeating one into the goodbye with `text: None`; `observation` adds "What you said lately:" after the facts ("- nothing yet" when empty); runner.py `_say` keeps the last 3 lines as spoken (after the `SPEECH_SHOWN` cut), oldest first, across days; tests in test_village_turn.py ("Where are the fish?" vs "where are the fish" refused, a line said four lines ago allowed, the goodbye without its text, the observation section) and test_village_runner.py (a refused say is never heard, `said` keeps 3, Reset clears it) (FR-008, FR-009, SC-002)
+- [X] T008 [US3] turn.py (research §3): `same_line(a, b)` comparing `re.sub(r"[\W_]+", "", text.lower())`; `parse_action` turns a say repeating one of the speaker's `said` into a wait with "you already said that" and a goodbye repeating one into the goodbye with `text: None`; `observation` adds "What you said lately:" after the facts ("- nothing yet" when empty); runner.py `_say` keeps the last 3 lines as spoken (after the `SPEECH_SHOWN` cut), oldest first, across days; tests in test_village_turn.py ("Where are the fish?" vs "where are the fish" refused, a line said four lines ago allowed, the goodbye without its text, the observation section) and test_village_runner.py (a refused say is never heard, `said` keeps 3, Reset clears it) (FR-008, FR-009, SC-002)
 
 ## Phase 5: User Story 4 — Work and festival deliveries (P2)
 

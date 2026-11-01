@@ -18,7 +18,7 @@ from agent_lab.store import Store
 from agent_lab.village import runner
 from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
 from agent_lab.village.seasons import weather
-from agent_lab.village.turn import villager_agent
+from agent_lab.village.turn import SPEECH_SHOWN, villager_agent
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -1575,3 +1575,30 @@ async def test_the_day_record_marks_what_villagers_said_as_claims(tmp_path: Path
     assert "Greta and Lina talked; what they said (their claims): Greta: line 0 / Lina: line 1" in (
         notes
     )
+
+
+@pytest.mark.anyio
+async def test_a_repeated_line_is_refused_and_never_heard(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [say("where are the fish", "Jonas")]})
+    neighbours_at_market(v)
+    villager(v, "Hilde").update(triggers=["met"], said=["Where are the fish?"])
+    await v.step()
+    assert villager(v, "Hilde")["last_action"] == {
+        "action": "wait",
+        "reason": "you already said that",
+    }
+    assert villager(v, "Jonas")["inbox"] == [] and "heard" not in kinds(v, "Jonas")
+    [turn] = v.store.list_turns("Hilde")
+    assert turn.village_action == {"action": "wait", "reason": "you already said that"}
+
+
+@pytest.mark.anyio
+async def test_a_villager_keeps_its_last_three_lines_as_spoken(tmp_path: Path) -> None:
+    long = "Fish " * 50
+    lines: list[str | Exception] = [say(t, "Jonas") for t in ("One.", "Two.", "Three.", long)]
+    v, _ = village_for(tmp_path, {"Hilde": lines})
+    neighbours_at_market(v)
+    for _ in lines:
+        villager(v, "Hilde")["triggers"] = ["met"]
+        await v.step()
+    assert villager(v, "Hilde")["said"] == ["Two.", "Three.", long[:SPEECH_SHOWN]]

@@ -29,6 +29,7 @@ from agent_lab.village.world import (
 )
 
 SPEECH_SHOWN = 200  # characters of a line shown on the map and heard by others
+SAID_KEPT = 3  # a villager's own last lines it may not repeat
 
 
 class Move(BaseModel):
@@ -175,6 +176,15 @@ def _heard(entry: dict[str, Any], listener: str) -> str:
 GROWING = ("fields", "flower_garden")
 
 
+def same_line(a: str, b: str) -> bool:
+    """The same words, whatever the case, spaces and punctuation."""
+    return re.sub(r"[\W_]+", "", a.lower()) == re.sub(r"[\W_]+", "", b.lower())
+
+
+def _repeats(v: Villager, text: str) -> bool:
+    return any(same_line(text[:SPEECH_SHOWN], line) for line in v["said"])  # kept as spoken
+
+
 def _knows(world: dict[str, Any], name: str, place: str) -> bool:
     """A villager knows how a growing place is doing if it works there or can see it."""
     me = cell(villager_of(world, name))
@@ -246,6 +256,8 @@ def observation(world: dict[str, Any], name: str) -> str:
             else ""
         ),
         f"Places: {', '.join(places)}.",
+        "What you said lately:",
+        *([f'- "{line}"' for line in me["said"]] or ["- nothing yet"]),
         "Where the others are, as far as you know:",
         *[
             f"- {o}: {seen_text(world, name, o)}"
@@ -300,7 +312,8 @@ def parse_action(
         return ({"action": "find", "villager": other}, None) if other else (wait, why)
     text = (action.text or "").strip() if isinstance(action, Say | Goodbye) else ""
     if isinstance(action, Goodbye):
-        goodbye: dict[str, Any] = {"action": "goodbye", "text": text or None}
+        repeated = _repeats(villager_of(world, name), text)
+        goodbye: dict[str, Any] = {"action": "goodbye", "text": None if repeated else text or None}
         if action.place:
             place, why = _destination(world, name, action.place)
             goodbye |= {"place": place} if place else {"ignored": why}
@@ -311,6 +324,8 @@ def parse_action(
     if isinstance(action, Say):
         if not text:
             return wait, "nothing to say"
+        if _repeats(villager_of(world, name), text):
+            return wait, "you already said that"
         to = None
         if action.to:
             to = villager_named(action.to)
