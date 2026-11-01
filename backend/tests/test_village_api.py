@@ -30,6 +30,11 @@ def steps(client: TestClient, n: int) -> None:
         assert client.post("/village/step").status_code == 200
 
 
+def decisions(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A villager's turns without its plan runs."""
+    return [t for t in turns if not t["village_action"] or t["village_action"]["action"] != "plan"]
+
+
 def village_agents(client: TestClient) -> list[dict[str, Any]]:
     return [a for a in client.get("/agents").json() if a["description"].endswith("in the village.")]
 
@@ -95,8 +100,10 @@ def test_start_creates_the_villager_agents_once(store: Store) -> None:
         listed = client.get("/agents").json()
         reflection = [a for a in listed if a["name"] == "Village reflection"]
         chronicler = [a for a in listed if a["name"] == "Village chronicler"]
+        planner = [a for a in listed if a["name"] == "Village planner"]
     assert len(reflection) == 1 and reflection[0]["template_id"] == "blocks"
     assert len(chronicler) == 1 and chronicler[0]["template_id"] == "blocks"
+    assert len(planner) == 1 and planner[0]["template_id"] == "blocks"
     assert sorted(a["name"] for a in agents) == [
         "Greta the farmer",
         "Jonas the fisher",
@@ -111,12 +118,12 @@ def test_stream_sends_state_on_connect_and_decisions_as_they_start(store: Store)
     with client, client.websocket_connect(f"{WS_BASE}/village/stream") as ws:
         assert ws.receive_json()["type"] == "state"
         steps(client, 3)
-        # Steps 1 and 2: the state after the step and after Step. Step 3 adds Jonas's decision:
-        # its start, and the state once it is applied.
-        events = [ws.receive_json() for _ in range(8)]
+        # Steps 1 and 2: the state after the step and after Step. Step 3 adds Jonas's plan run
+        # and his decision: each one's start, and the state once it is applied.
+        events = [ws.receive_json() for _ in range(10)]
     started = [e for e in events if e["type"] == "decision_started"]
-    assert [e["villager"] for e in started] == ["Jonas"] and started[0]["run_id"]
-    assert [e["type"] for e in events].count("state") == 7
+    assert [e["villager"] for e in started] == ["Jonas", "Jonas"] and started[0]["run_id"]
+    assert [e["type"] for e in events].count("state") == 8
     assert events[-1]["state"]["tick"] == 3 and events[-1]["state"]["ticking"] is False
 
 
@@ -137,7 +144,8 @@ def test_turns_stay_out_of_the_main_list(store: Store) -> None:
         steps(client, 3)
         runs = client.get("/runs").json()
         turns = client.get("/village/villagers/Jonas/turns").json()
-    assert runs == [] and len(turns) == 1
+    assert runs == [] and len(turns) == 2  # his plan for the day and one decision
+    assert [t["village_action"]["action"] for t in turns] == ["wait", "plan"]
 
 
 # --- a villager's turns ---
@@ -147,11 +155,13 @@ def test_turns_per_villager(store: Store) -> None:
     plan: dict[str, list[str | Exception]] = {"Jonas": ['{"action": "move", "place": "harbour"}']}
     with client_for(store, plan) as client:
         steps(client, 39)  # Jonas decides at 05:00 and every 30 minutes after: 13 turns
-        turns = client.get("/village/villagers/Jonas/turns").json()
+        listed = client.get("/village/villagers/Jonas/turns").json()
+        turns = decisions(listed)
         missing = client.get("/village/villagers/Bob/turns")
     assert missing.status_code == 404
     assert [t["village_tick"] for t in turns] == list(range(39, 2, -3))
-    assert {t["villager"] for t in turns} == {"Jonas"}
+    assert {t["villager"] for t in listed} == {"Jonas"}
+    assert [t["village_tick"] for t in listed if t not in turns] == [3]  # his plan on waking
     first = turns[-1]
     assert first["village_action"] == {"action": "wait", "reason": "unknown place 'harbour'"}
     assert first["prompt"].startswith("Day 1 (day 1 of spring, year 1), 05:00, morning.")
@@ -170,7 +180,7 @@ def test_an_edit_applies_from_the_next_decision(store: Store) -> None:
             client.put(f"/agents/{agent_id}", json={**fields, "config": config}).status_code == 200
         )
         steps(client, 3)
-        before, after = reversed(client.get("/village/villagers/Jonas/turns").json())
+        before, after = reversed(decisions(client.get("/village/villagers/Jonas/turns").json()))
     assert before["config_version"] != after["config_version"]
     assert after["config"]["blocks"][0]["system"].endswith("Always talk about the weather.")
 
@@ -186,7 +196,7 @@ def test_turns_survive_a_replaced_agent(store: Store) -> None:
         client.post("/village/reset")
         new_id = client.get("/village").json()["villagers"][1]["agent_id"]
         steps(client, 3)
-        turns = client.get("/village/villagers/Jonas/turns").json()
+        turns = decisions(client.get("/village/villagers/Jonas/turns").json())
     assert new_id and new_id != old_id
     assert {t["agent_id"] for t in turns} == {old_id, new_id}  # old and new turns listed
 

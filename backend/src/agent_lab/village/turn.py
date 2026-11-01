@@ -7,22 +7,25 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.memory import recall, when
-from agent_lab.village.seasons import WEATHER_TEXT, date_text, festival_in, growth_text, weather
+from agent_lab.village.plan import plan_lines
+from agent_lab.village.seasons import WEATHER_TEXT, date_text, growth_text, weather
 from agent_lab.village.world import (
-    FESTIVAL_EVENING,
     PLACES,
     VILLAGERS,
     adjacent,
     clock,
     door,
+    festival_lines,
     hhmm,
     label,
     minute_of_day,
     place_at,
     place_cells,
+    place_named,
     sees,
     steps_to,
     usual_place,
+    villager_named,
 )
 
 SPEECH_SHOWN = 200  # characters of a line shown on the map and heard by others
@@ -160,22 +163,12 @@ def _knows(world: dict[str, Any], name: str, place: str) -> bool:
     return VILLAGERS[name].work == place or any(sees(me, c) for c in place_cells(place))
 
 
-def _festival(tick: int) -> list[str]:
-    days = festival_in(clock(tick)[0])
-    if days is None:
-        return []
-    if days:
-        return [f"The harvest festival is on the square in {days} day{'s' if days > 1 else ''}."]
-    if minute_of_day(tick) < FESTIVAL_EVENING:
-        return ["Today is the harvest festival, this evening on the square."]
-    return ["The harvest festival is on now on the square; the whole village is expected there."]
-
-
 def observation(world: dict[str, Any], name: str) -> str:
     """The changing world as one villager sees it; persona and rules live in its agent."""
     me = villager_of(world, name)
     character = VILLAGERS[name]
     day, time, period = clock(world["tick"])
+    minute = minute_of_day(world["tick"])
     next_to = awake_neighbours(world, name)
     in_sight = [
         f"{VILLAGERS[v['name']].title} ({max(abs(v['x'] - me['x']), abs(v['y'] - me['y']))}"
@@ -208,12 +201,17 @@ def observation(world: dict[str, Any], name: str) -> str:
     views = me["views"]
     lines = [
         f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}.",
-        *_festival(world["tick"]),
+        *festival_lines(world["tick"]),
         where_text(world, me),
         *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
         + _usually(name, world["tick"]),
         *([f"You are {goal}."] if goal else []),
+        *(
+            plan_lines(me["plan"]["entries"], minute)
+            if me["plan"] and me["plan"]["day"] == day
+            else []
+        ),
         f"Next to you: {', '.join(VILLAGERS[n].title for n in next_to) or 'nobody'}.",
         f"In sight: {', '.join(in_sight) or 'nobody else'}.",
         f"{conversation}."
@@ -241,20 +239,6 @@ def observation(world: dict[str, Any], name: str) -> str:
         "What do you do? Answer with one JSON object.",
     ]
     return "\n".join(lines)
-
-
-def _place(text: str) -> str | None:
-    wanted = text.strip().lower().removeprefix("the ").replace("_", " ")
-    if wanted in ("home", "my home", "your home"):
-        return "home"
-    return next((key for key in PLACES if label(key) == wanted), None)
-
-
-def _name(text: str) -> str | None:
-    """A villager by first name or title ("Mayor Hilde", "hilde"): models often use the title."""
-    words = set(re.findall(r"[a-z]+", text.lower()))
-    named = [n for n in VILLAGERS if n.lower() in words]
-    return named[0] if len(named) == 1 else None
 
 
 def parse_action(
@@ -294,7 +278,7 @@ def parse_action(
             return wait, "nothing to say"
         to = None
         if action.to:
-            to = _name(action.to)
+            to = villager_named(action.to)
             if to is None or to == name:
                 return wait, f"unknown villager {action.to!r}"
         next_to = awake_neighbours(world, name)
@@ -314,7 +298,7 @@ def parse_action(
 def _destination(world: dict[str, Any], name: str, text: str) -> tuple[str | None, str | None]:
     """A place key (or "home") to walk to, or why not."""
     me = villager_of(world, name)
-    place = _place(text)
+    place = place_named(text)
     if place is None:
         return None, f"unknown place {text!r}"
     if place == "home" and cell(me) == door(name):
@@ -326,7 +310,7 @@ def _destination(world: dict[str, Any], name: str, text: str) -> tuple[str | Non
 
 def _seek(world: dict[str, Any], name: str, text: str) -> tuple[str | None, str | None]:
     """A villager to go looking for, or why not."""
-    other = _name(text)
+    other = villager_named(text)
     if other is None or other == name:
         return None, f"unknown villager {text!r}"
     if other in awake_neighbours(world, name):

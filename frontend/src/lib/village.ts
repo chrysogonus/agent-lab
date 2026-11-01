@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { ChronicleEntry, Run, VillageEvent, VillageState, Villager } from "./api";
+import type { ChronicleEntry, PlanEntry, Run, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
@@ -187,6 +187,10 @@ export function turnLabel(turn: Run): string {
   if (action.action === "chronicle") {
     return action.reason ? `${time}could not write the chronicle: ${action.reason}` : `${time}writes the chronicle of day ${action.day}`;
   }
+  if (action.action === "plan") {
+    if (action.reason) return `${time}could not plan: ${action.reason}`;
+    return `${time}${action.revision ? "changes the plan" : "plans the day"}`;
+  }
   if (action.action === "reflect") {
     const day = turn.village_tick == null ? "" : ` on day ${dayOf(turn.village_tick)}`;
     return action.reason ? `${time}could not reflect: ${action.reason}` : `${time}reflects${day}`;
@@ -197,6 +201,11 @@ export function turnLabel(turn: Run): string {
   if (action.action === "goodbye") return `${time}says goodbye${action.text ? `: ${action.text}` : ""}`;
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
   return `${time}waits`;
+}
+
+/** "07:30 town hall: Go through the list", "11:00 see Jonas: Ask for fish" */
+export function planEntryText(entry: PlanEntry): string {
+  return `${entry.time} ${entry.villager ? `see ${entry.villager}` : entry.place}: ${entry.purpose}`;
 }
 
 /** "Day 3 of autumn, year 1" */

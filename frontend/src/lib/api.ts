@@ -70,11 +70,12 @@ export type VillageAction =
   | { action: "goodbye"; text: string | null; place?: string; villager?: string; ignored?: string; reason?: string }
   | { action: "wait"; reason?: string }
   | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string }
-  | { action: "chronicle"; day: number; title?: string; text?: string; reason?: string };
+  | { action: "chronicle"; day: number; title?: string; text?: string; reason?: string }
+  | { action: "plan"; revision: number; entries?: string[]; reason?: string }; // M11
 
 export type VillageEvent = {
   tick: number;
-  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival";
+  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival" | "planned";
   text: string;
   from?: string;
   to?: string | null;
@@ -105,7 +106,12 @@ export type Villager = {
   learnings: { day: number; text: string }[]; // oldest first (M8)
   views: { villager: string; text: string; day: number }[];
   memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival"; text: string }[]; // newest first
+  plan: Plan | null; // today's plan (M11)
 };
+
+// M11: plans and purpose. See specs/011-plans-and-purpose/contracts/http-api.md.
+export type PlanEntry = { time: string; place: string | null; villager: string | null; purpose: string }; // place: its label or "home"
+export type Plan = { entries: PlanEntry[]; current: number | null; next: number | null; revisions: number };
 
 // M10: seasons, weather, growth and the chronicle. See specs/010-village-seasons/contracts/http-api.md.
 export type Season = "spring" | "summer" | "autumn" | "winter";

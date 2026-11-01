@@ -35,6 +35,14 @@ from agent_lab.village.world import (
 WAIT = '{"action": "wait"}'
 NOTHING_LEARNED = '{"learnings": [], "views": {}}'
 QUIET_DAY = '{"title": "A quiet day", "text": "Nothing much happened."}'
+A_PLAN = json.dumps(
+    {
+        "plan": [
+            {"time": "08:00", "place": "market", "purpose": "See who is about"},
+            {"time": "17:00", "place": "home", "purpose": "Rest"},
+        ]
+    }
+)
 MORNING = 30  # tick of 09:30: everyone is awake
 
 
@@ -58,10 +66,14 @@ def is_chronicle(messages: list[Message]) -> bool:
     return "the chronicle of a small village" in (messages[0]["content"] or "")
 
 
+def is_plan(messages: list[Message]) -> bool:
+    return "plan its day" in (messages[0]["content"] or "")
+
+
 def speaker(messages: list[Message]) -> str:
     """The villager a call is for: its persona opens the system prompt of a decision and the
-    prompt of a reflection."""
-    text = messages[1 if is_reflection(messages) else 0]["content"] or ""
+    prompt of a reflection or a plan."""
+    text = messages[1 if is_reflection(messages) or is_plan(messages) else 0]["content"] or ""
     return next(n for n in VILLAGERS if f"You are {n}," in text)
 
 
@@ -69,8 +81,8 @@ def responder(
     plan: dict[str, list[str | Exception]],
 ) -> Callable[[list[Message]], ChatResponse | Exception]:
     """Answers each villager from its own list (then waits), whatever order decisions run in;
-    reflections come from the list "<name>:reflect" (then an empty reflection), chronicles from
-    "chronicle" (then a quiet day)."""
+    reflections come from the list "<name>:reflect" (then an empty reflection), plans from
+    "<name>:plan" (then A_PLAN), chronicles from "chronicle" (then a quiet day)."""
     queues = {n: list(a) for n, a in plan.items()}
 
     def respond(messages: list[Message]) -> ChatResponse | Exception:
@@ -78,10 +90,14 @@ def responder(
             queue = queues.get("chronicle") or []
             item = queue.pop(0) if queue else QUIET_DAY
             return item if isinstance(item, Exception) else answer(item)
-        reflecting = is_reflection(messages)
-        key = f"{speaker(messages)}:reflect" if reflecting else speaker(messages)
+        if is_plan(messages):
+            key, default = f"{speaker(messages)}:plan", A_PLAN
+        elif is_reflection(messages):
+            key, default = f"{speaker(messages)}:reflect", NOTHING_LEARNED
+        else:
+            key, default = speaker(messages), WAIT
         queue = queues.get(key) or []
-        item = queue.pop(0) if queue else (NOTHING_LEARNED if reflecting else WAIT)
+        item = queue.pop(0) if queue else default
         return item if isinstance(item, Exception) else answer(item)
 
     return respond
@@ -125,12 +141,16 @@ def calls_of(llm: FakeLLM, name: str) -> list[str]:
     return [
         c[1]["content"] or ""
         for c in llm.calls
-        if not is_chronicle(c) and not is_reflection(c) and speaker(c) == name
+        if not is_chronicle(c) and not is_reflection(c) and not is_plan(c) and speaker(c) == name
     ]
 
 
 def reflections_of(llm: FakeLLM, name: str) -> list[str]:
     return [c[1]["content"] or "" for c in llm.calls if is_reflection(c) and speaker(c) == name]
+
+
+def plans_of(llm: FakeLLM, name: str) -> list[str]:
+    return [c[1]["content"] or "" for c in llm.calls if is_plan(c) and speaker(c) == name]
 
 
 def chronicles_of(llm: FakeLLM) -> list[str]:
@@ -1366,15 +1386,15 @@ async def test_reset_clears_plans_baskets_and_stalls_and_keeps_the_shared_agents
     tmp_path: Path,
 ) -> None:
     v, _ = village_for(tmp_path)
-    v.world["planner_agent_id"] = "planner-1"
     ids = {k: v.world[k] for k in ("reflection_agent_id", "chronicler_agent_id")}
+    ids["planner_agent_id"] = v.world["planner_agent_id"]
+    assert ids["planner_agent_id"]
     put(v, "Jonas", 1, 1, basket="fish", working={"place": "pier", "steps": 3}, said=["Hi"])
     v.world["stalls"]["fish"] = 2
     await v.reset()
     jonas = villager(v, "Jonas")
     assert jonas["basket"] is jonas["working"] is None and jonas["said"] == []
     assert v.world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
-    assert v.world["planner_agent_id"] == "planner-1"
     assert {k: v.world[k] for k in ids} == ids
 
 
@@ -1383,3 +1403,157 @@ def test_the_state_leaves_out_said_harvest_and_the_planner() -> None:
     state = v.state()
     assert not {"harvest", "planner_agent_id"} & set(state)
     assert all("said" not in x for x in state["villagers"])
+
+
+JONAS_WAKES = 3  # tick of 05:00
+
+
+def plan_json(*entries: tuple[str, str, str]) -> str:
+    return json.dumps({"plan": [{"time": t, "place": p, "purpose": why} for t, p, why in entries]})
+
+
+def talk(v: Village, a: str, b: str, lines: int) -> dict[str, Any]:
+    c = {"a": a, "b": b, "lines": lines, "last_tick": v.world["tick"]}
+    c["transcript"] = [f"{(a, b)[i % 2]}: line {i}" for i in range(lines)]
+    v.world["conversations"].append(c)
+    return c
+
+
+def plan_turn(v: Village, name: str) -> dict[str, Any] | None:
+    """What the villager's latest plan run did."""
+    actions = [t.village_action for t in v.store.list_turns(name)]
+    return next((a for a in actions if a and a["action"] == "plan"), None)
+
+
+def today_plan(v: Village, name: str, revisions: int = 0) -> None:
+    day = runner.clock(v.world["tick"])[0]
+    entries = [
+        {"minute": 480, "place": "market", "villager": None, "purpose": "trade"},
+        {"minute": 1020, "place": "home", "villager": None, "purpose": "rest"},
+    ]
+    villager(v, name)["plan"] = {"day": day, "entries": entries, "revisions": revisions}
+
+
+@pytest.mark.anyio
+async def test_a_villager_plans_its_day_on_waking(tmp_path: Path) -> None:
+    fishing = plan_json(("05:00", "pier", "Catch fish"), ("11:00", "market", "Sell the catch"))
+    v, llm = village_for(tmp_path, {"Jonas:plan": [fishing]})
+    v.world["tick"] = JONAS_WAKES - 1
+    await v.step()
+    jonas = villager(v, "Jonas")
+    assert jonas["plan"] == {
+        "day": 1,
+        "entries": [
+            {"minute": 300, "place": "pier", "villager": None, "purpose": "Catch fish"},
+            {"minute": 660, "place": "market", "villager": None, "purpose": "Sell the catch"},
+        ],
+        "revisions": 0,
+    }
+    assert len(plans_of(llm, "Jonas")) == 1 and plans_of(llm, "Hilde") == []  # still asleep
+    assert "planned" in kinds(v, "Jonas")
+    assert "Jonas's plan for the day: 05:00 pier: Catch fish" in json.dumps(v.world["day_record"])
+    assert plan_turn(v, "Jonas") == {
+        "action": "plan",
+        "revision": 0,
+        "entries": ["05:00 pier: Catch fish", "11:00 market: Sell the catch"],
+    }
+    await v.step()  # his decision on waking sees the plan, the current entry marked
+    assert (
+        "- 05:00 pier: Catch fish (now)\n- 11:00 market: Sell the catch (next)"
+        in (calls_of(llm, "Jonas")[-1])
+    )
+    state = next(x for x in v.state()["villagers"] if x["name"] == "Jonas")
+    assert state["plan"] == {
+        "entries": [
+            {"time": "05:00", "place": "pier", "villager": None, "purpose": "Catch fish"},
+            {"time": "11:00", "place": "market", "villager": None, "purpose": "Sell the catch"},
+        ],
+        "current": 0,
+        "next": 1,
+        "revisions": 0,
+    }
+
+
+@pytest.mark.anyio
+async def test_an_invalid_plan_keeps_the_previous_one(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Jonas:plan": ['{"plan": []}']})
+    v.world["tick"] = JONAS_WAKES - 1
+    await v.step()
+    assert villager(v, "Jonas")["plan"] is None
+    assert plan_turn(v, "Jonas") == {
+        "action": "plan",
+        "revision": 0,
+        "reason": "a plan needs at least 2 entries",
+    }
+    assert next(x for x in v.state()["villagers"] if x["name"] == "Jonas")["plan"] is None
+
+
+@pytest.mark.anyio
+async def test_a_long_talk_revises_both_plans_twice_a_day_at_most(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v)
+    today_plan(v, "Greta")
+    today_plan(v, "Lina", revisions=2)
+    v._end_conversation(talk(v, "Greta", "Lina", 4), "test")  # pyright: ignore[reportPrivateUsage]
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    revisions = plans_of(llm, "Greta")
+    assert len(revisions) == 1 and plans_of(llm, "Lina") == []  # Lina used both revisions
+    assert "Your plan so far:\n- 08:00 market: trade" in revisions[0]
+    assert "The conversation you just had:\nGreta: line 0 / Lina: line 1" in revisions[0]
+    greta = villager(v, "Greta")
+    assert greta["plan"]["revisions"] == 1 and greta["plan"]["entries"][1]["place"] == "home"
+    assert (plan_turn(v, "Greta") or {}).get("revision") == 1
+    v._end_conversation(talk(v, "Greta", "Lina", 3), "test")  # pyright: ignore[reportPrivateUsage]
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert len(plans_of(llm, "Greta")) == 1  # 3 lines are not a long talk
+    for _ in range(2):
+        v._end_conversation(talk(v, "Greta", "Lina", 5), "test")  # pyright: ignore[reportPrivateUsage]
+        await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert len(plans_of(llm, "Greta")) == 2 and villager(v, "Greta")["plan"]["revisions"] == 2
+
+
+@pytest.mark.anyio
+async def test_a_plan_finishing_on_another_day_is_dropped(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, delay=0.05)
+    morning(v)
+    v._start_plan("Jonas")  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.01)
+    v.world["tick"] += 144  # the next day began meanwhile
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert villager(v, "Jonas")["plan"] is None
+    assert plan_turn(v, "Jonas") == {
+        "action": "plan",
+        "revision": 0,
+        "reason": "the day it was for is over",
+    }
+
+
+@pytest.mark.anyio
+async def test_failing_plans_do_not_pause_the_village(tmp_path: Path) -> None:
+    down = RuntimeError("model down")
+    v, _ = village_for(tmp_path, {f"{n}:plan": [down] for n in VILLAGERS})
+    v.world["tick"] = JONAS_WAKES - 1
+    await v.step()
+    await v.step()
+    assert v.world["failed_ticks"] == 0
+    turns = [t.village_action for t in v.store.list_turns("Jonas")]
+    assert {"action": "plan", "revision": 0, "reason": "turn failed: run ended error"} in turns
+
+
+@pytest.mark.anyio
+async def test_step_and_reset_wait_for_plans(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, delay=0.02)
+    v.world["tick"] = JONAS_WAKES - 1
+    await v.step()
+    assert v.plans == {} and villager(v, "Jonas")["plan"] is not None
+    morning(v)
+    v._start_plan("Hilde")  # pyright: ignore[reportPrivateUsage]
+    await v.reset()
+    assert v.plans == {} and villager(v, "Hilde")["plan"] is None
+
+
+def test_the_planner_agent_is_created_once_and_listed() -> None:
+    v, _ = village_for(":memory:")
+    v.ensure_agents()
+    planners = [a for a in v.store.list_agents() if a.name.startswith("Village planner")]
+    assert [a.agent_id for a in planners] == [v.world["planner_agent_id"]]

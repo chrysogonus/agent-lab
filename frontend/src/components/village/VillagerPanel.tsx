@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { villagerTurns, type Run, type Villager } from "@/lib/api";
-import { eventLines, sleepText, stateText, turnLabel } from "@/lib/village";
+import { eventLines, planEntryText, sleepText, stateText, turnLabel } from "@/lib/village";
 import { VillagerSprite } from "./pixels";
 
 const MEMORIES_SHOWN = 10;
@@ -48,6 +48,24 @@ export function VillagerPanel({
         </button>
       </div>
       <p className="font-sans text-sm leading-relaxed text-dusk">{villager.persona}</p>
+      <div>
+        <h3 className="mb-1.5 text-lg">Today&apos;s plan</h3>
+        {villager.plan === null ? (
+          <p className="text-sm text-dusk-muted">No plan yet: villagers plan their day when they wake.</p>
+        ) : (
+          <ol className="flex flex-col gap-1 font-sans">
+            {villager.plan.entries.map((entry, i) => {
+              const mark = i === villager.plan!.current ? "now" : i === villager.plan!.next ? "next" : null;
+              return (
+                <li key={i} className={`text-sm ${mark === "now" ? "text-dusk" : "text-dusk-muted"}`} aria-current={mark === "now" ? "step" : undefined}>
+                  {planEntryText(entry)}
+                  {mark && <span className="ml-1.5 font-pixel text-xs text-signal-ink">{mark}</span>}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
       {villager.agent_id && (
         <button type="button" onClick={() => onEditAgent(villager.agent_id!)} className="village-button self-start">
           Edit its agent

@@ -22,6 +22,7 @@ import {
   whereText,
   calendarText,
   newEntries,
+  planEntryText,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -49,6 +50,7 @@ const villager = (fields: Partial<Villager>): Villager => ({
   learnings: [],
   views: [],
   memories: [],
+  plan: null,
   ...fields,
 });
 
@@ -224,5 +226,24 @@ describe("seasons and the chronicle", () => {
     expect(newEntries(chronicle, "c")).toBe(0);
     expect(newEntries(chronicle, null)).toBe(3);
     expect(newEntries(chronicle, "gone")).toBe(3); // e.g. after a reset
+  });
+});
+
+describe("plans", () => {
+  it("names a place or a villager to see", () => {
+    expect(planEntryText({ time: "07:30", place: "town hall", villager: null, purpose: "Go through the list" })).toBe(
+      "07:30 town hall: Go through the list",
+    );
+    expect(planEntryText({ time: "11:00", place: null, villager: "Jonas", purpose: "Ask for fish" })).toBe("11:00 see Jonas: Ask for fish");
+  });
+
+  it("labels plan runs among the turns", () => {
+    const run = (village_action: Run["village_action"]) =>
+      ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(run({ action: "plan", revision: 0, entries: ["05:00 pier: fish"] }))).toBe("05:00 plans the day");
+    expect(turnLabel(run({ action: "plan", revision: 1, entries: ["05:00 pier: fish"] }))).toBe("05:00 changes the plan");
+    expect(turnLabel(run({ action: "plan", revision: 0, reason: "a plan needs at least 2 entries" }))).toBe(
+      "05:00 could not plan: a plan needs at least 2 entries",
+    );
   });
 });

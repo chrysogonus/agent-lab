@@ -34,6 +34,14 @@ from agent_lab.village.memory import (
     remember,
     unreflected,
 )
+from agent_lab.village.plan import (
+    REVISIONS,
+    entry_text,
+    marks,
+    parse_plan,
+    plan_prompt,
+    planner_agent,
+)
 from agent_lab.village.seasons import (
     dark,
     date,
@@ -91,6 +99,7 @@ FAILED_TICKS_PAUSE = 3
 IDLE_STEPS = 3  # an idle villager decides again after 30 village minutes
 SILENT_STEPS = 3  # a conversation without a line for this long ends
 CONVERSATION_LINES = 10
+PLAN_TALK_LINES = 4  # a conversation this long ends with both revising their plans
 NIGHT_STEP = 0.2  # seconds per step while everyone sleeps
 STEP_GAP = 0.1  # seconds between moves in a Step
 CELLS_PER_STEP = 3  # how far a villager walks in 10 village minutes
@@ -129,6 +138,7 @@ class Village:
         self.decisions: dict[str, asyncio.Task[None]] = {}
         self.reflections: dict[str, asyncio.Task[None]] = {}  # never count as decisions
         self.chronicle: asyncio.Task[None] | None = None  # nor does the chronicle
+        self.plans: dict[str, asyncio.Task[None]] = {}  # nor do plans
         self.outcomes: list[bool] = []  # decisions finished since the last step: succeeded?
         self.in_step = False  # inside Step: its own decisions may start while paused
         self.resetting = False
@@ -221,6 +231,7 @@ class Village:
                 "wake": hhmm(character.wake),
                 "bed": hhmm(character.bed),
                 "goal": goal_text(goal),
+                "plan": self._plan_state(v["plan"], day, minute_of_day(world["tick"])),
                 "talking_with": partners(self.world, name),
                 "beliefs": [
                     {
@@ -295,6 +306,28 @@ class Village:
             },
         }
 
+    @staticmethod
+    def _plan_state(plan: dict[str, Any] | None, day: int, minute: int) -> dict[str, Any] | None:
+        """Today's plan with its current and next entry marked; yesterday's plan is none."""
+        if not plan or plan["day"] != day:
+            return None
+        current, following = marks(plan["entries"], minute)
+        entries = [
+            {
+                "time": hhmm(e["minute"]),
+                "place": e["place"] if e["place"] in (None, "home") else label(e["place"]),
+                "villager": e["villager"],
+                "purpose": e["purpose"],
+            }
+            for e in plan["entries"]
+        ]
+        return {
+            "entries": entries,
+            "current": current,
+            "next": following,
+            "revisions": plan["revisions"],
+        }
+
     def _publish(self) -> None:
         self.store.save_village(self.world)
         self.bus.publish(CHANNEL, {"type": "state", "state": self.state()})
@@ -302,7 +335,8 @@ class Village:
     # --- villager agents ---
 
     def ensure_agents(self, *, recreate: bool = False) -> None:
-        """Creates each villager's block agent and the shared reflection agent; with `recreate`
+        """Creates each villager's block agent and the shared reflection, chronicler and planner
+        agents; with `recreate`
         (Reset), also deleted ones.
 
         Without it a villager whose agent was deleted waits until the owner resets.
@@ -318,6 +352,8 @@ class Village:
             self.world["reflection_agent_id"] = self._create_agent(reflection_agent())
         if missing(self.world["chronicler_agent_id"]):
             self.world["chronicler_agent_id"] = self._create_agent(chronicler_agent())
+        if missing(self.world["planner_agent_id"]):
+            self.world["planner_agent_id"] = self._create_agent(planner_agent())
         self.store.save_village(self.world)
 
     def _create_agent(self, body: dict[str, Any]) -> str:
@@ -358,12 +394,23 @@ class Village:
         self.world["conversations"].remove(c)
         transcript = " / ".join(c.get("transcript", []))
         self._note(f"{c['a']} and {c['b']} talked: {transcript}")
+        day = clock(self.world["tick"])[0]
         for me, other in ((c["a"], c["b"]), (c["b"], c["a"])):
             v = self._villager(me)
             self._event(v, "ended", f"Your conversation with {other} ended: {reason}.", to=other)
             if me != by:
                 self._trigger(v, "conversation ended")
             self._remember(v, "conversation", f"Talked with {other}: {transcript}", [other])
+            plan = v["plan"]
+            if (
+                c["lines"] >= PLAN_TALK_LINES
+                and not (v["asleep"] or v["bedtime"] or self.resetting)
+                and plan
+                and plan["day"] == day
+                and plan["revisions"] < REVISIONS
+            ):
+                plan["revisions"] += 1  # counted when it starts: two revision runs a day at most
+                self._start_plan(me, transcript)
 
     def _remember(self, v: Villager, kind: str, text: str, about: list[str]) -> None:
         remember(v, self.world["tick"], kind, text, about, place_at(v["x"], v["y"]))
@@ -392,6 +439,8 @@ class Village:
                         self._note(f"Overnight: {news}")  # yesterday's work shows by morning
                 self._event(v, "woke", "You woke up at home.")
                 self._trigger(v, "woke")
+                if not self.resetting:
+                    self._start_plan(name)
             return
         if not awake and not v["bedtime"]:
             v |= {"bedtime": True, "goal": {"kind": "home"}, "triggers": []}
@@ -631,6 +680,51 @@ class Village:
             self.store.set_village_action(run_id, action)
         self._publish()
 
+    def _start_plan(self, name: str, revise: str | None = None) -> None:
+        previous = self.plans.get(name)  # one villager's plans never overlap
+        self.plans[name] = asyncio.create_task(self._plan(name, revise, previous))
+
+    async def _plan(
+        self, name: str, revise: str | None, previous: asyncio.Task[None] | None
+    ) -> None:
+        """A plan for the day on waking, or a revision (`revise`: the conversation just had)."""
+        if previous:
+            await asyncio.gather(previous, return_exceptions=True)
+        tick = self.world["tick"]
+        day = clock(tick)[0]
+        v = self._villager(name)
+        revision = v["plan"]["revisions"] if revise is not None and v["plan"] else 0
+        prompt = plan_prompt(self.world, name, revise)
+        try:
+            run_id, answer, failed = await self._run(
+                self.world["planner_agent_id"], name, prompt, tick
+            )
+        finally:
+            if self.plans.get(name) is asyncio.current_task():
+                del self.plans[name]
+        if self.resetting:
+            return
+        entries, reason = (None, failed) if failed else parse_plan(answer, name)
+        # Decoding JSON can undo redaction of the raw answer: redact again.
+        entries, reason = redact(entries, self.secrets), redact(reason, self.secrets)
+        v = self._villager(name)
+        if entries and (v["asleep"] or clock(self.world["tick"])[0] != day):
+            entries, reason = None, "the day it was for is over"  # one plan a villager a day
+        if entries:
+            v["plan"] = {"day": day, "entries": entries, "revisions": revision}
+            text = "; ".join(entry_text(e) for e in entries)
+            if revise is None:
+                self._event(v, "planned", "You planned your day.")
+                self._note(f"{name}'s plan for the day: {text}")
+            else:
+                self._event(v, "planned", "You changed your plan.")
+                self._note(f"{name} changed the plan for the day: {text}")
+        action: dict[str, Any] = {"action": "plan", "revision": revision}
+        action |= {"entries": [entry_text(e) for e in entries]} if entries else {"reason": reason}
+        if run_id:
+            self.store.set_village_action(run_id, action)
+        self._publish()
+
     async def _chronicle(self, record: dict[str, Any], previous: asyncio.Task[None] | None) -> None:
         """Tonight's chronicle entry, for the day the record began even past midnight."""
         if previous:  # a late chronicle never overtakes the one before
@@ -776,9 +870,14 @@ class Village:
             self.world["talked_out"].append(sorted([a, b]))
 
     async def _settle(self) -> None:
-        """Waits until no decision or reflection is in flight."""
-        while self.decisions or self.reflections or (self.chronicle and not self.chronicle.done()):
-            tasks = [*self.decisions.values(), *self.reflections.values()]
+        """Waits until no decision, reflection, plan or chronicle is in flight."""
+        while (
+            self.decisions
+            or self.reflections
+            or self.plans
+            or (self.chronicle and not self.chronicle.done())
+        ):
+            tasks = [*self.decisions.values(), *self.reflections.values(), *self.plans.values()]
             tasks += [self.chronicle] if self.chronicle else []
             await asyncio.gather(*tasks, return_exceptions=True)
 

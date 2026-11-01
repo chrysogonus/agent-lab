@@ -1,5 +1,6 @@
 """The village map, its clock and its four villagers (specs/007-village-life/data-model.md)."""
 
+import re
 from collections import deque
 from dataclasses import dataclass
 from functools import cache
@@ -244,6 +245,33 @@ def usual_place(name: str, tick: int) -> str:
         return "square"
     routine = VILLAGERS[name].routine
     return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
+
+
+def festival_lines(tick: int) -> list[str]:
+    """The harvest festival news at a step, for whoever plans or decides then."""
+    days = festival_in(clock(tick)[0])
+    if days is None:
+        return []
+    if days:
+        return [f"The harvest festival is on the square in {days} day{'s' if days > 1 else ''}."]
+    if minute_of_day(tick) < FESTIVAL_EVENING:
+        return ["Today is the harvest festival, this evening on the square."]
+    return ["The harvest festival is on now on the square; the whole village is expected there."]
+
+
+def place_named(text: str) -> str | None:
+    """A place key, or "home", from how a villager names it ("the market", "home")."""
+    wanted = text.strip().lower().removeprefix("the ").replace("_", " ")
+    if wanted in ("home", "my home", "your home"):
+        return "home"
+    return next((key for key in PLACES if label(key) == wanted), None)
+
+
+def villager_named(text: str) -> str | None:
+    """A villager by first name or title ("Mayor Hilde", "hilde"): models often use the title."""
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    named = [n for n in VILLAGERS if n.lower() in words]
+    return named[0] if len(named) == 1 else None
 
 
 VERSION = 5  # the world's shape: 2 to 4 are upgraded in place, anything else starts fresh
