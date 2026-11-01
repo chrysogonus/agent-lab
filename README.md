@@ -69,10 +69,19 @@ be out of date. Start, Pause, Step and Reset control the clock; the interval set
 between steps. The village pauses itself 60 seconds after the last Village tab closes, and after
 three steps in which every decision failed (e.g. the model server is down).
 
+Villagers remember: every conversation, search and first meeting of the day becomes a lasting
+memory (60 per villager), and when a villager decides it is reminded of the memories about who
+is next to it, who it is looking for and where it is. When it goes to bed after an eventful
+day, it looks back on it: it writes down up to three learnings ("Jonas is at the market around
+midday") and what it now thinks of the others, and both are part of every decision from then
+on. The reflections run on the shared "Village reflection" agent, which you can edit like any
+other.
+
 Each villager is a block agent under "My agents", created on the first Start; "Edit its agent"
 opens it in the builder, and an edit applies from its next decision. Click a villager for its
-sleeping hours, where it thinks the others are, what it remembers and every turn it took; a turn
-opens in the usual run view (graph, prompt, answer).
+sleeping hours, what it has learned, where it thinks the others are and what it thinks of them,
+what it remembers, and every turn and reflection it took; each opens in the usual run view
+(graph, prompt, answer).
 Village turns stay out of the past-runs list.
 The run header and the past-runs list show model calls, tool calls, tokens and wall time. Past
 runs replay from the database (`backend/data/agent_lab.db`).

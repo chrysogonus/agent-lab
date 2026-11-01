@@ -5,7 +5,9 @@ import { villagerTurns, type Run, type Villager } from "@/lib/api";
 import { eventLines, sleepText, stateText, turnLabel } from "@/lib/village";
 import { VillagerSprite } from "./pixels";
 
-/** One villager: who it is, where, what it remembers, and every turn it took. */
+const MEMORIES_SHOWN = 10;
+
+/** One villager: who it is, where, what it learned and remembers, and every turn it took. */
 export function VillagerPanel({
   villager,
   tick,
@@ -22,6 +24,8 @@ export function VillagerPanel({
   onEditAgent: (agentId: string) => void;
 }) {
   const [turns, setTurns] = useState<Run[]>([]);
+  const [allMemories, setAllMemories] = useState(false);
+  const memories = allMemories ? villager.memories : villager.memories.slice(0, MEMORIES_SHOWN);
   useEffect(() => {
     villagerTurns(villager.name).then(setTurns, () => setTurns([]));
   }, [villager.name, tick, turnsStarted]);
@@ -50,17 +54,56 @@ export function VillagerPanel({
         </button>
       )}
       <div>
-        <h3 className="mb-1.5 text-lg">Thinks the others are</h3>
-        <ul className="flex flex-col gap-1 font-sans">
+        <h3 className="mb-1.5 text-lg">Has learned</h3>
+        {villager.learnings.length === 0 ? (
+          <p className="text-sm text-dusk-muted">Nothing yet. Villagers learn when they go to bed after a day worth remembering.</p>
+        ) : (
+          <ol className="flex flex-col gap-1 font-sans">
+            {villager.learnings.map((l, i) => (
+              <li key={i} className="text-sm text-dusk">
+                <span className="font-pixel text-dusk-muted">Day {l.day}</span> {l.text}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+      <div>
+        <h3 className="mb-1.5 text-lg">The others</h3>
+        <ul className="flex flex-col gap-1.5 font-sans">
           {villager.beliefs.map((b) => (
             <li key={b.villager} className="text-sm text-dusk">
               <span className="font-pixel">{b.villager}</span> {b.text}
+              {b.view && <span className="block text-dusk-muted">Thinks: {b.view}</span>}
             </li>
           ))}
         </ul>
       </div>
       <div>
         <h3 className="mb-1.5 text-lg">Remembers</h3>
+        {villager.memories.length === 0 ? (
+          <p className="text-sm text-dusk-muted">Nothing lasting yet: conversations, searches and meetings stay here.</p>
+        ) : (
+          <>
+            <ol className="flex flex-col gap-1 font-sans">
+              {memories.map((m, i) => (
+                <li key={i} className="text-sm text-dusk">
+                  <span className="font-pixel text-dusk-muted tabular-nums">
+                    Day {m.day} {m.time}
+                  </span>{" "}
+                  {m.text}
+                </li>
+              ))}
+            </ol>
+            {villager.memories.length > MEMORIES_SHOWN && (
+              <button type="button" onClick={() => setAllMemories(!allMemories)} className="village-button village-button--small mt-2">
+                {allMemories ? "Show fewer" : `Show all ${villager.memories.length}`}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      <div>
+        <h3 className="mb-1.5 text-lg">Lately</h3>
         {villager.events.length === 0 ? (
           <p className="text-sm text-dusk-muted">Nothing yet. Start or step the village.</p>
         ) : (

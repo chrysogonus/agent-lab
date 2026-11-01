@@ -39,13 +39,13 @@ callables that tell decisions from reflections by the system prompt. Runner test
 
 ## Phase 4: User Story 3 — Seeing what a villager has learned (P3)
 
-- [ ] T004 [P] [US3] frontend/src/lib/api.ts and lib/village.ts: villager `learnings`, `views`, `memories`, `beliefs[].view`; `VillageAction` `reflect`; `turnLabel` "reflects on day 1" (or the reason); `memoryLines`; tests in village.test.ts
-- [ ] T005 [US3] frontend/src/components/village/VillagerPanel.tsx: "Has learned" (with day), views next to beliefs, "Remembers" from lasting memories (10, then "Show all"), screenshots at 1400 × 950
+- [X] T004 [P] [US3] frontend/src/lib/api.ts and lib/village.ts: villager `learnings`, `views`, `memories`, `beliefs[].view`; `VillageAction` `reflect`; `turnLabel` "reflects on day 1" (or the reason); `memoryLines`; tests in village.test.ts
+- [X] T005 [US3] frontend/src/components/village/VillagerPanel.tsx: "Has learned" (with day), views next to beliefs, "Remembers" from lasting memories (10, then "Show all"), screenshots at 1400 × 950
 
 ## Phase 5: Polish
 
-- [ ] T006 README.md (village memory), AGENTS.md (`memory.py` in the layout, reflections in the contracts)
-- [ ] T007 `make check`; quickstart manual steps on the real model with results recorded below
+- [X] T006 README.md (village memory), AGENTS.md (`memory.py` in the layout, reflections in the contracts)
+- [X] T007 `make check`; quickstart manual steps on the real model with results recorded below
 
 ## Dependencies
 
@@ -70,3 +70,22 @@ T001 → T002 → T003 → (T004 → T005) → T006 → T007.
 | SC-003, SC-004 | test_village_runner.py |
 | SC-005 | test_village_runner.py (10 scripted days) |
 | SC-006 | quickstart step 3 (real model) |
+
+## Manual check results (T007, 2026-11-01)
+
+vLLM `qwen3.5-9b`; a scratch backend on a copy of the owner's database, reset, then driven over
+the API and stream at a 1 s interval from day 1, 04:30 to day 3, 04:50 (290 steps, 260 s; 0 of
+1,009 published states moved more than one villager).
+
+| Quickstart step | Result |
+|---|---|
+| 1. Two days | 8 reflections, one per villager per night, all valid; 19 to 38 lasting memories per villager |
+| 2. Panel | "Has learned", views next to beliefs and lasting memories render (screenshot with a mocked villager); reflections listed as "reflects on day N" |
+| 3. Day 2 follows day 1 (SC-006) | Greta learned "Mayor Hilde needs my best vegetables for the festival tomorrow" and on day 2 went to find Hilde and promised "the finest harvest for your festival"; Hilde learned "Greta promised to bring her finest vegetables" and on day 2 looked for Greta first; by night 2 Hilde had learned "Jonas is at the market around midday" and her view of him was "works diligently but keeps missing me when I need his fish most urgently" |
+
+Learnings examples: Jonas "I must bring fresh fish to the market before noon tomorrow for Mayor
+Hilde's festival", Lina "Mayor Hilde needs the best roses at the square by noon tomorrow".
+
+Fixed during the checks: a villager who walked out of a conversation got the "conversation
+ended" trigger itself and decided again at once, so turns were duplicated within a step; only
+the villager left behind is triggered now. Reset no longer creates a second reflection agent.

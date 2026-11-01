@@ -68,11 +68,12 @@ export type VillageAction =
   | { action: "find"; villager: string; reason?: string }
   | { action: "say"; text: string; to: string | null; reason?: string }
   | { action: "goodbye"; text: string | null; reason?: string }
-  | { action: "wait"; reason?: string };
+  | { action: "wait"; reason?: string }
+  | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string };
 
 export type VillageEvent = {
   tick: number;
-  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited";
+  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected";
   text: string;
   from?: string;
   to?: string | null;
@@ -98,7 +99,10 @@ export type Villager = {
   bed: string;
   goal: string | null; // "walking to the market", "going home", "looking for Lina"
   talking_with: string[];
-  beliefs: { villager: string; text: string }[];
+  beliefs: { villager: string; text: string; view: string | null }[];
+  learnings: { day: number; text: string }[]; // oldest first (M8)
+  views: { villager: string; text: string; day: number }[];
+  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection"; text: string }[]; // newest first
 };
 
 export type VillageLine = { tick: number; time: string; from: string; to: string | null; text: string };

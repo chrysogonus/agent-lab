@@ -135,11 +135,20 @@ export function whereText(villager: Villager): string {
   return "Between places";
 }
 
+/** The village day a step belongs to (day 1 starts at 04:30 with step 0). */
+export function dayOf(tick: number): number {
+  return 1 + Math.floor((270 + tick * TICK_MINUTES) / 1440);
+}
+
 /** One line for a turn: its time and what it did (or why it waited). */
 export function turnLabel(turn: Run): string {
   const time = turn.village_tick == null ? "" : `${tickTime(turn.village_tick)} `;
   const action = turn.village_action;
   if (!action) return `${time}${turn.status === "running" ? "thinking…" : "no action recorded"}`;
+  if (action.action === "reflect") {
+    const day = turn.village_tick == null ? "" : ` on day ${dayOf(turn.village_tick)}`;
+    return action.reason ? `${time}could not reflect: ${action.reason}` : `${time}reflects${day}`;
+  }
   if (action.reason) return `${time}waited: ${action.reason}`;
   if (action.action === "move") return `${time}walks ${action.place === "home" ? "home" : `to the ${placeLabel(action.place)}`}`;
   if (action.action === "find") return `${time}goes looking for ${action.villager}`;

@@ -3,6 +3,7 @@ import type { Run, VillageState, Villager } from "./api";
 import {
   cellKind,
   clockText,
+  dayOf,
   eventLines,
   figures,
   logLines,
@@ -37,6 +38,9 @@ const villager = (fields: Partial<Villager>): Villager => ({
   goal: null,
   talking_with: [],
   beliefs: [],
+  learnings: [],
+  views: [],
+  memories: [],
   ...fields,
 });
 
@@ -141,5 +145,13 @@ describe("panel", () => {
       "05:00 waited: unknown place 'harbour'",
     );
     expect(turnLabel(turn({ status: "running" }))).toBe("05:00 thinking…");
+    expect(turnLabel(turn({ village_tick: 105, village_action: { action: "reflect", learnings: ["x"], views: {} } }))).toBe(
+      "22:00 reflects on day 1",
+    );
+    expect(turnLabel(turn({ village_action: { action: "reflect", reason: "the answer is not JSON" } }))).toBe(
+      "05:00 could not reflect: the answer is not JSON",
+    );
+    expect(dayOf(116)).toBe(1);
+    expect(dayOf(117)).toBe(2);
   });
 });

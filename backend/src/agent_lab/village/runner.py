@@ -272,16 +272,19 @@ class Village:
             v["triggers"].append(reason)
 
     def _end_conversations(self, name: str, reason: str) -> None:
+        """Ends `name`'s conversations because of what `name` did."""
         for c in [c for c in self.world["conversations"] if name in (c["a"], c["b"])]:
-            self._end_conversation(c, reason)
+            self._end_conversation(c, reason, by=name)
 
-    def _end_conversation(self, c: dict[str, Any], reason: str) -> None:
+    def _end_conversation(self, c: dict[str, Any], reason: str, by: str | None = None) -> None:
+        """Both remember it; the one who ended it (`by`) has no reason to decide again."""
         self.world["conversations"].remove(c)
         transcript = " / ".join(c.get("transcript", []))
         for me, other in ((c["a"], c["b"]), (c["b"], c["a"])):
             v = self._villager(me)
             self._event(v, "ended", f"Your conversation with {other} ended: {reason}.", to=other)
-            self._trigger(v, "conversation ended")
+            if me != by:
+                self._trigger(v, "conversation ended")
             self._remember(v, "conversation", f"Talked with {other}: {transcript}", [other])
 
     def _remember(self, v: Villager, kind: str, text: str, about: list[str]) -> None:

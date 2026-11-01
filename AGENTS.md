@@ -30,8 +30,9 @@ report; keep every gate at its current strictness.
   `workflows/` (chain, routing, parallel, orchestrator, evaluator), `blocks/` (block agents:
   `model.py` types and layout rules, `graph.py`, `run.py`, `convert.py` templates as blocks),
   `village/` (`world.py` map, homes, clock, villagers with sleeping hours and routines;
-  `turn.py` observations, actions and beliefs text; `runner.py` the step loop and background
-  decisions; specs/007-village-life/),
+  `turn.py` observations, actions and beliefs text; `memory.py` lasting memories, recall and
+  reflection; `runner.py` the step loop, background decisions and nightly reflections;
+  specs/007-village-life/, specs/008-village-memory/),
   `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
@@ -72,6 +73,8 @@ report; keep every gate at its current strictness.
    `village_tick` (the step they started in) and `villager`; the village never calls the model
    directly, and model answers become a validated action (anything else is `wait` with a
    reason). Steps hold one lock; decisions apply on the event loop without awaiting in between.
+   Reflections are runs of the shared reflection agent, tagged the same way; they never count as
+   decisions, and their answer is validated into learnings and views.
 6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
    `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
    forward-looking abstractions.

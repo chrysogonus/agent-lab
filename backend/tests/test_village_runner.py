@@ -503,10 +503,13 @@ async def test_goodbye_and_walking_away_end_a_conversation(tmp_path: Path) -> No
     v2, _ = village_for(":memory:", {"Hilde": [say("Hi")], "Jonas": [move("pier")]})
     neighbours_at_market(v2)
     villager(v2, "Hilde")["triggers"] = ["met"]
-    for _ in range(3):
+    for _ in range(2):  # Hilde says hi, Jonas walks off
         await v2.step()
     assert v2.world["conversations"] == []
     assert any("Jonas walked away" in e["text"] for e in villager(v2, "Hilde")["events"])
+    # Walking away is no reason for Jonas to decide again; Hilde, left behind, will.
+    assert "conversation ended" not in villager(v2, "Jonas")["triggers"]
+    assert "conversation ended" in villager(v2, "Hilde")["triggers"]
 
 
 @pytest.mark.anyio
