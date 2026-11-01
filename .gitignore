@@ -14,3 +14,21 @@ next-env.d.ts
 # Local state and secrets
 .env
 backend/data/
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Tooling and OS
+.coverage
+htmlcov/
+coverage/
+*.log
+.DS_Store
+.claude/settings.local.json
+CLAUDE.local.md
