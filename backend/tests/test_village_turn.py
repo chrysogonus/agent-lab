@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from agent_lab.blocks.model import BlocksConfig, layout_errors
+from agent_lab.village.seasons import WEATHER_TEXT, date, weather
 from agent_lab.village.turn import (
     belief_text,
     heard_places,
@@ -59,7 +60,9 @@ def test_observation() -> None:
     )
     world["conversations"] = [{"a": "Hilde", "b": "Jonas", "lines": 2, "last_tick": 29}]
     text = observation(world, "Jonas")
-    assert text.startswith("Day 1, 09:30, morning. You are at the market.")
+    weather_line = WEATHER_TEXT[weather(1)]
+    assert text.startswith(f"Day 1 (day 1 of spring, year 1), 09:30, morning. {weather_line}.\n")
+    assert "\nYou are at the market." in text
     assert "You get up at 05:00 and go to bed at 21:00." in text
     assert "At this hour you are usually at the pier." in text
     assert "Next to you: Mayor Hilde." in text
@@ -230,3 +233,15 @@ def test_moving_or_finding_while_talking_needs_a_goodbye_first() -> None:
     rules = villager_agent("Hilde")["config"]["blocks"][0]["system"]
     assert '"place": "market"} to end a conversation and leave' in rules
     assert "say goodbye before you walk off" in rules
+
+
+@pytest.mark.parametrize("day", [3, 10, 17, 21, 24, 30])
+def test_the_observation_names_date_season_and_weather(day: int) -> None:
+    world = new_world()
+    world["tick"] = (day - 1) * 144 + 30  # 09:30
+    for v in world["villagers"]:
+        v["asleep"] = False
+    year, season, day_of_season = date(day)
+    first = observation(world, "Greta").split("\n")[0]
+    expected = f"Day {day} (day {day_of_season} of {season}, year {year}), 09:30, morning."
+    assert first == f"{expected} {WEATHER_TEXT[weather(day)]}."

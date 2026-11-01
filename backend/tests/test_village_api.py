@@ -154,7 +154,8 @@ def test_turns_per_villager(store: Store) -> None:
     assert {t["villager"] for t in turns} == {"Jonas"}
     first = turns[-1]
     assert first["village_action"] == {"action": "wait", "reason": "unknown place 'harbour'"}
-    assert first["prompt"].startswith("Day 1, 05:00, morning. You are at your home's door.")
+    assert first["prompt"].startswith("Day 1 (day 1 of spring, year 1), 05:00, morning.")
+    assert "\nYou are at your home's door." in first["prompt"]
 
 
 def test_an_edit_applies_from_the_next_decision(store: Store) -> None:

@@ -213,6 +213,82 @@
 .village-flutter-path {
   animation: village-flutter-path 9s ease-in-out infinite;
 }
+/* Weather (M10): rain and snow fall across the map, fog drifts, cloud shadows pass. */
+.village-rain {
+  animation: village-fall 0.8s linear infinite;
+}
+@keyframes village-fall {
+  from {
+    transform: translate(0, -12px);
+  }
+  to {
+    transform: translate(-10px, 364px);
+  }
+}
+.village-flake {
+  animation: village-snowfall 7s linear infinite;
+}
+@keyframes village-snowfall {
+  0% {
+    transform: translate(0, -6px);
+  }
+  25% {
+    transform: translate(5px, 84px);
+  }
+  50% {
+    transform: translate(-4px, 174px);
+  }
+  75% {
+    transform: translate(5px, 264px);
+  }
+  100% {
+    transform: translate(0, 358px);
+  }
+}
+.village-fog {
+  animation: village-fog-drift 26s ease-in-out infinite alternate;
+}
+@keyframes village-fog-drift {
+  from {
+    transform: translateX(-36px);
+  }
+  to {
+    transform: translateX(36px);
+  }
+}
+.village-cloud {
+  animation: village-cloud-pass 44s linear infinite;
+}
+@keyframes village-cloud-pass {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(700px);
+  }
+}
+.village-flash {
+  animation: village-flash 9s steps(1, end) infinite;
+}
+@keyframes village-flash {
+  0%,
+  88% {
+    opacity: 0;
+  }
+  89% {
+    opacity: 0.55;
+  }
+  90% {
+    opacity: 0;
+  }
+  92% {
+    opacity: 0.35;
+  }
+  93% {
+    opacity: 0;
+  }
+}
+
 .village-ring-wave {
   transform-box: fill-box;
   transform-origin: center;
@@ -416,8 +492,17 @@
   .village-paper,
   .village-flutter,
   .village-flutter-path,
-  .village-firefly {
+  .village-firefly,
+  .village-rain,
+  .village-flake,
+  .village-fog,
+  .village-cloud,
+  .village-flash {
     animation: none;
+  }
+  .village-rain,
+  .village-flake {
+    transform: translateY(var(--still)); /* still drops and flakes spread over the map */
   }
   .village-wave-b,
   .village-step-b,

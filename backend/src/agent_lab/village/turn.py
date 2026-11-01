@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.memory import recall, when
+from agent_lab.village.seasons import WEATHER_TEXT, date_text, weather
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -185,7 +186,8 @@ def observation(world: dict[str, Any], name: str) -> str:
     remembered = recall(me["memories"], world["tick"], matters, here)
     views = me["views"]
     lines = [
-        f"Day {day}, {time}, {period}. {where_text(world, me)}",
+        f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}.",
+        where_text(world, me),
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
         + _usually(name, world["tick"]),
         *([f"You are {goal}."] if goal else []),
@@ -386,6 +388,7 @@ def villager_agent(name: str) -> dict[str, Any]:
         "template_id": "blocks",
         "name": character.title,
         "description": f"Plays {character.title} in the village.",
-        "sample_prompt": "Day 1, 05:00, morning. You are at your home's door.\nWhat do you do?",
+        "sample_prompt": "Day 1 (day 1 of spring, year 1), 05:00, morning. Sunny.\n"
+        "You are at your home's door.\nWhat do you do?",
         "config": {"reasoning": False, "blocks": [decide, check]},
     }

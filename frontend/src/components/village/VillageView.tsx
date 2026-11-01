@@ -13,10 +13,11 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { PACES, PERIOD_SKY, activity, clockText, glideMs, figures, logLines, narration, newEntries, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
+import { PACES, PERIOD_SKY, activity, calendarText, clockText, glideMs, figures, logLines, narration, newEntries, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
+import { Puddles, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
 import { VillagerPanel } from "./VillagerPanel";
 
 const SEEN_KEY = "village-chronicle-seen";
@@ -81,8 +82,10 @@ function useVillage(): VillageStream {
 function VillageMap({ state, selected, onSelect }: { state: VillageState; selected: string | null; onSelect: (name: string) => void }) {
   const { width, height, rows, places, homes } = state.map;
   const map = rows.join("\n");
-  const sky = PERIOD_SKY[state.period];
-  const dark = state.period === "evening" || state.period === "night";
+  const sky = PERIOD_SKY[state.sky];
+  const { dark, weather, calendar } = state;
+  const wet = weather === "rain" || weather === "storm";
+  const warm = calendar.season === "spring" || calendar.season === "summer";
   const areas = placeAreas(rows);
   const owners = new Map(state.villagers.map((v) => [v.name, v]));
   const houses = homes.map((h) => `${h.letter}:${owners.get(h.villager)?.color ?? "#d6584b"}`).join(",");
@@ -101,9 +104,18 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
           <stop offset={1} className="village-sky-stop" style={{ stopColor: sky.bottom.color, stopOpacity: sky.bottom.opacity }} />
         </linearGradient>
       </defs>
-      <Ground map={map} houses={houses} />
-      <LakeRings map={map} />
-      {!dark && areas.G && <Butterflies area={areas.G} />}
+      <Ground
+        map={map}
+        houses={houses}
+        season={calendar.season}
+        snow={state.snow_cover}
+        fields={state.growth.fields.stage}
+        garden={state.growth.flower_garden.stage}
+        neglected={state.growth.fields.neglected}
+      />
+      {wet && <Puddles rows={rows} />}
+      {weather !== "snow" && <LakeRings map={map} />}
+      {!dark && warm && !wet && areas.G && <Butterflies area={areas.G} />}
       {homes.map((h) => {
         const owner = owners.get(h.villager);
         const home = owner && !owner.asleep && owner.x === h.door[0] && owner.y === h.door[1];
@@ -111,7 +123,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
       })}
       <rect width={width * TILE} height={height * TILE} fill="url(#village-sky)" pointerEvents="none" aria-hidden />
       <Lights map={map} on={dark} />
-      {dark && <Fireflies map={map} />}
+      {dark && calendar.season !== "winter" && !wet && <Fireflies map={map} />}
       {homes.map((h) => owners.get(h.villager)?.asleep && areas[h.letter] && <Snores key={h.letter} area={areas[h.letter]} />)}
       {places.map((p) => {
         const area = areas[rows[p.y][p.x]];
@@ -177,6 +189,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
           </g>
         );
       })}
+      <WeatherLayer weather={weather} width={width * TILE} height={height * TILE} />
     </svg>
   );
 }
@@ -287,7 +300,6 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
   };
   const fresh = newEntries(state.chronicle, seen);
 
-  const night = state.period === "evening" || state.period === "night";
 
   return (
     <div className="grid min-h-0 flex-1 gap-4 font-pixel text-dusk lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -315,22 +327,15 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
       </section>
       <aside className="village-window flex min-h-0 flex-col gap-4 overflow-auto p-5" aria-label="Village controls">
         <div className="flex items-center gap-3">
-          <svg viewBox="0 0 12 12" width={36} height={36} className="pixel-art shrink-0" aria-hidden>
-            {night ? (
-              <path d="M5 1h3v1h1v1H7v1H6v4h1v1h2v1H8v1H5v-1H3V9H2V3h1V2h2z" fill="#ffe9a8" stroke="#2a2340" strokeWidth={0.6} />
-            ) : (
-              <>
-                <path d="M5 0h2v2H5zM5 10h2v2H5zM0 5h2v2H0zM10 5h2v2h-2zM1 1h2v2H1zM9 1h2v2H9zM1 9h2v2H1zM9 9h2v2H9z" fill="#f0a830" />
-                <rect x={3} y={3} width={6} height={6} fill="#ffd75e" stroke="#2a2340" strokeWidth={0.6} />
-              </>
-            )}
-          </svg>
+          <WeatherIcon weather={state.weather} dark={state.dark} />
           <div>
             <p>
               <PixelDigits text={state.time} />
             </p>
-            <p className="mt-2 text-base text-dusk-muted">
-              Day {state.day}, {state.period}
+            <p className="mt-2 text-base text-dusk-muted">{calendarText(state)}</p>
+            <p className="text-sm text-dusk-muted">
+              {WEATHER_WORDS[state.weather]}, {state.period}
+              {state.calendar.festival_in === 0 ? ", harvest festival" : ""}
             </p>
           </div>
         </div>

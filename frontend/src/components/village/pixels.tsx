@@ -1,12 +1,14 @@
 // The village's pixel art, drawn in code: tiles, places, scenery and the four villagers.
 // One map cell is a 16 x 16 pixel tile; the map's SVG viewBox counts pixels.
 import { memo, type CSSProperties, type ReactNode } from "react";
+import type { FieldStage, GardenStage, Season } from "../../lib/api";
 import { cellKind, placeAreas, type Activity, type Area } from "../../lib/village"; // relative: the sprite test runs without path aliases
+import { BARE_TREE, RIPE_GREENS, WEEDS, WEEDS_PALETTE, fieldRows, gardenPalette, leavesOf, lookOf } from "./seasons";
 
 export const TILE = 16;
 export const INK = "#2a2340"; // the outline of everything
 
-type Palette = Record<string, string>;
+export type Palette = Record<string, string>;
 
 /** Pixel rows ("." is see-through) as one rect per run of equal pixels. */
 export function Pixels({ rows, palette, x = 0, y = 0 }: { rows: readonly string[]; palette: Palette; x?: number; y?: number }) {
@@ -203,8 +205,15 @@ function hash(x: number, y: number): number {
   return (x * 7 + y * 13 + x * y) % 3;
 }
 
-function Defs() {
+type Year = { season: Season; snow: boolean; fields: FieldStage; garden: GardenStage };
+
+function Defs({ season, snow, fields, garden }: Year) {
   // A tile's ground overlaps the next tile by half a pixel, so no seams show when the map is scaled.
+  const look = lookOf(season, snow);
+  const leaves = leavesOf(season);
+  const grassPalette = { ...GRASS_PALETTE, d: look.tuft, l: look.blade };
+  const crop = (x: number) => fieldRows(fields, x, CROPS);
+  const cropPalette = { ...CROP_PALETTE, f: look.furrow, s: "#e0c080", ...(fields === "ripe" ? RIPE_GREENS : {}) };
   const tile = (id: string, fill: string, overlay?: ReactNode) => (
     <g key={id} id={id}>
       <rect width={TILE + 0.5} height={TILE + 0.5} fill={fill} />
@@ -213,8 +222,8 @@ function Defs() {
   );
   return (
     <defs>
-      {GRASS_TILES.map((rows, i) => tile(`vt-grass${i}`, C.grass, <Pixels rows={rows} palette={GRASS_PALETTE} />))}
-      {tile("vt-path", C.path, <Pixels rows={PATH_TILE} palette={{ p: C.pebble, q: "#f6e6bd" }} />)}
+      {GRASS_TILES.map((rows, i) => tile(`vt-grass${i}`, look.grass, <Pixels rows={rows} palette={grassPalette} />))}
+      {tile("vt-path", look.path, <Pixels rows={PATH_TILE} palette={{ p: look.pebble, q: snow ? "#ffffff" : "#f6e6bd" }} />)}
       {tile("vt-water", C.water)}
       <g id="vt-waves-a">
         <Pixels rows={WAVES_A} palette={{ w: C.wave }} />
@@ -223,9 +232,14 @@ function Defs() {
         <Pixels rows={WAVES_B} palette={{ w: C.wave }} />
       </g>
       {tile("vt-stone", C.stone, <Pixels rows={STONE_TILE} palette={{ j: C.joint }} />)}
-      {tile("vt-greens", C.soil, <Pixels rows={CROPS.greens} palette={CROP_PALETTE} />)}
-      {tile("vt-wheat", C.soil, <Pixels rows={CROPS.wheat} palette={CROP_PALETTE} />)}
-      {tile("vt-flowers", C.grass, <Pixels rows={FLOWER_BED} palette={FLOWER_PALETTE} />)}
+      {[0, 1].map((x) => {
+        const rows = crop(x);
+        return tile(`vt-field${x}`, look.soil, <Pixels rows={rows} palette={cropPalette} />);
+      })}
+      <g id="vt-weeds">
+        <Pixels rows={WEEDS} palette={WEEDS_PALETTE} />
+      </g>
+      {tile("vt-flowers", look.grass, <Pixels rows={FLOWER_BED} palette={gardenPalette(garden, FLOWER_PALETTE)} />)}
       <g id="vt-planks">
         <rect width={TILE + 0.5} height={TILE + 0.5} fill={C.wood} />
         {[0, 4, 8, 12].map((y) => (
@@ -235,9 +249,15 @@ function Defs() {
           </g>
         ))}
       </g>
-      <g id="vt-tree">
-        <Pixels rows={TREE} palette={TREE_PALETTE} />
-      </g>
+      {(leaves ?? [null]).map((palette, i) => (
+        <g key={i} id={`vt-tree${i}`}>
+          {palette ? (
+            <Pixels rows={TREE} palette={{ ...TREE_PALETTE, ...palette }} />
+          ) : (
+            <Pixels rows={BARE_TREE} palette={{ ...TREE_PALETTE, s: snow ? "#ffffff" : TREE_PALETTE.t }} />
+          )}
+        </g>
+      ))}
       <g id="vt-lamp">
         <Pixels rows={LAMP} palette={{ o: INK, y: "#efe6c4", x: "#00000026" }} />
       </g>
@@ -376,14 +396,15 @@ function cellsOf(rows: string[], char: string): [number, number][] {
 
 /** Everything that does not change between steps: ground, places, houses and scenery.
  * `houses` is "letter:color" per home, joined by commas, so the memo compares a string. */
-export const Ground = memo(function Ground({ map, houses }: { map: string; houses: string }) {
+export const Ground = memo(function Ground({ map, houses, neglected, ...year }: { map: string; houses: string; neglected: boolean } & Year) {
   const rows = map.split("\n");
+  const trees = leavesOf(year.season)?.length ?? 1;
   const areas = placeAreas(rows);
   const cells = rows.flatMap((row, y) => [...row].map((char, x) => ({ char, x, y })));
   const water = cells.filter((c) => c.char === "~" || c.char === "P");
   return (
     <g>
-      <Defs />
+      <Defs {...year} />
       {cells.map(({ char, x, y }) => {
         const kind = cellKind(char);
         const id =
@@ -393,9 +414,7 @@ export const Ground = memo(function Ground({ map, houses }: { map: string; house
               ? "vt-water"
               : kind === "place"
                 ? char === "F"
-                  ? x % 2
-                    ? "vt-wheat"
-                    : "vt-greens"
+                  ? `vt-field${x % 2}`
                   : (PLACE_TILE[char] ?? "vt-grass0")
                 : `vt-grass${hash(x, y)}`; // grass, and the ground under trees, lamps and buildings
         return <use key={`${x},${y}`} href={`#${id}`} x={x * TILE} y={y * TILE} />;
@@ -438,8 +457,9 @@ export const Ground = memo(function Ground({ map, houses }: { map: string; house
           const [letter, color] = house.split(":");
           return areas[letter] && <Building key={letter} area={areas[letter]} roof={color} roofDark={darker(color, 0.7)} />;
         })}
+      {neglected && cellsOf(rows, "F").map(([x, y]) => <use key={`weeds-${x},${y}`} href="#vt-weeds" x={x * TILE} y={y * TILE} />)}
       {cellsOf(rows, "t").map(([x, y]) => (
-        <use key={`tree-${x},${y}`} href="#vt-tree" x={x * TILE} y={y * TILE} />
+        <use key={`tree-${x},${y}`} href={`#vt-tree${(x * 5 + y * 3) % trees}`} x={x * TILE} y={y * TILE} />
       ))}
       {cellsOf(rows, "i").map(([x, y]) => (
         <use key={`lamp-${x},${y}`} href="#vt-lamp" x={x * TILE} y={y * TILE} />
