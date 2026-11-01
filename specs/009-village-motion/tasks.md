@@ -9,8 +9,8 @@ runner tests pass `move_gap=0`. **Gate**: `make check` per phase; commit after e
 
 ## Phase 1: User Stories 1 and 2 — movement and conversations (P1) 🎯 MVP
 
-- [ ] T001 [US1] backend/src/agent_lab/village/runner.py: `CELLS_PER_STEP = 3`, rounds, gap per research §1; tests in backend/tests/test_village_runner.py: up to 3 cells per step through each cell, one move per published state over a step with several walkers, early arrival, a meeting mid-step while walking on, 100 steps with at most 3 cells per villager per step (SC-002), crossing fields → pier in at most a third of the M8 steps (SC-001)
-- [ ] T002 [US2] turn.py and runner.py: move and find refused while talking ("you are talking with <names>; say goodbye first"), goodbye with `place` or `villager` (invalid → "You said goodbye but stayed: …"), new rules text, `_refresh_rules()` on load, `state()` `work`; tests in test_village_turn.py and test_village_runner.py: refusals, goodbye with place / villager / nothing / invalid destination, the other villager told, the refresh replaces only the unchanged rules text (SC-003)
+- [X] T001 [US1] backend/src/agent_lab/village/runner.py: `CELLS_PER_STEP = 3`, rounds, gap per research §1; tests in backend/tests/test_village_runner.py: up to 3 cells per step through each cell, one move per published state over a step with several walkers, early arrival, a meeting mid-step while walking on, 100 steps with at most 3 cells per villager per step (SC-002), crossing fields → pier in at most a third of the M8 steps (SC-001)
+- [X] T002 [US2] turn.py and runner.py: move and find refused while talking ("you are talking with <names>; say goodbye first"), goodbye with `place` or `villager` (invalid → "You said goodbye but stayed: …"), new rules text, `_refresh_rules()` on load, `state()` `work`; tests in test_village_turn.py and test_village_runner.py: refusals, goodbye with place / villager / nothing / invalid destination, the other villager told, the refresh replaces only the unchanged rules text (SC-003)
 
 ## Phase 2: User Stories 3 and 4 — idle animations and world (P2, P3)
 

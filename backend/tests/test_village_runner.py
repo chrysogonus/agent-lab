@@ -15,7 +15,7 @@ from agent_lab.llm.base import ChatResponse, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 from agent_lab.village import runner
-from agent_lab.village.runner import CHANNEL, FRESH_START, StepConflict, Village
+from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
 from agent_lab.village.turn import villager_agent
 from agent_lab.village.world import (
     PLACES,
@@ -249,7 +249,8 @@ async def test_walking_costs_no_model_call(tmp_path: Path) -> None:
     greta = villager(v, "Greta")
     greta["goal"] = {"kind": "place", "place": "square"}
     distance = steps_to(greta["x"], greta["y"], place_cells("square"))
-    for _ in range(distance - 1):
+    steps = -(-distance // CELLS_PER_STEP)  # three cells a step
+    for _ in range(steps - 1):
         await v.step()
         assert calls_of(llm, "Greta") == []
     await v.step()
@@ -286,9 +287,14 @@ async def test_moves_are_staggered_within_a_step(tmp_path: Path) -> None:
             now = {x["name"]: (x["x"], x["y"]) for x in event["state"]["villagers"]}
             changed = [n for n in now if now[n] != before[n]]
             assert len(changed) <= 1  # one move per published state
+            for n in changed:
+                bx, by = before[n]
+                assert abs(now[n][0] - bx) + abs(now[n][1] - by) == 1  # one cell at a time
             moved_in_order += changed
             before = now
-        assert sorted(moved_in_order) == ["Greta", "Hilde", "Jonas"]
+        assert set(moved_in_order) == {"Greta", "Hilde", "Jonas"}
+        assert all(moved_in_order.count(n) <= CELLS_PER_STEP for n in moved_in_order)
+        assert moved_in_order[:3] != [moved_in_order[0]] * 3  # rounds: they take turns
         first_movers.append(moved_in_order[0])
     assert len(set(first_movers)) > 1  # the order rotates
 
@@ -308,7 +314,8 @@ async def test_hundred_steps_stay_on_walkable_cells() -> None:
         await v.step()
         for x in v.world["villagers"]:
             bx, by = before[x["name"]]
-            assert walkable(x["x"], x["y"]) and abs(x["x"] - bx) + abs(x["y"] - by) <= 1
+            moved = abs(x["x"] - bx) + abs(x["y"] - by)
+            assert walkable(x["x"], x["y"]) and moved <= CELLS_PER_STEP
     assert v.world["tick"] == MORNING + 100
 
 
@@ -500,15 +507,26 @@ async def test_goodbye_and_walking_away_end_a_conversation(tmp_path: Path) -> No
     assert any("Hilde said goodbye" in e["text"] for e in villager(v, "Jonas")["events"])
     assert v.world["log"][-1]["text"] == "See you!"
 
-    v2, _ = village_for(":memory:", {"Hilde": [say("Hi")], "Jonas": [move("pier")]})
+    leave = json.dumps({"action": "goodbye", "text": "Off to the pier!", "place": "pier"})
+    v2, _ = village_for(":memory:", {"Hilde": [say("Hi")], "Jonas": [move("pier"), leave]})
     neighbours_at_market(v2)
     villager(v2, "Hilde")["triggers"] = ["met"]
-    for _ in range(2):  # Hilde says hi, Jonas walks off
+    jonas = villager(v2, "Jonas")
+    jonas_at = (jonas["x"], jonas["y"])
+    for _ in range(2):  # Hilde says hi; Jonas tries to walk off and may not
         await v2.step()
+    assert jonas["last_action"] == {
+        "action": "wait",
+        "reason": "you are talking with Hilde; say goodbye first",
+    }
+    assert (jonas["x"], jonas["y"]) == jonas_at and len(v2.world["conversations"]) == 1
+    jonas["triggers"] = ["spoken to"]
+    await v2.step()  # Jonas says goodbye and leaves for the pier
     assert v2.world["conversations"] == []
-    assert any("Jonas walked away" in e["text"] for e in villager(v2, "Hilde")["events"])
-    # Walking away is no reason for Jonas to decide again; Hilde, left behind, will.
-    assert "conversation ended" not in villager(v2, "Jonas")["triggers"]
+    assert any("Jonas said goodbye" in e["text"] for e in villager(v2, "Hilde")["events"])
+    assert jonas["goal"] == {"kind": "place", "place": "pier"}
+    # Leaving is no reason for Jonas to decide again; Hilde, left behind, will.
+    assert "conversation ended" not in jonas["triggers"]
     assert "conversation ended" in villager(v2, "Hilde")["triggers"]
 
 
@@ -919,3 +937,105 @@ async def test_an_m7_world_keeps_going_with_empty_memory(tmp_path: Path) -> None
     assert all(x["memories"] == [] for x in reloaded.world["villagers"])
     reloaded.ensure_agents()
     assert reloaded.world["reflection_agent_id"]
+
+
+# --- M9: faster walks, goodbye to leave ---
+
+
+@pytest.mark.anyio
+async def test_walkers_go_three_cells_a_step_and_stop_on_arrival(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    fields = place_cells("fields")
+    greta = put(v, "Greta", 11, 12, goal={"kind": "place", "place": "pier"})  # on the path
+    start = (greta["x"], greta["y"])
+    await v.step()
+    assert abs(greta["x"] - start[0]) + abs(greta["y"] - start[1]) == CELLS_PER_STEP
+    put(v, "Greta", 7, 14, goal={"kind": "place", "place": "fields"})  # just east of the fields
+    distance = steps_to(greta["x"], greta["y"], fields)
+    assert 0 < distance < CELLS_PER_STEP
+    await v.step()  # arrives after one or two cells and stops there
+    assert place_at(greta["x"], greta["y"]) == "fields" and greta["goal"] is None
+    assert kinds(v, "Greta").count("arrived") == 1
+
+
+@pytest.mark.anyio
+async def test_crossing_the_village_takes_a_third_of_the_steps(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    fx, fy = label_cell("fields")
+    greta = put(v, "Greta", fx, fy, goal={"kind": "place", "place": "pier"})
+    distance = steps_to(fx, fy, place_cells("pier"))  # the steps it took in M8
+    steps = 0
+    while greta["goal"]:
+        await v.step()
+        steps += 1
+    assert place_at(greta["x"], greta["y"]) == "pier" and steps <= -(-distance // 3)
+
+
+@pytest.mark.anyio
+async def test_a_walker_meets_someone_mid_step_and_walks_on(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    put(v, "Jonas", 12, 11)  # standing on the road
+    greta = put(v, "Greta", 9, 11, goal={"kind": "place", "place": "pier"})
+    await v.step()
+    assert "met" in kinds(v, "Greta") and "met" in kinds(v, "Jonas")
+    assert greta["x"] == 9 + CELLS_PER_STEP  # met Jonas on the way and kept walking
+
+
+@pytest.mark.anyio
+async def test_goodbye_to_find_someone_and_an_ignored_destination(tmp_path: Path) -> None:
+    to_find = json.dumps({"action": "goodbye", "text": "Bye!", "villager": "Greta"})
+    v, _ = village_for(tmp_path, {"Hilde": [to_find]})
+    neighbours_at_market(v)
+    v.world["conversations"] = [
+        {"a": "Hilde", "b": "Jonas", "lines": 2, "last_tick": MORNING, "transcript": []}
+    ]
+    villager(v, "Hilde")["triggers"] = ["spoken to"]
+    await v.step()
+    hilde = villager(v, "Hilde")
+    assert v.world["conversations"] == [] and hilde["goal"]["villager"] == "Greta"
+
+    nowhere = json.dumps({"action": "goodbye", "place": "harbour"})
+    v2, _ = village_for(":memory:", {"Hilde": [nowhere]})
+    neighbours_at_market(v2)
+    v2.world["conversations"] = [
+        {"a": "Hilde", "b": "Jonas", "lines": 2, "last_tick": MORNING, "transcript": []}
+    ]
+    villager(v2, "Hilde")["triggers"] = ["spoken to"]
+    await v2.step()
+    hilde = villager(v2, "Hilde")
+    assert v2.world["conversations"] == [] and hilde["goal"] is None
+    assert "You said goodbye but stayed: unknown place 'harbour'." in [
+        e["text"] for e in hilde["events"]
+    ]
+
+
+@pytest.mark.anyio
+async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> None:
+    from agent_lab.village.turn import PREVIOUS_RULES, RULES
+
+    v, _ = village_for(tmp_path)
+    ids = {x["name"]: x["agent_id"] for x in v.world["villagers"]}
+    for name, edited in (("Hilde", False), ("Jonas", True)):
+        agent = v.store.get_agent(ids[name])
+        assert agent is not None
+        blocks = agent.config["blocks"]
+        old = PREVIOUS_RULES + (" Always mention the weather." if edited else "")
+        rules_free = blocks[0]["system"].replace(RULES, "")
+        system = rules_free + (old.replace(PREVIOUS_RULES, "MY OWN RULES") if edited else old)
+        v.store.update_agent(
+            agent.agent_id,
+            name=agent.name,
+            description=agent.description,
+            sample_prompt=agent.sample_prompt,
+            config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
+        )
+    Village(store=v.store, models=v.models, bus=Bus())  # loading refreshes the rules
+    hilde = v.store.get_agent(ids["Hilde"])
+    jonas = v.store.get_agent(ids["Jonas"])
+    assert hilde is not None and jonas is not None
+    assert RULES in hilde.config["blocks"][0]["system"]
+    assert PREVIOUS_RULES not in hilde.config["blocks"][0]["system"]
+    assert "MY OWN RULES" in jonas.config["blocks"][0]["system"]  # the owner's edit stays

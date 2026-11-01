@@ -45,6 +45,8 @@ class Say(BaseModel):
 class Goodbye(BaseModel):
     action: Literal["goodbye"]
     text: str | None = None
+    place: str | None = None  # where it goes next (M9)
+    villager: str | None = None  # or whom it goes looking for
 
 
 class Wait(BaseModel):
@@ -243,27 +245,26 @@ def parse_action(
         return wait, "the answer is not JSON"
     except ValidationError as exc:
         return wait, f"not a valid action: {exc.errors()[0]['msg']}"
-    me = villager_of(world, name)
+    talking = partners(world, name)
+    if isinstance(action, Move | Find) and talking:
+        return wait, f"you are talking with {' and '.join(talking)}; say goodbye first"
     if isinstance(action, Move):
-        place = _place(action.place)
-        if place is None:
-            return wait, f"unknown place {action.place!r}"
-        if place == "home" and cell(me) == door(name):
-            return wait, "already at your home"
-        if place != "home" and place_at(me["x"], me["y"]) == place:
-            return wait, f"already at the {label(place)}"
-        return {"action": "move", "place": place}, None
+        place, why = _destination(world, name, action.place)
+        return ({"action": "move", "place": place}, None) if place else (wait, why)
     if isinstance(action, Find):
-        other = _name(action.villager)
-        if other is None or other == name:
-            return wait, f"unknown villager {action.villager!r}"
-        if other in awake_neighbours(world, name):
-            return wait, f"{other} is already next to you"
-        return {"action": "find", "villager": other}, None
-    if isinstance(action, Say | Goodbye):
-        text = (action.text or "").strip()
-        if isinstance(action, Goodbye):
-            return {"action": "goodbye", "text": text or None}, None
+        other, why = _seek(world, name, action.villager)
+        return ({"action": "find", "villager": other}, None) if other else (wait, why)
+    text = (action.text or "").strip() if isinstance(action, Say | Goodbye) else ""
+    if isinstance(action, Goodbye):
+        goodbye: dict[str, Any] = {"action": "goodbye", "text": text or None}
+        if action.place:
+            place, why = _destination(world, name, action.place)
+            goodbye |= {"place": place} if place else {"ignored": why}
+        elif action.villager:
+            other, why = _seek(world, name, action.villager)
+            goodbye |= {"villager": other} if other else {"ignored": why}
+        return goodbye, None
+    if isinstance(action, Say):
         if not text:
             return wait, "nothing to say"
         to = None
@@ -285,6 +286,29 @@ def parse_action(
     return wait, None
 
 
+def _destination(world: dict[str, Any], name: str, text: str) -> tuple[str | None, str | None]:
+    """A place key (or "home") to walk to, or why not."""
+    me = villager_of(world, name)
+    place = _place(text)
+    if place is None:
+        return None, f"unknown place {text!r}"
+    if place == "home" and cell(me) == door(name):
+        return None, "already at your home"
+    if place != "home" and place_at(me["x"], me["y"]) == place:
+        return None, f"already at the {label(place)}"
+    return place, None
+
+
+def _seek(world: dict[str, Any], name: str, text: str) -> tuple[str | None, str | None]:
+    """A villager to go looking for, or why not."""
+    other = _name(text)
+    if other is None or other == name:
+        return None, f"unknown villager {text!r}"
+    if other in awake_neighbours(world, name):
+        return None, f"{other} is already next to you"
+    return other, None
+
+
 def heard_places(text: str, speaker: str, hearer: str) -> dict[str, str]:
     """Villagers a line places somewhere: a sentence naming one of them and one place (or home)."""
     found: dict[str, str] = {}
@@ -298,7 +322,8 @@ def heard_places(text: str, speaker: str, hearer: str) -> dict[str, str]:
     return found
 
 
-RULES = (
+# The M7 rules: stored villager agents still holding them verbatim get RULES on load (M9).
+PREVIOUS_RULES = (
     "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
     "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
@@ -316,6 +341,30 @@ RULES = (
     '{"action": "wait"} to go on with what you are doing.\n'
     "You go home to sleep at your bedtime by yourself. Say short things, stay in character, "
     "answer people who talk to you, and say goodbye when you have said what you wanted."
+)
+
+
+RULES = (
+    "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
+    "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
+    "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
+    "something happens: you woke up, arrived somewhere, met someone, someone spoke to you, or a "
+    "while passed. Reply with only one JSON object and nothing else:\n"
+    '{"action": "move", "place": "market"} to walk to a place or "home" (a few steps every 10 '
+    "minutes until you arrive),\n"
+    '{"action": "find", "villager": "Lina"} to go and look for someone where you think they '
+    "are,\n"
+    '{"action": "say", "text": "Good morning!", "to": "Jonas"} to talk to someone standing right '
+    'next to you ("to" is optional). You can only talk to people right next to you: to talk to '
+    "someone else, find them first,\n"
+    '{"action": "goodbye", "text": "See you later!", "place": "market"} to end a conversation '
+    'and leave: "text" is optional, and "place" (or "villager": "Lina" to go looking for '
+    "someone) says where you go next; leave both out to stay,\n"
+    '{"action": "wait"} to go on with what you are doing.\n'
+    "While you talk with someone, you both stay where you are: say goodbye before you walk "
+    "off. You go home to sleep at your bedtime by yourself. Say short things, stay in "
+    "character, answer people who talk to you, and say goodbye when you have said what you "
+    "wanted."
 )
 
 

@@ -29,6 +29,8 @@ from agent_lab.village.memory import (
     unreflected,
 )
 from agent_lab.village.turn import (
+    PREVIOUS_RULES,
+    RULES,
     SPEECH_SHOWN,
     awake_neighbours,
     belief_text,
@@ -73,7 +75,8 @@ IDLE_STEPS = 3  # an idle villager decides again after 30 village minutes
 SILENT_STEPS = 3  # a conversation without a line for this long ends
 CONVERSATION_LINES = 10
 NIGHT_STEP = 0.2  # seconds per step while everyone sleeps
-STEP_GAP = 0.25  # seconds between moves in a Step
+STEP_GAP = 0.1  # seconds between moves in a Step
+CELLS_PER_STEP = 3  # how far a villager walks in 10 village minutes
 FRESH_START = "the village moved to a bigger map and started fresh"
 
 Villager = dict[str, Any]
@@ -97,6 +100,7 @@ class Village:
         self.store, self.models, self.bus, self.secrets = store, models, bus, secrets
         self.world = self._load()
         self.world["running"] = False  # a restarted backend shows the world paused
+        self._refresh_rules()
         self.lock = asyncio.Lock()
         self.ticking = False
         self.task: asyncio.Task[None] | None = None
@@ -139,6 +143,26 @@ class Village:
             self.store.save_village(world)
         return world
 
+    def _refresh_rules(self) -> None:
+        """Villager agents still holding the previous rules text verbatim get the current one;
+        the owner's edits to the rules are left alone."""
+        for v in self.world["villagers"]:
+            agent = self.store.get_agent(v["agent_id"] or "")
+            if agent is None:
+                continue
+            blocks: list[dict[str, Any]] = agent.config.get("blocks") or []
+            system: str = blocks[0].get("system", "") if blocks else ""
+            if PREVIOUS_RULES not in system:
+                continue
+            first = {**blocks[0], "system": system.replace(PREVIOUS_RULES, RULES)}
+            self.store.update_agent(
+                agent.agent_id,
+                name=agent.name,
+                description=agent.description,
+                sample_prompt=agent.sample_prompt,
+                config={**agent.config, "blocks": [first, *blocks[1:]]},
+            )
+
     # --- what the API and the stream show ---
 
     def _villager(self, name: str) -> Villager:
@@ -169,6 +193,7 @@ class Village:
                 "persona": character.persona,
                 "place": place_at(v["x"], v["y"]),
                 "destination": goal["place"] if goal and goal["kind"] == "place" else None,
+                "work": character.work,
                 "state": self._state_of(self._villager(name)),
                 "wake": hhmm(character.wake),
                 "bed": hhmm(character.bed),
@@ -535,27 +560,36 @@ class Village:
         if kind == "wait":
             self._event(v, "waited", f"You waited: {reason}." if reason else "You waited.")
         elif kind == "move":
-            self._end_conversations(name, f"{name} walked away")
-            if action["place"] == "home":
-                v["goal"] = {"kind": "home"}
-                self._event(v, "set_off", "You set off for home.")
-            else:
-                v["goal"] = {"kind": "place", "place": action["place"]}
-                self._event(v, "set_off", f"You set off for the {label(action['place'])}.")
+            self._set_off(v, action["place"])
         elif kind == "find":
-            other = action["villager"]
-            self._end_conversations(name, f"{name} walked away")
-            v["goal"] = {"kind": "find", "villager": other, "target": self._find_target(v, other)}
-            self._event(v, "set_off", f"You set off to find {other}.", to=other)
-            self._look()  # already in sight: aim at them now
+            self._seek(v, action["villager"])
         elif kind == "say":
             self._say(v, action["text"], action["to"])
-        else:  # goodbye
+        else:  # goodbye, then perhaps on its way
             if action["text"] and awake_neighbours(self.world, name):
                 self._say(v, action["text"], None)
             self._end_conversations(name, f"{name} said goodbye")
             if not action["text"]:
                 self._event(v, "said", "You said goodbye.")
+            if action.get("ignored"):
+                self._event(v, "waited", f"You said goodbye but stayed: {action['ignored']}.")
+            elif action.get("place"):
+                self._set_off(v, action["place"])
+            elif action.get("villager"):
+                self._seek(v, action["villager"])
+
+    def _set_off(self, v: Villager, place: str) -> None:
+        if place == "home":
+            v["goal"] = {"kind": "home"}
+            self._event(v, "set_off", "You set off for home.")
+        else:
+            v["goal"] = {"kind": "place", "place": place}
+            self._event(v, "set_off", f"You set off for the {label(place)}.")
+
+    def _seek(self, v: Villager, other: str) -> None:
+        v["goal"] = {"kind": "find", "villager": other, "target": self._find_target(v, other)}
+        self._event(v, "set_off", f"You set off to find {other}.", to=other)
+        self._look()  # already in sight: aim at them now
 
     def _find_target(self, v: Villager, other: str) -> list[list[int]]:
         belief = v["beliefs"].get(other)
@@ -649,14 +683,21 @@ class Village:
         )
         gap = self.move_gap
         if gap is None:
-            gap = STEP_GAP if self.in_step else world["interval"] / (len(walkers) + 1)
-        for i, v in enumerate(walkers):  # one at a time, so the view shows them walk in turn
-            if i and gap:
-                await asyncio.sleep(gap)
-            if self._walks(v):  # a decision may have stopped it meanwhile
+            moves = CELLS_PER_STEP * len(walkers)
+            gap = STEP_GAP if self.in_step else world["interval"] / (moves + 1)
+        moved = False
+        for _ in range(CELLS_PER_STEP):  # in rounds, one cell each, so the view shows them in turn
+            for v in walkers:
+                if not self._walks(v):
+                    continue
+                if moved and gap:
+                    await asyncio.sleep(gap)
+                    if not self._walks(v):  # someone spoke to it meanwhile
+                        continue
                 self._walk(v)
                 self._look()
                 self._publish()
+                moved = True
         self._look()
         self._upkeep()
         if self.outcomes:

@@ -113,6 +113,18 @@ def test_belief_from_routine_outside_waking_hours() -> None:
         ('{"action": "say", "text": "Hi all"}', {"action": "say", "text": "Hi all", "to": None}),
         ('{"action": "goodbye", "text": "Bye!"}', {"action": "goodbye", "text": "Bye!"}),
         ('{"action": "goodbye"}', {"action": "goodbye", "text": None}),
+        (
+            '{"action": "goodbye", "text": "Bye!", "place": "pier"}',
+            {"action": "goodbye", "text": "Bye!", "place": "pier"},
+        ),
+        (
+            '{"action": "goodbye", "villager": "lina"}',
+            {"action": "goodbye", "text": None, "villager": "Lina"},
+        ),
+        (
+            '{"action": "goodbye", "place": "harbour"}',
+            {"action": "goodbye", "text": None, "ignored": "unknown place 'harbour'"},
+        ),
         ('{"action": "wait"}', {"action": "wait"}),
     ],
 )
@@ -201,3 +213,20 @@ def test_observation_lists_only_the_last_ten_events() -> None:
     events = [{"tick": t, "kind": "waited", "text": f"Event {t}."} for t in range(10)]
     text = observation(world_with(Lina={"events": events}), "Lina")
     assert text.count("Event ") == 10 and "Event 0." in text
+
+
+def test_moving_or_finding_while_talking_needs_a_goodbye_first() -> None:
+    hx, hy = door("Hilde")
+    world = world_with(Jonas=at(hx + 1, hy))
+    world["conversations"] = [{"a": "Jonas", "b": "Hilde", "lines": 1, "last_tick": 30}]
+    for answer in (
+        '{"action": "move", "place": "market"}',
+        '{"action": "find", "villager": "Lina"}',
+    ):
+        assert parse_action(answer, world, "Hilde") == (
+            {"action": "wait"},
+            "you are talking with Jonas; say goodbye first",
+        )
+    rules = villager_agent("Hilde")["config"]["blocks"][0]["system"]
+    assert '"place": "market"} to end a conversation and leave' in rules
+    assert "say goodbye before you walk off" in rules
