@@ -1315,7 +1315,7 @@ async def _festival_evening(v: Village, day: int) -> None:
 
 @pytest.mark.anyio
 async def test_festival_guests_remember_who_else_was_there(tmp_path: Path) -> None:
-    v, _ = village_for(tmp_path)
+    v, llm = village_for(tmp_path)
     await _festival_evening(v, 21)
     assert v.world["festival"] == {"day": 21, "present": ["Jonas", "Lina"]}
     memory = villager(v, "Jonas")["memories"][-1]
@@ -1323,6 +1323,9 @@ async def test_festival_guests_remember_who_else_was_there(tmp_path: Path) -> No
     assert memory["text"] == "The harvest festival on the square with Lina."
     assert memory["about"] == ["Lina"]
     assert not any(m["kind"] == "festival" for m in villager(v, "Greta")["memories"])
+    greta_events = [e for e in villager(v, "Greta")["events"] if e["kind"] == "festival"]
+    assert [e["text"] for e in greta_events] == [f"{runner.FESTIVAL_BEGINS}."]  # once, to all
+    assert len(calls_of(llm, "Greta")) >= 1  # and she decided on it
     notes = [i["text"] for i in v.world["day_record"]["items"]]
     assert "Jonas joined the harvest festival on the square." in notes
 

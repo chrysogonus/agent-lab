@@ -286,7 +286,7 @@ def test_the_festival_is_counted_down_announced_and_expected_on_the_square() -> 
     )
     world["tick"] = _at(21, 18, 30)
     evening = observation(world, "Jonas")
-    assert "The harvest festival is on now on the square." in evening
+    assert "The harvest festival is on now on the square; the whole village is expected" in evening
     assert "At this hour you are usually at the square." in evening
     world["tick"] = _at(20, 18, 30)
     assert "At this hour you are usually at the pier." in observation(world, "Jonas")

@@ -81,6 +81,11 @@
   Jonas." The square is decorated (bunting, lanterns) from the state's `calendar.festival_in == 0`.
 - **Why**: bedtime is the end of that villager's evening; importance 5 keeps the memory through
   the memory limit for a long time.
+- **Festival start** (added after the real-model check): at the first festival-evening step every
+  awake villager gets the event "The harvest festival has begun on the square; the whole village
+  is expected there." and a trigger, so it decides again with the festival in mind; the
+  observation line says the same. Without it, villagers stayed in long conversations and only
+  one of four reached the square (the village still never moves anyone).
 
 ## 6. Chronicle (new `village/chronicle.py`)
 

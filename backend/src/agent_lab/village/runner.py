@@ -97,6 +97,9 @@ CELLS_PER_STEP = 3  # how far a villager walks in 10 village minutes
 RECORD_ITEMS = 120  # happenings kept for the chronicle of one day
 RECORD_TEXT = 300
 FRESH_START = "the village moved to a bigger map and started fresh"
+FESTIVAL_BEGINS = (
+    "The harvest festival has begun on the square; the whole village is expected there"
+)
 
 Villager = dict[str, Any]
 
@@ -407,6 +410,10 @@ class Village:
         if festival is None or festival["day"] != day:
             festival = {"day": day, "present": []}
             self.world["festival"] = festival
+            for v in self.world["villagers"]:  # everyone awake hears it begin and may set off
+                if not v["asleep"] and not v["bedtime"]:
+                    self._event(v, "festival", f"{FESTIVAL_BEGINS}.")
+                    self._trigger(v, "festival")
         present: list[str] = festival["present"]
         for v in self.world["villagers"]:
             if (

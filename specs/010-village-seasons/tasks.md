@@ -56,13 +56,13 @@ pass `move_gap=0`. A scripted year is tested on `end_day` directly (28 calls), n
 
 ## Phase 6: User Story 5 — The harvest festival (P3)
 
-- [X] T011 [US5] world.py `usual_place(name, tick)` (festival day from 18:00: the square for every awake villager), callers in turn.py and runner.py; turn.py festival lines ("in N days", "today, this evening on the square", "on now"); memory.py `IMPORTANCE["festival"] = 5`; runner.py guests recorded in `world["festival"]` each festival-evening step, a festival memory naming the other guests when a guest's bedtime starts, a note in the day record; tests in test_village_turn.py and test_village_runner.py (countdown days 1–6, today, on now, usual place, memory only for guests, not on other days)
+- [X] T011 [US5] world.py `usual_place(name, tick)` (festival day from 18:00: the square for every awake villager), callers in turn.py and runner.py; turn.py festival lines ("in N days", "today, this evening on the square", "on now"); memory.py `IMPORTANCE["festival"] = 5`; runner.py guests recorded in `world["festival"]` each festival-evening step, an event and trigger for every awake villager when the festival begins, a festival memory naming the other guests when a guest's bedtime starts, a note in the day record; tests in test_village_turn.py and test_village_runner.py (countdown days 1–6, today, on now, usual place, memory only for guests, not on other days)
 - [X] T012 [US5] seasons.tsx `Festival`: bunting across the square and lanterns at its corners, lit when dark, on the festival day; screenshot by day and night
 
 ## Phase 7: Polish
 
 - [X] T013 README.md (seasons, weather, growth, festival, chronicle, paces), AGENTS.md (`seasons.py`, `chronicle.py` in the layout; the chronicler in the village contracts)
-- [ ] T014 `make check`; quickstart manual steps on the real model with results recorded below (SC-006, SC-007)
+- [X] T014 `make check`; quickstart manual steps on the real model with results recorded below (SC-006, SC-007)
 
 ## Dependencies
 
@@ -109,6 +109,24 @@ up. Then seasons and weather, growth, the festival; each phase is shippable on i
 | SC-006 | quickstart step 2 (real model) |
 | SC-007 | quickstart step 5 (real model) |
 
-## Manual check results
+## Manual check results (2026-11-01)
 
-(filled in by T005, T007, T010, T012 and T014)
+Screenshots (mocked states, 1400 × 950): the chronicle button and panel with "New" marks; every
+season (spring blossom, summer, autumn gold and red, bare winter and snow cover); every weather
+kind (sun, cloud shadows, rain with puddles, storm with lamps lit at dusk, fog at night, snow, and
+snow still under reduced motion); all seven field stages with weeds and the four garden states;
+the festival square by day and lit at night; the pace buttons with Normal pressed (T005, T007,
+T010, T012, SC-005).
+
+Real model (vLLM `qwen3.5-9b`), a scratch backend on a copy of the owner's database at Fast
+pace:
+
+| Check | Result |
+|---|---|
+| Two days from day 1 (SC-006) | 288 steps in 474 s; one chronicle entry per night, each built from things in its day record (Hilde asking for lilies, Jonas promising trout, the rain on day 2); 40 of 586 decisions mention the weather or season, e.g. Jonas: "The rain keeps the mud deep, Mayor." |
+| Festival, from day 20 (SC-007), first run | Only Lina reached the square (21:40); the others stayed in long conversations about a storm they had talked themselves into on a sunny day. Fixed: the festival's start is now an event and a trigger for every awake villager |
+| Festival, second run (fresh copy) | All four on the square by 18:30 (Lina 18:00, Greta 18:20, Hilde and Jonas 18:30); each remembers "The harvest festival on the square with …" naming the other three; the chronicle of day 21 ends "By evening, all four villagers joined forces on the square" |
+
+Fixed during the checks: the chronicler copied the example title from its prompt ("Rain and a
+promise" on a sunny day); the prompt now describes the title instead, and later titles were the
+model's own ("The Great Harvest Rush", "Harvest Festival Preparations").

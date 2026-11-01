@@ -74,7 +74,7 @@ export type VillageAction =
 
 export type VillageEvent = {
   tick: number;
-  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected";
+  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival";
   text: string;
   from?: string;
   to?: string | null;

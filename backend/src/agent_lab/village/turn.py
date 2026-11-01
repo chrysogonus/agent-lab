@@ -168,7 +168,7 @@ def _festival(tick: int) -> list[str]:
         return [f"The harvest festival is on the square in {days} day{'s' if days > 1 else ''}."]
     if minute_of_day(tick) < FESTIVAL_EVENING:
         return ["Today is the harvest festival, this evening on the square."]
-    return ["The harvest festival is on now on the square."]
+    return ["The harvest festival is on now on the square; the whole village is expected there."]
 
 
 def observation(world: dict[str, Any], name: str) -> str:
