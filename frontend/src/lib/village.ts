@@ -44,9 +44,10 @@ export const PERIOD_SKY: Record<VillageState["period"], { top: Light; bottom: Li
 
 export type Activity = "walking" | "talking" | "thinking" | "working" | "idle";
 
-/** What a figure shows: its walk, its talk, a thought bubble, its work at its own place, or idling. */
-export function activity(villager: Villager): Activity {
-  if (villager.state === "walking" || villager.state === "bedtime") return "walking";
+/** What a figure shows: its walk (only while it is actually moving between cells; a walker
+ * waiting for its next move idles), its talk, a thought bubble, its work at its own place, or idling. */
+export function activity(villager: Villager, moving: boolean): Activity {
+  if (moving && (villager.state === "walking" || villager.state === "bedtime")) return "walking";
   if (villager.state === "talking") return "talking";
   if (villager.state === "deciding") return "thinking";
   return villager.place === villager.work ? "working" : "idle";

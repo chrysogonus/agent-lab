@@ -87,12 +87,13 @@ describe("map", () => {
   });
 
   it("picks what each figure is doing", () => {
-    expect(activity(villager({ state: "walking" }))).toBe("walking");
-    expect(activity(villager({ state: "bedtime" }))).toBe("walking");
-    expect(activity(villager({ state: "talking" }))).toBe("talking");
-    expect(activity(villager({ state: "deciding" }))).toBe("thinking");
-    expect(activity(villager({ state: "idle" }))).toBe("working"); // idle at the town hall, its work place
-    expect(activity(villager({ state: "idle", place: "market" }))).toBe("idle");
+    expect(activity(villager({ state: "walking", place: null }), true)).toBe("walking");
+    expect(activity(villager({ state: "bedtime", place: null }), true)).toBe("walking");
+    expect(activity(villager({ state: "walking", place: null }), false)).toBe("idle"); // between two moves
+    expect(activity(villager({ state: "talking" }), false)).toBe("talking");
+    expect(activity(villager({ state: "deciding" }), false)).toBe("thinking");
+    expect(activity(villager({ state: "idle" }), false)).toBe("working"); // idle at the town hall, its work place
+    expect(activity(villager({ state: "idle", place: "market" }), false)).toBe("idle");
   });
 
   it("gives each villager its own rhythm", () => {
