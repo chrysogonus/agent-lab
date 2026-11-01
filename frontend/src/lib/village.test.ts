@@ -91,6 +91,7 @@ describe("map", () => {
     expect(activity(villager({ state: "walking", place: null }), true)).toBe("walking");
     expect(activity(villager({ state: "bedtime", place: null }), true)).toBe("walking");
     expect(activity(villager({ state: "walking", place: null }), false)).toBe("idle"); // between two moves
+    expect(activity(villager({ state: "idle", place: "town_hall" }), true)).toBe("walking"); // gliding into its last cell
     expect(activity(villager({ state: "talking" }), false)).toBe("talking");
     expect(activity(villager({ state: "deciding" }), false)).toBe("thinking");
     expect(activity(villager({ state: "idle" }), false)).toBe("working"); // idle at the town hall, its work place

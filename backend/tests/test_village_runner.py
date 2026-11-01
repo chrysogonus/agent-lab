@@ -1043,10 +1043,48 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> 
 
 
 @pytest.mark.anyio
+async def test_each_walker_keeps_its_rhythm_across_steps_as_others_join(tmp_path: Path) -> None:
+    interval = 1.2  # a move every 0.4 s per walker
+    v, _ = village_for(tmp_path, move_gap=None)
+    morning(v)
+    v.world |= {"interval": interval, "running": True}  # timing as in the loop, without it
+    greta = villager(v, "Greta")
+    greta["goal"] = {"kind": "place", "place": "pier"}
+    queue = v.bus.subscribe(CHANNEL)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    moves: list[float] = []
+
+    async def collect(step: asyncio.Task[None]) -> None:
+        last = (greta["x"], greta["y"])
+        while not step.done() or not queue.empty():
+            try:
+                event = await asyncio.wait_for(queue.get(), 0.02)
+            except TimeoutError:
+                continue
+            if event["type"] != "state":
+                continue
+            now = next(x for x in event["state"]["villagers"] if x["name"] == "Greta")
+            if (now["x"], now["y"]) != last:
+                moves.append(loop.time() - started)
+                last = (now["x"], now["y"])
+
+    for n in range(3):
+        if n == 1:  # Hilde, before Greta in the villager order, starts walking too
+            villager(v, "Hilde")["goal"] = {"kind": "place", "place": "pier"}
+        begun = loop.time()
+        await collect(asyncio.create_task(v._step()))  # pyright: ignore[reportPrivateUsage]
+        await asyncio.sleep(max(0.0, interval - (loop.time() - begun)))
+    spacing = [b - a for a, b in pairwise(moves)]
+    assert len(moves) == 3 * CELLS_PER_STEP
+    assert all(abs(s - interval / CELLS_PER_STEP) < 0.1 for s in spacing), spacing
+
+
+@pytest.mark.anyio
 async def test_moves_are_spread_evenly_over_the_step(tmp_path: Path) -> None:
     v, _ = village_for(tmp_path, move_gap=None)
     morning(v)
-    v.world["interval"] = 0.6
+    v.world["interval"] = 1.2
     v.world["running"] = True  # timing as in the loop, without starting it
     for name in ("Hilde", "Greta"):
         villager(v, name)["goal"] = {"kind": "place", "place": "pier"}
@@ -1071,4 +1109,4 @@ async def test_moves_are_spread_evenly_over_the_step(tmp_path: Path) -> None:
     for name, at in times.items():
         assert len(at) == CELLS_PER_STEP, name
         spacing = [b - a for a, b in pairwise(at)]
-        assert all(abs(s - 0.6 / CELLS_PER_STEP) < 0.08 for s in spacing), (name, spacing)
+        assert all(abs(s - 1.2 / CELLS_PER_STEP) < 0.08 for s in spacing), (name, spacing)

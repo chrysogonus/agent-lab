@@ -2,16 +2,16 @@
 
 ## 1. Three cells per step, in rounds
 
-- **Decision**: each step runs up to 3 rounds; in each round every walker (in a fixed order)
-  moves one cell, then `_look()` and a publish run, then the runner sleeps `gap`. A walker
-  that arrives, starts deciding or is spoken to stops for the rest of the step; its slots keep
-  their time, so the others' rhythm holds.
+- **Decision**: each step runs up to 3 rounds; every villager owns one fixed slot per round (in
+  villager order), and a walker moves one cell in its slot, then `_look()` and a publish run.
+  Empty slots keep their time, so a walker's rhythm stays the same across steps whoever else
+  starts or stops walking; a villager who starts walking mid-step moves in its own slot.
 - **Why**: crossing the map takes a third of the steps (SC-001); interleaving keeps "one move per
   published state" (SC-002) and lets meetings happen mid-step.
-- **Gap**: `interval / (3 × walkers)` in the running loop, so each walker moves every
+- **Gap**: `interval / (3 × villagers)` in the running loop, so each walker moves every
   `interval / 3` seconds (≈ 1.7 s at 5 s); 0.1 s in Step; tests pass 0. The view glides each move
   linearly for exactly that long (`glideMs`), so walking is continuous; the walk animation plays
-  only while a figure is gliding (a fixed order replaced M7's rotation, which jittered the rhythm
+  while a figure is gliding, including into its last cell (the state already says it arrived) (a fixed order replaced M7's rotation, which jittered the rhythm
   at step boundaries).
 
 ## 2. Leaving a conversation
