@@ -179,7 +179,8 @@ only steps spent working.
   or later; the village never forces it.
 - A villager revises its plan twice and talks long again → no third revision that day.
 - A repeated line inside a goodbye → the goodbye happens without the text.
-- Work while talking → refused like move and find: "you are talking with X; say goodbye first".
+- Work while talking → allowed: villagers talk while they work (working together depends on
+  it); saying something does not stop the work, only walking off does.
 - A villager carrying a basket goes to bed → it keeps the basket overnight.
 - Goods set out on the stalls before autumn → they stay until the festival is over, then the
   stalls are cleared for the next year.
@@ -247,8 +248,7 @@ only steps spent working.
   carried baskets and the goods on the stalls; the festival evening's memories and the chronicle
   MUST name the goods that were there; the stalls are cleared when winter starts.
 - **FR-014**: The villagers' rules MUST describe work and give; invalid work or give (wrong place,
-  empty or full hands, nobody there, the other asleep, still talking) MUST become a wait with the
-  reason.
+  empty or full hands, nobody there, the other asleep) MUST become a wait with the reason.
 
 **State and quality**
 
