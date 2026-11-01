@@ -20,6 +20,7 @@ from agent_lab.village.world import (
     sees,
     step_towards,
     steps_to,
+    upgrade,
     usual_place,
     walkable,
 )
@@ -109,7 +110,7 @@ def test_sleeping_hours_and_routines() -> None:
 
 def test_new_world_has_everyone_asleep_at_home() -> None:
     world = new_world()
-    assert (world["version"], world["tick"], world["running"]) == (4, 0, False)
+    assert (world["version"], world["tick"], world["running"]) == (5, 0, False)
     assert world["interval"] == 5
     assert world["conversations"] == world["talked_out"] == world["log"] == []
     names = [v["name"] for v in world["villagers"]]
@@ -118,3 +119,24 @@ def test_new_world_has_everyone_asleep_at_home() -> None:
         assert v["asleep"] and (v["x"], v["y"]) == door(v["name"])
         assert v["goal"] is None and v["beliefs"] == {} and v["events"] == []
         assert v["memories"] == v["learnings"] == [] and v["views"] == {}
+        assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
+    assert world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
+    assert world["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
+    assert world["planner_agent_id"] is None
+
+
+def test_a_version_4_world_gets_plans_baskets_and_stalls() -> None:
+    world = new_world()
+    for v in world["villagers"]:
+        for key in ("plan", "basket", "working", "said"):
+            del v[key]
+    for key in ("stalls", "harvest", "planner_agent_id"):
+        del world[key]
+    world |= {"version": 4, "tick": 40, "chronicle": [{"day": 1}]}
+    upgraded = upgrade(world)
+    assert (upgraded["version"], upgraded["tick"], upgraded["chronicle"]) == (5, 40, [{"day": 1}])
+    for v in upgraded["villagers"]:
+        assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
+    assert upgraded["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
+    assert upgraded["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
+    assert upgraded["planner_agent_id"] is None

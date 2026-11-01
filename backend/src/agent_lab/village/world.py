@@ -246,7 +246,7 @@ def usual_place(name: str, tick: int) -> str:
     return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
 
 
-VERSION = 4  # the world's shape: 2 and 3 are upgraded in place, anything else starts fresh
+VERSION = 5  # the world's shape: 2 to 4 are upgraded in place, anything else starts fresh
 
 
 def new_world() -> dict[str, Any]:
@@ -274,6 +274,10 @@ def new_world() -> dict[str, Any]:
                 "speech": None,
                 "inbox": [],
                 "events": [],
+                "plan": None,
+                "basket": None,
+                "working": None,
+                "said": [],
             }
         )
     return {
@@ -294,25 +298,38 @@ def new_world() -> dict[str, Any]:
         "festival": None,
         "chronicle": [],
         "chronicler_agent_id": None,
+        "stalls": {"fish": 0, "vegetables": 0, "flowers": 0},
+        "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
+        "planner_agent_id": None,
     }
 
 
 def upgrade(world: dict[str, Any]) -> dict[str, Any]:
     """An older world brought to the current shape, so the village keeps going: version 2 (M7)
-    gets empty memory (M8), version 3 the seasons with places as the season finds them (M10)."""
+    gets empty memory (M8), version 3 the seasons with places as the season finds them (M10),
+    version 4 no plans, empty hands and empty stalls (M11)."""
     if world["version"] == 2:
         for v in world["villagers"]:
             v |= {"memories": [], "learnings": [], "views": {}}
         for c in world["conversations"]:
             c.setdefault("transcript", [])
         world |= {"version": 3, "reflection_agent_id": None}
-    day = clock(world["tick"])[0]
+    if world["version"] == 3:
+        day = clock(world["tick"])[0]
+        world |= {
+            "version": 4,
+            "growth": new_growth(date(day)[1]),
+            "tended": {"fields": 0, "flower_garden": 0},
+            "day_record": None,
+            "festival": None,
+            "chronicle": [],
+            "chronicler_agent_id": None,
+        }
+    for v in world["villagers"]:
+        v |= {"plan": None, "basket": None, "working": None, "said": []}
     return world | {
         "version": VERSION,
-        "growth": new_growth(date(day)[1]),
-        "tended": {"fields": 0, "flower_garden": 0},
-        "day_record": None,
-        "festival": None,
-        "chronicle": [],
-        "chronicler_agent_id": None,
+        "stalls": {"fish": 0, "vegetables": 0, "flowers": 0},
+        "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
+        "planner_agent_id": None,
     }

@@ -256,7 +256,7 @@ async def test_an_m6_world_starts_fresh_with_its_agents_updated(tmp_path: Path) 
         {"tick": 40, "villagers": [{"name": "Hilde", "agent_id": agent.agent_id, "x": 1, "y": 1}]}
     )
     v = Village(store=store, models=fake_models(FakeLLM([])), bus=Bus())
-    assert v.world["version"] == 4 and v.world["tick"] == 0
+    assert v.world["version"] == 5 and v.world["tick"] == 0
     assert v.world["paused_reason"] == FRESH_START
     assert villager(v, "Hilde")["agent_id"] == agent.agent_id
     updated = store.get_agent(agent.agent_id)
@@ -959,7 +959,7 @@ async def test_an_m7_world_keeps_going_with_empty_memory(tmp_path: Path) -> None
     world |= {"version": 2, "tick": 40}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (4, 40)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (5, 40)
     assert reloaded.world["paused_reason"] is None
     assert all(x["memories"] == [] for x in reloaded.world["villagers"])
     reloaded.ensure_agents()
@@ -1151,7 +1151,7 @@ async def test_an_m9_world_keeps_going_with_the_seasons(tmp_path: Path) -> None:
     world |= {"version": 3, "tick": 144 * 9 + 30}  # day 10: summer
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (4, 144 * 9 + 30)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (5, 144 * 9 + 30)
     assert reloaded.world["paused_reason"] is None
     assert reloaded.world["growth"]["fields"]["stage"] == "growing"
     assert reloaded.world["growth"]["flower_garden"]["stage"] == "blooming"
@@ -1336,3 +1336,50 @@ async def test_no_festival_on_other_days(tmp_path: Path) -> None:
     await _festival_evening(v, 20)
     assert v.world["festival"] is None
     assert not any(m["kind"] == "festival" for m in villager(v, "Jonas")["memories"])
+
+
+# --- M11: plans and purpose ---
+
+
+@pytest.mark.anyio
+async def test_an_m10_world_keeps_going_with_empty_hands(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    world = v.store.load_village()
+    assert world is not None
+    for x in world["villagers"]:
+        for key in ("plan", "basket", "working", "said"):
+            del x[key]
+    for key in ("stalls", "harvest", "planner_agent_id"):
+        del world[key]
+    world |= {"version": 4, "tick": 144 * 20 + 30, "chronicle": [{"day": 20, "title": "t"}]}
+    v.store.save_village(world)
+    reloaded = Village(store=v.store, models=v.models, bus=Bus())
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (5, 144 * 20 + 30)
+    assert reloaded.world["paused_reason"] is None
+    assert reloaded.world["chronicle"] == [{"day": 20, "title": "t"}]  # M10 history is kept
+    assert all(x["basket"] is None and x["plan"] is None for x in reloaded.world["villagers"])
+    assert reloaded.world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
+
+
+@pytest.mark.anyio
+async def test_reset_clears_plans_baskets_and_stalls_and_keeps_the_shared_agents(
+    tmp_path: Path,
+) -> None:
+    v, _ = village_for(tmp_path)
+    v.world["planner_agent_id"] = "planner-1"
+    ids = {k: v.world[k] for k in ("reflection_agent_id", "chronicler_agent_id")}
+    put(v, "Jonas", 1, 1, basket="fish", working={"place": "pier", "steps": 3}, said=["Hi"])
+    v.world["stalls"]["fish"] = 2
+    await v.reset()
+    jonas = villager(v, "Jonas")
+    assert jonas["basket"] is jonas["working"] is None and jonas["said"] == []
+    assert v.world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
+    assert v.world["planner_agent_id"] == "planner-1"
+    assert {k: v.world[k] for k in ids} == ids
+
+
+def test_the_state_leaves_out_said_harvest_and_the_planner() -> None:
+    v, _ = village_for(":memory:")
+    state = v.state()
+    assert not {"harvest", "planner_agent_id"} & set(state)
+    assert all("said" not in x for x in state["villagers"])
