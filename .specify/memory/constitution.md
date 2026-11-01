@@ -1,4 +1,4 @@
-# Agent Lab Constitution
+# Glasshouse Constitution
 
 ## Core Principles
 

@@ -227,7 +227,7 @@ export default function Home() {
     return (
       <div className="flex min-h-dvh flex-col gap-4 p-4 lg:h-dvh">
         <header className="flex items-start gap-6">
-          <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Agent Lab</h1>
+          <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Glasshouse</h1>
           {viewSwitch}
         </header>
         <VillageView onEditAgent={editVillagerAgent} />
@@ -238,7 +238,7 @@ export default function Home() {
   return (
     <div className="flex min-h-dvh flex-col gap-4 p-4 lg:h-dvh">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
-        <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Agent Lab</h1>
+        <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Glasshouse</h1>
         {viewSwitch}
         <div className="flex flex-1 flex-col gap-2">
           <AgentPicker

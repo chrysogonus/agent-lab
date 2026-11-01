@@ -7,7 +7,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" }
 const pixel = Pixelify_Sans({ subsets: ["latin"], variable: "--font-pixelify" }); // the village
 
 export const metadata: Metadata = {
-  title: "Agent Lab",
+  title: "Glasshouse",
   description: "Watch hand-built agents work, step by step.",
 };
 

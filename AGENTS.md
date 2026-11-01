@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Agent Lab: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
+Glasshouse: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
 builder, per-agent models) with a live trace view, plus a village of four villager agents
 (M6–M10). Rules for every change: `.specify/memory/constitution.md`. Current feature:
 `specs/011-plans-and-purpose/`; earlier milestones in `specs/001-…` to `specs/010-…`. Human

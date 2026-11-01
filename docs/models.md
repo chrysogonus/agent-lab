@@ -2,7 +2,7 @@
 
 [← README](../README.md)
 
-Agent Lab talks to any **OpenAI-compatible** chat endpoint. Settings live in `.env` (copy
+Glasshouse talks to any **OpenAI-compatible** chat endpoint. Settings live in `.env` (copy
 `.env.example`); restart the backend after changing them.
 
 ```mermaid

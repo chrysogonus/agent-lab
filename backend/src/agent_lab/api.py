@@ -110,7 +110,7 @@ def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
 
 
 def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -> FastAPI:
-    app = FastAPI(title="Agent Lab")
+    app = FastAPI(title="Glasshouse")
     # Rejects DNS-rebinding requests that reach the loopback port under a foreign Host.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
     app.add_middleware(

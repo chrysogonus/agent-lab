@@ -1,8 +1,8 @@
-# Agent Lab
+# Glasshouse
 
 **Build AI agents by hand and watch every step they take.**
 
-Agent Lab is a local playground for learning how agents work. No agent frameworks: the ReAct
+Glasshouse is a local playground for learning how agents work. No agent frameworks: the ReAct
 loop, the workflow patterns, tool calling and tracing are plain, readable Python. Every model
 and tool call shows up live as a span on the agent's graph, and every run can be replayed.
 On top of that sits a small pixel-art village where four AI villagers live their days on their
@@ -111,4 +111,4 @@ other agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
 ## Security and license
 
 Found a vulnerability? Please report it privately: see [SECURITY.md](SECURITY.md).
-Agent Lab is released under the [MIT License](LICENSE).
+Glasshouse is released under the [MIT License](LICENSE).

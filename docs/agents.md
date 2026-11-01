@@ -2,7 +2,7 @@
 
 [← README](../README.md)
 
-Agent Lab ships six agents. They are **templates**: read-only, always on the default model.
+Glasshouse ships six agents. They are **templates**: read-only, always on the default model.
 Press **Customize** to get an editable copy ([builder.md](builder.md)).
 
 ## The six templates

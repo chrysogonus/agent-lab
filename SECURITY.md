@@ -3,14 +3,14 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately through GitHub's
-[private vulnerability reporting](https://github.com/chrysogonus/agent-lab/security/advisories/new)
+[private vulnerability reporting](https://github.com/chrysogonus/glasshouse/security/advisories/new)
 (Security tab → "Report a vulnerability"). Do not open a public issue.
 
 Include what is affected, how to reproduce it, and the impact you see.
 
 ## Supported versions
 
-Agent Lab has no releases yet; only the latest commit on `main` is supported.
+Glasshouse has no releases yet; only the latest commit on `main` is supported.
 
 ## Response
 
@@ -20,7 +20,7 @@ be.
 
 ## Scope
 
-Agent Lab is meant to run on your own machine: both servers bind to 127.0.0.1. Reports about the
+Glasshouse is meant to run on your own machine: both servers bind to 127.0.0.1. Reports about the
 backend or frontend exposing data beyond localhost, leaking API keys (into spans, logs or API
 responses), or executing model output are in scope. Running it deliberately on a public
 interface is not a supported setup.

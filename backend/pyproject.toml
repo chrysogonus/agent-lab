@@ -2,7 +2,7 @@
 name = "agent-lab"
 version = "0.1.0"
 license = "MIT"
-description = "Agent Lab backend: hand-built agents with tracing"
+description = "Glasshouse backend: hand-built agents with tracing"
 authors = [
     { name = "Christopher Filsinger", email = "16050006+chrysogonus@users.noreply.github.com" }
 ]
