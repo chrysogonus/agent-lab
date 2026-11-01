@@ -30,14 +30,32 @@ export function placeAreas(rows: string[]): Record<string, Area> {
   return areas;
 }
 
-/** The light over the map: warm in the morning, dusky in the evening, dark blue at night. */
-export const PERIOD_TINT: Record<VillageState["period"], { color: string; opacity: number }> = {
-  morning: { color: "#ffcf8a", opacity: 0.08 },
-  midday: { color: "#ffffff", opacity: 0 },
-  afternoon: { color: "#ffb070", opacity: 0.07 },
-  evening: { color: "#4b2a6b", opacity: 0.3 },
-  night: { color: "#101642", opacity: 0.52 },
+type Light = { color: string; opacity: number };
+
+/** The sky's light over the map, top to bottom: peach mornings, clear middays, a sunset glow
+ * from the top in the evening, deep blue nights. */
+export const PERIOD_SKY: Record<VillageState["period"], { top: Light; bottom: Light }> = {
+  morning: { top: { color: "#ffb36b", opacity: 0.24 }, bottom: { color: "#ffe2b0", opacity: 0.04 } },
+  midday: { top: { color: "#fff6d8", opacity: 0.08 }, bottom: { color: "#ffffff", opacity: 0 } },
+  afternoon: { top: { color: "#ffcf7a", opacity: 0.16 }, bottom: { color: "#ffe6a8", opacity: 0.04 } },
+  evening: { top: { color: "#ff7a59", opacity: 0.36 }, bottom: { color: "#4b2a6b", opacity: 0.4 } },
+  night: { top: { color: "#0b1240", opacity: 0.64 }, bottom: { color: "#1a2260", opacity: 0.5 } },
 };
+
+export type Activity = "walking" | "talking" | "thinking" | "working" | "idle";
+
+/** What a figure shows: its walk, its talk, a thought bubble, its work at its own place, or idling. */
+export function activity(villager: Villager): Activity {
+  if (villager.state === "walking" || villager.state === "bedtime") return "walking";
+  if (villager.state === "talking") return "talking";
+  if (villager.state === "deciding") return "thinking";
+  return villager.place === villager.work ? "working" : "idle";
+}
+
+/** A stable offset in seconds per villager, so idle animations do not run in sync. */
+export function rhythm(name: string): number {
+  return ([...name].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 7) % 50) / 10;
+}
 
 export type Figure = { villager: Villager; cx: number; cy: number };
 

@@ -1,7 +1,7 @@
 // The village's pixel art, drawn in code: tiles, places, scenery and the four villagers.
 // One map cell is a 16 x 16 pixel tile; the map's SVG viewBox counts pixels.
-import { memo, type ReactNode } from "react";
-import { cellKind, placeAreas, type Area } from "../../lib/village"; // relative: the sprite test runs without path aliases
+import { memo, type CSSProperties, type ReactNode } from "react";
+import { cellKind, placeAreas, type Activity, type Area } from "../../lib/village"; // relative: the sprite test runs without path aliases
 
 export const TILE = 16;
 export const INK = "#2a2340"; // the outline of everything
@@ -274,6 +274,9 @@ function Building({ area, roof, roofDark, flag }: { area: Area; roof: string; ro
   const bands = [8, 6, 4, 2, 0];
   return (
     <g>
+      {/* a soft shadow on the ground in front of and beside the building */}
+      <rect x={x + 3} y={y + 32} width={w - 2} height={3} fill="#1d2a1a" opacity={0.18} />
+      <rect x={x + w - 1} y={y + 17} width={3} height={18} fill="#1d2a1a" opacity={0.14} />
       {flag ? (
         <>
           <rect x={x + w / 2} y={y} width={1} height={8} fill={INK} />
@@ -520,5 +523,165 @@ export function PixelDigits({ text, height = 30 }: { text: string; height?: numb
       </svg>
       <span className="sr-only">{text}</span>
     </span>
+  );
+}
+
+// --- villagers in motion (M9) ---
+
+const EYE = "e";
+
+/** A villager drawn from its sprite: eyes apart, so they can blink and glance; while walking the
+ * feet take turns lifting; at work it holds its prop. */
+export function VillagerFigure({ name, activity, rhythm }: { name: string; activity: Activity; rhythm: number }) {
+  const sprite = SPRITES[name] ?? SPRITES.Lina;
+  const skin = sprite.palette.s;
+  const face = sprite.rows.map((row) => row.replaceAll(EYE, "s"));
+  const eyes = sprite.rows.map((row) => row.replace(/[^e]/g, "."));
+  const walking = activity === "walking";
+  const body = walking ? face.slice(0, 14) : face;
+  const lift = (row: string, from: number) => [...row].map((c, i) => (i >= from && i < from + 8 ? "." : c)).join("");
+  const style = { "--rhythm": `-${rhythm}s` } as CSSProperties;
+  return (
+    <g style={style} className={walking ? "village-walk" : activity === "talking" ? "village-talk" : "village-breathe"}>
+      <g transform="translate(-8 -11)">
+        <Pixels rows={body} palette={sprite.palette} />
+        {walking && (
+          <>
+            <g className="village-step-a">
+              <Pixels rows={[face[14], lift(face[15], 0)]} palette={sprite.palette} y={14} />
+            </g>
+            <g className="village-step-b">
+              <Pixels rows={[face[14], lift(face[15], 8)]} palette={sprite.palette} y={14} />
+            </g>
+          </>
+        )}
+        <g className="village-glance">
+          <Pixels rows={eyes} palette={{ e: INK }} />
+        </g>
+        <g className="village-blink">
+          <Pixels rows={eyes} palette={{ e: skin }} />
+        </g>
+      </g>
+      {activity === "working" && <WorkProp name={name} />}
+    </g>
+  );
+}
+
+/** What each villager works with at its own place, around its hands (x ±6, y 0). */
+function WorkProp({ name }: { name: string }) {
+  if (name === "Jonas") {
+    return (
+      <g aria-hidden>
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <rect key={i} x={6 + i} y={-1 - i * 1.4} width={1} height={1.6} fill="#7e4a24" />
+        ))}
+        <line x1={14} y1={-12} x2={17} y2={7} stroke="#e8f4ff" strokeWidth={0.4} />
+        <g className="village-float">
+          <rect x={16} y={6} width={2} height={1} fill="#e5484d" />
+          <rect x={16} y={7} width={2} height={1} fill="#ffffff" />
+        </g>
+      </g>
+    );
+  }
+  if (name === "Greta") {
+    return (
+      <g className="village-hoe" aria-hidden>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <rect key={i} x={6 + i * 0.8} y={-2 + i * 1.3} width={1} height={1.5} fill="#9a5b2c" />
+        ))}
+        <rect x={9} y={5} width={4} height={1.5} fill="#8a8f98" stroke={INK} strokeWidth={0.3} />
+      </g>
+    );
+  }
+  if (name === "Lina") {
+    return (
+      <g className="village-can" aria-hidden>
+        <rect x={6} y={-2} width={5} height={4} rx={0.5} fill="#5fa8c9" stroke={INK} strokeWidth={0.4} />
+        <rect x={10.5} y={-1.5} width={3} height={1} fill="#5fa8c9" stroke={INK} strokeWidth={0.3} />
+        {[0, 1, 2].map((i) => (
+          <rect key={i} className="village-drop" style={{ animationDelay: `${i * 0.25}s` }} x={13.5} y={0} width={0.8} height={1.2} fill="#a7dbf5" />
+        ))}
+      </g>
+    );
+  }
+  return (
+    <g className="village-paper" aria-hidden>
+      <rect x={-3} y={-3} width={6} height={7} fill="#fffaf0" stroke={INK} strokeWidth={0.4} />
+      {[-1.5, 0, 1.5].map((dy) => (
+        <rect key={dy} x={-2} y={dy} width={4} height={0.5} fill="#8492a6" />
+      ))}
+    </g>
+  );
+}
+
+// --- the living world (M9): all decoration, none of it clickable ---
+
+/** Puffs rising from the chimney of a house whose owner is home and awake. */
+export function Smoke({ area }: { area: Area }) {
+  const x = (area.x1 + 1) * TILE - 12;
+  const y = (area.y1 - 1) * TILE;
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <circle key={i} className="village-smoke" style={{ animationDelay: `${i * 1.1}s` }} cx={x} cy={y} r={1.8 + i * 0.5} fill="#cfd4dc" stroke="#9aa1ad" strokeWidth={0.3} opacity={0} />
+      ))}
+    </g>
+  );
+}
+
+const BUTTERFLY_COLORS = ["#f7a8cc", "#ffe27a", "#c3a2f0"];
+
+/** Butterflies over the flower garden, by day. */
+export function Butterflies({ area }: { area: Area }) {
+  const w = (area.x1 - area.x0 + 1) * TILE;
+  const h = (area.y1 - area.y0 + 1) * TILE;
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {BUTTERFLY_COLORS.map((color, i) => (
+        <g key={color} transform={`translate(${area.x0 * TILE + ((i + 1) * w) / 4} ${area.y0 * TILE + h / 2 - 4 + i * 3})`}>
+          <g className="village-flutter-path" style={{ animationDelay: `-${i * 2.3}s` }}>
+            <g className="village-flutter">
+              <rect x={-2} y={-1} width={1.6} height={2} fill={color} />
+              <rect x={0.4} y={-1} width={1.6} height={2} fill={color} />
+            </g>
+            <rect x={-0.4} y={-1} width={0.8} height={2} fill={INK} />
+          </g>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/** Rings where fish jump, on a few water cells far from the shore. */
+export function LakeRings({ map }: { map: string }) {
+  const rows = map.split("\n");
+  const open = cellsOf(rows, "~").filter(([x, y]) =>
+    [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => rows[y + dy]?.[x + dx] === "~")),
+  );
+  const picks = [0.2, 0.55, 0.85].map((f) => open[Math.floor(f * open.length)]).filter(Boolean);
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {picks.map(([x, y], i) => (
+        <ellipse key={`${x},${y}`} className="village-ring-wave" style={{ animationDelay: `${i * 1.7}s` }} cx={x * TILE + 8} cy={y * TILE + 8} rx={6} ry={2.5} fill="none" stroke="#d8f1fc" strokeWidth={0.8} opacity={0} />
+      ))}
+    </g>
+  );
+}
+
+/** Fireflies near the water and the trees, in the evening and at night. */
+export function Fireflies({ map }: { map: string }) {
+  const rows = map.split("\n");
+  const shore = cellsOf(rows, "~").filter(([x, y]) => [rows[y - 1]?.[x], rows[y]?.[x - 1]].some((c) => c && c !== "~"));
+  const spots = [...cellsOf(rows, "t"), ...shore];
+  const picks = [0.05, 0.18, 0.31, 0.44, 0.57, 0.7, 0.83, 0.96].map((f) => spots[Math.floor(f * spots.length)]).filter(Boolean);
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {picks.map(([x, y], i) => (
+        <g key={`${x},${y}`} className="village-firefly" style={{ animationDelay: `-${i * 0.9}s` }}>
+          <circle cx={x * TILE + 8} cy={y * TILE + 2} r={2.2} fill="#fff3a0" opacity={0.25} />
+          <rect x={x * TILE + 7.5} y={y * TILE + 1.5} width={1} height={1} fill="#fffbd0" />
+        </g>
+      ))}
+    </g>
   );
 }

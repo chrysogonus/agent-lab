@@ -12,9 +12,9 @@ import {
   type Run,
   type VillageState,
 } from "@/lib/api";
-import { PERIOD_TINT, clockText, figures, logLines, narration, placeAreas, stateText, statusLine } from "@/lib/village";
+import { PERIOD_SKY, activity, clockText, figures, logLines, narration, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
-import { Ground, Lights, PixelDigits, Pixels, SPRITES, Snores, TILE, VillagerSprite } from "./pixels";
+import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { VillagerPanel } from "./VillagerPanel";
 
 type VillageStream = {
@@ -61,7 +61,8 @@ function useVillage(): VillageStream {
 function VillageMap({ state, selected, onSelect }: { state: VillageState; selected: string | null; onSelect: (name: string) => void }) {
   const { width, height, rows, places, homes } = state.map;
   const map = rows.join("\n");
-  const tint = PERIOD_TINT[state.period];
+  const sky = PERIOD_SKY[state.period];
+  const dark = state.period === "evening" || state.period === "night";
   const areas = placeAreas(rows);
   const owners = new Map(state.villagers.map((v) => [v.name, v]));
   const houses = homes.map((h) => `${h.letter}:${owners.get(h.villager)?.color ?? "#d6584b"}`).join(",");
@@ -73,21 +74,36 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
       role="group"
       aria-label={`Village map, ${clockText(state)}`}
     >
+      <defs>
+        <linearGradient id="village-sky" x1={0} y1={0} x2={0} y2={1}>
+          <stop offset={0} className="village-sky-stop" style={{ stopColor: sky.top.color, stopOpacity: sky.top.opacity }} />
+          <stop offset={1} className="village-sky-stop" style={{ stopColor: sky.bottom.color, stopOpacity: sky.bottom.opacity }} />
+        </linearGradient>
+      </defs>
       <Ground map={map} houses={houses} />
-      <rect width={width * TILE} height={height * TILE} fill={tint.color} opacity={tint.opacity} className="village-tint" aria-hidden />
-      <Lights map={map} on={state.period === "evening" || state.period === "night"} />
+      <LakeRings map={map} />
+      {!dark && areas.G && <Butterflies area={areas.G} />}
+      {homes.map((h) => {
+        const owner = owners.get(h.villager);
+        const home = owner && !owner.asleep && owner.x === h.door[0] && owner.y === h.door[1];
+        return home && areas[h.letter] && <Smoke key={h.letter} area={areas[h.letter]} />;
+      })}
+      <rect width={width * TILE} height={height * TILE} fill="url(#village-sky)" pointerEvents="none" aria-hidden />
+      <Lights map={map} on={dark} />
+      {dark && <Fireflies map={map} />}
       {homes.map((h) => owners.get(h.villager)?.asleep && areas[h.letter] && <Snores key={h.letter} area={areas[h.letter]} />)}
       {places.map((p) => {
         const area = areas[rows[p.y][p.x]];
-        const top = rows[area.y0 - 1]?.[area.x0] === "B" ? area.y0 - 1 : area.y0; // the town hall's sign hangs on its wall
-        return <NamePlate key={p.key} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={top * TILE} text={p.label} />;
+        // On the top edge, where villagers rarely stand; the town hall's sign hangs on its wall,
+        // the pier's floats on the water below it (Jonas fishes from its top).
+        const edge = p.key === "pier" ? area.y1 + 1.4 : rows[area.y0 - 1]?.[area.x0] === "B" ? area.y0 - 1 : area.y0;
+        return <NamePlate key={p.key} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={edge * TILE} text={p.label} />;
       })}
       {homes.map((h) => {
         const area = areas[h.letter];
         return area && <NamePlate key={h.letter} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={area.y0 * TILE + 16} text={h.villager} small />;
       })}
       {placed.map(({ villager, cx, cy }) => {
-        const sprite = SPRITES[villager.name];
         const isSelected = selected === villager.name;
         const nameWidth = villager.name.length * 4.6 + 6;
         return (
@@ -99,20 +115,14 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
             aria-pressed={isSelected}
             onClick={() => onSelect(villager.name)}
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(villager.name))}
-            className="village-figure cursor-pointer outline-none transition-transform duration-500 ease-out motion-reduce:transition-none"
+            className="village-figure cursor-pointer outline-none transition-transform duration-[350ms] ease-linear motion-reduce:transition-none"
             style={{ transform: `translate(${cx * TILE}px, ${cy * TILE}px)` }}
           >
             <title>{villager.title}</title>
             <rect className="village-ring" pointerEvents="none" x={-10} y={-13} width={20} height={21} rx={3} fill="none" stroke="#fffaf0" strokeWidth={1.5} />
             <rect x={-5} y={4} width={10} height={2} fill="#00000030" />
             <rect x={-4} y={3} width={8} height={4} fill="#00000018" />
-            <g className={villager.state === "walking" || villager.state === "bedtime" ? "village-walk" : undefined}>
-              {sprite ? (
-                <Pixels rows={sprite.rows} palette={sprite.palette} x={-8} y={-11} />
-              ) : (
-                <rect x={-5} y={-9} width={10} height={14} fill={villager.color} stroke="#2a2340" />
-              )}
-            </g>
+            <VillagerFigure name={villager.name} activity={activity(villager)} rhythm={rhythm(villager.name)} />
             <g className="village-name" pointerEvents="none">
               <rect x={-nameWidth / 2} y={7} width={nameWidth} height={9} rx={2} fill="#fffaf0" stroke="#2a2340" strokeWidth={0.75} />
               <text y={13.6} textAnchor="middle" fontSize={7} fill="#2a2340" className="font-pixel">

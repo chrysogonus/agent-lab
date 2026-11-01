@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Run, VillageState, Villager } from "./api";
 import {
+  activity,
   cellKind,
   clockText,
   dayOf,
+  rhythm,
   eventLines,
   figures,
   logLines,
@@ -28,6 +30,7 @@ const villager = (fields: Partial<Villager>): Villager => ({
   y: 1,
   place: "town_hall",
   destination: null,
+  work: "town_hall",
   last_action: null,
   speech: null,
   events: [],
@@ -81,6 +84,22 @@ describe("map", () => {
     expect(a.cx).toBeLessThan(5.5);
     expect(b.cx).toBeGreaterThan(5.5);
     expect([c.cx, c.cy]).toEqual([2.5, 3.5]);
+  });
+
+  it("picks what each figure is doing", () => {
+    expect(activity(villager({ state: "walking" }))).toBe("walking");
+    expect(activity(villager({ state: "bedtime" }))).toBe("walking");
+    expect(activity(villager({ state: "talking" }))).toBe("talking");
+    expect(activity(villager({ state: "deciding" }))).toBe("thinking");
+    expect(activity(villager({ state: "idle" }))).toBe("working"); // idle at the town hall, its work place
+    expect(activity(villager({ state: "idle", place: "market" }))).toBe("idle");
+  });
+
+  it("gives each villager its own rhythm", () => {
+    const offsets = ["Hilde", "Jonas", "Greta", "Lina"].map(rhythm);
+    expect(new Set(offsets).size).toBe(4);
+    expect(offsets.every((o) => o >= 0 && o < 5)).toBe(true);
+    expect(rhythm("Hilde")).toBe(rhythm("Hilde"));
   });
 
   it("leaves sleeping villagers inside their houses", () => {

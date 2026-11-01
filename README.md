@@ -59,15 +59,23 @@ Hilde (town hall), Jonas the fisher (pier), Greta the farmer (fields) and Lina t
 05:00, Greta at 05:30, Lina at 06:30 and Hilde at 07:30; at bedtime they walk home by
 themselves, and once everyone sleeps the night passes in seconds.
 
-The clock moves in steps of 10 village minutes, and walkers move one at a time within a step.
+The clock moves in steps of 10 village minutes; a walker covers up to three cells a step, gliding
+from cell to cell, and walkers take turns within a step.
 A villager only asks its model what to do when something happens: it woke, arrived, met
 someone, was spoken to, found (or missed) someone it was looking for, or half an hour passed.
 It can walk to a place or home, go and find another villager where it thinks they are, talk to
-someone standing right next to it, say goodbye, or wait. Villagers talk only face to face, and
+someone standing right next to it, say goodbye (and where it goes next), or wait. Villagers talk
+only face to face and stay together until one of them says goodbye, and
 each one keeps an idea of where the others are (seen, heard, or their usual routine), which can
 be out of date. Start, Pause, Step and Reset control the clock; the interval sets the seconds
 between steps. The village pauses itself 60 seconds after the last Village tab closes, and after
 three steps in which every decision failed (e.g. the model server is down).
+
+Standing villagers breathe, blink and look around; at their own place they work: Jonas fishes
+from the pier, Greta hoes the field, Lina waters the flowers, Hilde reads her papers. Chimneys
+smoke while their owners are home, butterflies cross the garden, fish ring the lake, the light
+turns golden and dusky towards the evening, and fireflies come out at night. With reduced motion
+turned on, all of it stays still.
 
 Villagers remember: every conversation, search and first meeting of the day becomes a lasting
 memory (60 per villager), and when a villager decides it is reminded of the memories about who

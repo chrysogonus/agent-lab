@@ -137,21 +137,18 @@
   opacity: 1;
 }
 
-.village-tint {
+.village-sky-stop {
   transition:
-    fill 1s,
-    opacity 1s;
+    stop-color 2s,
+    stop-opacity 2s;
 }
 
-/* Water ripples in two frames; walkers bob; the cursor over a picked villager bounces. */
+/* Water ripples in two frames; the cursor over a picked villager bounces; "Zz" floats. */
 .village-wave-a {
   animation: village-frames 1.6s infinite;
 }
 .village-wave-b {
   animation: village-frames 1.6s -0.8s infinite;
-}
-.village-walk {
-  animation: village-bob 0.5s infinite;
 }
 .village-cursor {
   animation: village-bob 0.8s infinite;
@@ -159,6 +156,70 @@
 .village-snore {
   animation: village-bob 1.6s infinite;
 }
+
+/* Villagers (M9): each runs on its own rhythm (--rhythm, a negative delay). */
+.village-walk {
+  animation: village-bob 0.3s infinite;
+}
+.village-step-a {
+  animation: village-frames 0.3s infinite;
+}
+.village-step-b {
+  animation: village-frames 0.3s -0.15s infinite;
+}
+.village-breathe {
+  animation: village-bob 2.6s var(--rhythm, 0s) infinite;
+}
+.village-talk {
+  animation: village-bob 0.9s var(--rhythm, 0s) infinite;
+}
+.village-blink {
+  opacity: 0;
+  animation: village-blink 4.3s var(--rhythm, 0s) infinite;
+}
+.village-glance {
+  animation: village-glance 7.1s var(--rhythm, 0s) infinite;
+}
+.village-float {
+  animation: village-bob 1.2s infinite;
+}
+.village-hoe {
+  transform-origin: 6px -1px;
+  animation: village-hoe 1.4s ease-in-out infinite;
+}
+.village-can {
+  transform-origin: 7px 0px;
+  animation: village-tilt 2.4s ease-in-out infinite;
+}
+.village-drop {
+  animation: village-drop 0.75s linear infinite;
+}
+.village-paper {
+  animation: village-paper 3.2s ease-in-out infinite;
+}
+
+/* The living world (M9). */
+.village-smoke {
+  animation: village-smoke 3.3s ease-out infinite;
+}
+.village-flutter {
+  animation: village-flutter 0.25s infinite;
+  transform-origin: 0 0;
+}
+.village-flutter-path {
+  animation: village-flutter-path 9s ease-in-out infinite;
+}
+.village-ring-wave {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: village-ring 5.1s ease-out infinite;
+}
+.village-firefly {
+  animation:
+    village-glow 2.2s ease-in-out infinite,
+    village-drift 7s ease-in-out infinite;
+}
+
 @keyframes village-frames {
   0%,
   49.9% {
@@ -179,6 +240,148 @@
     transform: translateY(-1px);
   }
 }
+@keyframes village-blink {
+  0%,
+  95% {
+    opacity: 0;
+  }
+  95.1%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes village-glance {
+  0%,
+  40% {
+    transform: translateX(0);
+  }
+  40.1%,
+  55% {
+    transform: translateX(-1px);
+  }
+  55.1%,
+  75% {
+    transform: translateX(0);
+  }
+  75.1%,
+  88% {
+    transform: translateX(1px);
+  }
+  88.1%,
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes village-hoe {
+  0%,
+  100% {
+    transform: rotate(-28deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+@keyframes village-tilt {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(18deg);
+  }
+}
+@keyframes village-drop {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+}
+@keyframes village-paper {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes village-smoke {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(4px, -14px) scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes village-flutter {
+  0%,
+  49.9% {
+    transform: scaleX(1);
+  }
+  50%,
+  100% {
+    transform: scaleX(0.3);
+  }
+}
+@keyframes village-flutter-path {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(9px, -6px);
+  }
+  50% {
+    transform: translate(16px, 2px);
+  }
+  75% {
+    transform: translate(5px, 7px);
+  }
+}
+@keyframes village-ring {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  60%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@keyframes village-glow {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes village-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(5px, -4px);
+  }
+  66% {
+    transform: translate(-4px, -7px);
+  }
+}
 
 .village-ring,
 .village-figure .village-name {
@@ -194,12 +397,28 @@
 
 @media (prefers-reduced-motion: reduce) {
   .village-wave-a,
-  .village-walk,
   .village-cursor,
-  .village-snore {
+  .village-snore,
+  .village-walk,
+  .village-step-a,
+  .village-breathe,
+  .village-talk,
+  .village-blink,
+  .village-glance,
+  .village-float,
+  .village-hoe,
+  .village-can,
+  .village-drop,
+  .village-paper,
+  .village-flutter,
+  .village-flutter-path,
+  .village-firefly {
     animation: none;
   }
-  .village-wave-b {
+  .village-wave-b,
+  .village-step-b,
+  .village-smoke,
+  .village-ring-wave {
     display: none;
   }
 }

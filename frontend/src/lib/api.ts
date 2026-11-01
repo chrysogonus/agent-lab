@@ -67,7 +67,7 @@ export type VillageAction =
   | { action: "move"; place: string; reason?: string }
   | { action: "find"; villager: string; reason?: string }
   | { action: "say"; text: string; to: string | null; reason?: string }
-  | { action: "goodbye"; text: string | null; reason?: string }
+  | { action: "goodbye"; text: string | null; place?: string; villager?: string; ignored?: string; reason?: string }
   | { action: "wait"; reason?: string }
   | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string };
 
@@ -90,6 +90,7 @@ export type Villager = {
   y: number;
   place: string | null;
   destination: string | null;
+  work: string; // its work place key (M9)
   last_action: VillageAction | null;
   speech: { text: string; to: string | null; tick: number } | null;
   events: VillageEvent[];
