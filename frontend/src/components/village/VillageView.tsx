@@ -13,7 +13,7 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { PERIOD_SKY, activity, clockText, glideMs, figures, logLines, narration, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
+import { PACES, PERIOD_SKY, activity, clockText, glideMs, figures, logLines, narration, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { VillagerPanel } from "./VillagerPanel";
@@ -237,7 +237,6 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
   const [selected, setSelected] = useState<string | null>(null);
   const [turn, setTurn] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [interval, setIntervalText] = useState<string | null>(null);
 
   const act = async (call: () => Promise<VillageState>) => {
     setError(null);
@@ -252,11 +251,6 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
     return <p className="text-sm text-muted">{streamError ?? "Loading the village…"}</p>;
   }
   const villager = state.villagers.find((v) => v.name === selected) ?? null;
-  const saveInterval = () => {
-    const seconds = Number(interval);
-    if (interval !== null && Number.isInteger(seconds) && seconds !== state.interval) void act(() => setVillageInterval(seconds));
-    setIntervalText(null);
-  };
 
   const night = state.period === "evening" || state.period === "night";
 
@@ -329,21 +323,20 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
             Reset
           </button>
         </div>
-        <label className="flex items-center gap-2 text-base text-dusk-muted">
-          A step every
-          <input
-            type="number"
-            min={1}
-            max={30}
-            value={interval ?? state.interval}
-            onChange={(e) => setIntervalText(e.target.value)}
-            onBlur={saveInterval}
-            onKeyDown={(e) => e.key === "Enter" && saveInterval()}
-            className="w-16 rounded-md border-2 border-dusk bg-parchment px-2 py-0.5 font-sans text-base text-dusk tabular-nums focus-visible:outline-3 focus-visible:outline-llm"
-            aria-label="Seconds between steps"
-          />
-          seconds
-        </label>
+        <div className="flex items-center gap-2.5 text-base text-dusk-muted" role="group" aria-label="Pace">
+          Pace
+          {PACES.map((pace) => (
+            <button
+              key={pace.label}
+              type="button"
+              aria-pressed={state.interval === pace.seconds}
+              onClick={() => state.interval !== pace.seconds && void act(() => setVillageInterval(pace.seconds))}
+              className="village-button village-button--small"
+            >
+              {pace.label}
+            </button>
+          ))}
+        </div>
         {(streamError || error) && (
           <p role="alert" className="text-base text-fault">
             {streamError ?? error}

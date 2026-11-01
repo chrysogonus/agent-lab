@@ -119,9 +119,21 @@ export function clockText(state: VillageState): string {
   return `Day ${state.day}, ${state.time}, ${state.period}`;
 }
 
+/** Seconds per 10-minute step while anyone is awake; nights pass quickly at every pace. */
+export const PACES = [
+  { label: "Slow", seconds: 15 },
+  { label: "Normal", seconds: 5 },
+  { label: "Fast", seconds: 2 },
+] as const;
+
+export function paceOf(interval: number): (typeof PACES)[number] | null {
+  return PACES.find((p) => p.seconds === interval) ?? null;
+}
+
 export function statusLine(state: VillageState): string {
   if (state.ticking) return "Stepping…";
-  if (state.running) return `Running, a step every ${state.interval} s`;
+  const pace = paceOf(state.interval);
+  if (state.running) return pace ? `Running at ${pace.label} pace` : `Running, a step every ${state.interval} s`;
   if (state.paused_reason === "owner" || !state.paused_reason) return "Paused";
   return `Paused: ${state.paused_reason}`;
 }

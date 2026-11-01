@@ -110,6 +110,10 @@
 .village-button--danger {
   color: var(--color-fault);
 }
+.village-button[aria-pressed="true"] {
+  background: #ffd75e;
+  box-shadow: inset 0 2px 0 #c99a35;
+}
 .village-button--small {
   font-size: 0.875rem;
   padding: 0.15rem 0.6rem;

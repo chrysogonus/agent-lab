@@ -185,3 +185,14 @@ def test_turns_survive_a_replaced_agent(store: Store) -> None:
         turns = client.get("/village/villagers/Jonas/turns").json()
     assert new_id and new_id != old_id
     assert {t["agent_id"] for t in turns} == {old_id, new_id}  # old and new turns listed
+
+
+def test_changing_the_pace_keeps_every_villagers_model(store: Store) -> None:
+    with client_for(store) as client:
+        client.post("/village/start")
+        client.post("/village/pause")
+        before = {a["id"]: a["config"] for a in client.get("/agents").json()}
+        for seconds in (15, 5, 2):
+            assert client.put("/village/interval", json={"seconds": seconds}).status_code == 200
+        after = {a["id"]: a["config"] for a in client.get("/agents").json()}
+    assert after == before  # FR-002

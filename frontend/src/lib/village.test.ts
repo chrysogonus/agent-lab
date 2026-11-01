@@ -15,6 +15,8 @@ import {
   sleepText,
   stateText,
   statusLine,
+  PACES,
+  paceOf,
   tickTime,
   turnLabel,
   whereText,
@@ -137,7 +139,9 @@ describe("words", () => {
   it("states the clock and the village's status", () => {
     expect(clockText(state({}))).toBe("Day 1, 07:20, morning");
     expect(statusLine(state({ ticking: true, running: true }))).toBe("Stepping…");
-    expect(statusLine(state({ running: true, interval: 5 }))).toBe("Running, a step every 5 s");
+    expect(statusLine(state({ running: true, interval: 5 }))).toBe("Running at Normal pace");
+    expect(statusLine(state({ running: true, interval: 15 }))).toBe("Running at Slow pace");
+    expect(statusLine(state({ running: true, interval: 7 }))).toBe("Running, a step every 7 s");
     expect(statusLine(state({ paused_reason: "owner" }))).toBe("Paused");
     expect(statusLine(state({ paused_reason: "no viewer for 60 s" }))).toBe("Paused: no viewer for 60 s");
   });
@@ -180,5 +184,17 @@ describe("panel", () => {
     );
     expect(dayOf(116)).toBe(1);
     expect(dayOf(117)).toBe(2);
+  });
+});
+
+describe("paces", () => {
+  it("are Slow, Normal and Fast at 15, 5 and 2 seconds a step", () => {
+    expect(PACES.map((p) => [p.label, p.seconds])).toEqual([
+      ["Slow", 15],
+      ["Normal", 5],
+      ["Fast", 2],
+    ]);
+    expect(paceOf(2)?.label).toBe("Fast");
+    expect(paceOf(7)).toBeNull();
   });
 });

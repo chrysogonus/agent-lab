@@ -1131,3 +1131,16 @@ async def test_an_m9_world_keeps_going_with_the_seasons(tmp_path: Path) -> None:
     assert reloaded.world["growth"]["flower_garden"]["stage"] == "blooming"
     assert reloaded.world["chronicle"] == [] and reloaded.world["day_record"] is None
     assert reloaded.state()["calendar"]["season"] == "summer"
+
+
+@pytest.mark.anyio
+async def test_steps_follow_the_pace_while_anyone_is_awake(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    v.world["interval"] = 0.4  # the pace, scaled down (SC-001)
+    v.viewer_joined()
+    started = v.world["tick"]
+    v.start()
+    await asyncio.sleep(1.0)  # steps at 0, 0.4 and 0.8 s; NIGHT_STEP would give 5
+    v.pause()
+    assert v.world["tick"] - started == 3
