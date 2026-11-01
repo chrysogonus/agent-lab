@@ -2,14 +2,17 @@
 
 ## 1. Three cells per step, in rounds
 
-- **Decision**: each step runs up to 3 rounds; in each round every walker (in the rotated order of
-  M7) moves one cell, then `_look()` and a publish run, then the runner sleeps `gap`. A walker
-  that arrives, starts deciding or is spoken to stops for the rest of the step.
+- **Decision**: each step runs up to 3 rounds; in each round every walker (in a fixed order)
+  moves one cell, then `_look()` and a publish run, then the runner sleeps `gap`. A walker
+  that arrives, starts deciding or is spoken to stops for the rest of the step; its slots keep
+  their time, so the others' rhythm holds.
 - **Why**: crossing the map takes a third of the steps (SC-001); interleaving keeps "one move per
   published state" (SC-002) and lets meetings happen mid-step.
-- **Gap**: `interval / (3 × walkers + 1)` in the running loop (≈ 0.38 s with 4 walkers at 5 s);
-  0.1 s in Step; tests pass 0. The view glides each move linearly in 0.35 s, so walking looks
-  continuous.
+- **Gap**: `interval / (3 × walkers)` in the running loop, so each walker moves every
+  `interval / 3` seconds (≈ 1.7 s at 5 s); 0.1 s in Step; tests pass 0. The view glides each move
+  linearly for exactly that long (`glideMs`), so walking is continuous; the walk animation plays
+  only while a figure is gliding (a fixed order replaced M7's rotation, which jittered the rhythm
+  at step boundaries).
 
 ## 2. Leaving a conversation
 
