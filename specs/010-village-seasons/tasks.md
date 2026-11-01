@@ -8,7 +8,8 @@ description: "Task list for M10 — Village Seasons"
 contracts/http-api.md, quickstart.md)
 
 **Tests**: requested by the spec (FR-020, SC-001–SC-004). `FakeLLM` only; answers come from
-callables that tell decisions, reflections and chronicles apart by the system prompt. Runner tests
+callables that tell decisions, reflections and chronicles apart by the system prompt (the
+chronicler's prompt must not contain `"learnings"`, which marks a reflection). Runner tests
 pass `move_gap=0`. A scripted year is tested on `end_day` directly (28 calls), not by running
 4,032 steps.
 
@@ -40,7 +41,7 @@ pass `move_gap=0`. A scripted year is tested on `end_day` directly (28 calls), n
 
 - [ ] T003 [P] [US2] New backend/src/agent_lab/village/chronicle.py (research §6): `CHRONICLE_KEPT = 28`, `chronicle_prompt(world, record)` (the record's day as "Day 17, day 3 of autumn, year 1", that day's weather, the places' states, the items), `parse_entry(answer) -> (entry | None, reason)` ("`title` and `text` non-empty strings; title cut to 60, text to 800"), `chronicler_agent()` (block agent "Village chronicler": model block `chronicle` + check `answer-is-json`); tests in new backend/tests/test_village_chronicle.py: the prompt lists date, weather and items; every valid and invalid answer; the agent validates as a block agent
 - [ ] T004 [US2] backend/src/agent_lab/village/runner.py: `_note(text)` ("texts cut to 300, at most 120 items"), day record opened in `_schedule` at the first waking when none is open, notes from `_look` (first meeting of a pair that day, found, missed), `_end_conversation` (once per conversation, with the transcript), `_set_off`, goodbye; `_fall_asleep` closes the record and starts `_chronicle` when everyone sleeps; `_chronicle` runs the agent, appends `{day, year, season, day_of_season, weather, title, text, run_id}` (≤ 28, oldest dropped), sets `village_action` `{"action": "chronicle", "title"}` or `{"action": "chronicle", "reason"}`, publishes; `_settle` waits for it; failures never reach `outcomes`; `ensure_agents` creates the chronicler once and Reset keeps `chronicler_agent_id` (recreated if deleted); `state()` sends `chronicle` newest first; tests in test_village_runner.py: one chronicle per night over 7 scripted days (SC-004), the entry carries the record's day and weather when the last villager falls asleep after midnight (US2 scenario 2), invalid answers add none and record the reason, a failing chronicle does not pause the village, Step and Reset wait for it, reset clears the chronicle, at most 28 kept, the agent created once and listed
-- [ ] T005 [US2] frontend/src/lib/api.ts (`chronicle`, `VillageAction` `chronicle`), lib/village.ts (`newEntries(chronicle, seenRunId)` — all when the id is missing; `turnLabel` "writes the chronicle of day 3" or the reason), new frontend/src/components/village/ChroniclePanel.tsx (entries newest first with day, season and weather; new ones marked; opening stores the newest run id in `localStorage` inside try/catch), VillageView.tsx (a Chronicle button with the count of new entries); tests in village.test.ts; screenshot at 1400 × 950
+- [ ] T005 [US2] frontend/src/lib/api.ts (`chronicle`, `VillageAction` `chronicle`), lib/village.ts (`newEntries(chronicle, seenRunId)` — all when the id is missing; `turnLabel` "writes the chronicle of day 3" or the reason), new frontend/src/components/village/ChroniclePanel.tsx (entries newest first with day, season and weather; new ones marked; opening stores the newest run id in `localStorage` inside try/catch; each entry opens the run that wrote it via `GET /runs/{run_id}` and the existing turn view, because the run list leaves out village runs), VillageView.tsx (a Chronicle button with the count of new entries); tests in village.test.ts; screenshot at 1400 × 950
 
 ## Phase 4: User Story 3 — Seasons and weather (P2)
 
@@ -87,7 +88,7 @@ up. Then seasons and weather, growth, the festival; each phase is shippable on i
 | FR-001 | village.test.ts (paces); T002 |
 | FR-002 | test_village_api.py (models unchanged) |
 | FR-003, FR-004, FR-005 | test_village_runner.py (record, once per night, after midnight, invalid, not a failure, Step/Reset); test_village_chronicle.py |
-| FR-006 | village.test.ts (`newEntries`); T005 screenshot |
+| FR-006 | village.test.ts (`newEntries`); T005 screenshot (an entry opens its run) |
 | FR-007, FR-008 | test_village_seasons.py (dates, weather) |
 | FR-009 | T007 screenshots; test_village_seasons.py (sky, dark, snow cover) |
 | FR-010 | test_village_turn.py (first line) |

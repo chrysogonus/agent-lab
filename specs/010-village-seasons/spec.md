@@ -81,8 +81,8 @@ first and marks those written since the owner last opened the chronicle.
    is added for that day and the reason is recorded on the run; the village keeps running.
 4. **Given** three entries written since the owner last opened the chronicle, **When** the owner
    returns to the view, **Then** the chronicle shows that three entries are new.
-5. **Given** the chronicle runs, **When** the owner opens it in the run list, **Then** each
-   chronicle run is listed like the reflections, with its spans.
+5. **Given** a chronicle entry, **When** the owner opens it, **Then** the run that wrote it opens
+   with its spans, as a villager's turn does.
 
 ---
 
