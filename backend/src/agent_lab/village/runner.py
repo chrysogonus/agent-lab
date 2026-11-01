@@ -676,28 +676,23 @@ class Village:
         minute = minute_of_day(world["tick"])
         for v in world["villagers"]:
             self._schedule(v, minute)
-        names = list(VILLAGERS)
-        walkers = sorted(
-            (v for v in world["villagers"] if self._walks(v)),
-            key=lambda v: (names.index(v["name"]) - world["tick"]) % len(names),
-        )
+        # Moves fill the step evenly, in a fixed order, so each walker moves every
+        # interval / CELLS_PER_STEP seconds and the view can glide it there without pausing.
+        walkers = [v for v in world["villagers"] if self._walks(v)]
         gap = self.move_gap
         if gap is None:
             moves = CELLS_PER_STEP * len(walkers)
-            gap = STEP_GAP if self.in_step else world["interval"] / (moves + 1)
-        moved = False
-        for _ in range(CELLS_PER_STEP):  # in rounds, one cell each, so the view shows them in turn
-            for v in walkers:
-                if not self._walks(v):
-                    continue
-                if moved and gap:
-                    await asyncio.sleep(gap)
-                    if not self._walks(v):  # someone spoke to it meanwhile
-                        continue
+            gap = STEP_GAP if self.in_step else world["interval"] / max(moves, 1)
+        slots = [v for _ in range(CELLS_PER_STEP) for v in walkers]  # rounds of one cell each
+        for i, v in enumerate(slots):
+            if not any(self._walks(w) for w in walkers):
+                break  # everyone arrived or stopped
+            if i and gap:
+                await asyncio.sleep(gap)  # an empty slot keeps its time, so the rhythm holds
+            if self._walks(v):  # someone may have spoken to it meanwhile
                 self._walk(v)
                 self._look()
                 self._publish()
-                moved = True
         self._look()
         self._upkeep()
         if self.outcomes:

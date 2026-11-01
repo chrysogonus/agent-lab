@@ -13,7 +13,7 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { PERIOD_SKY, activity, clockText, figures, logLines, narration, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
+import { PERIOD_SKY, activity, clockText, glideMs, figures, logLines, narration, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { VillagerPanel } from "./VillagerPanel";
@@ -68,6 +68,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
   const owners = new Map(state.villagers.map((v) => [v.name, v]));
   const houses = homes.map((h) => `${h.letter}:${owners.get(h.villager)?.color ?? "#d6584b"}`).join(",");
   const placed = figures(state).sort((a, b) => a.cy - b.cy); // lower on the map is nearer, drawn later
+  const glide = glideMs(state);
   return (
     <svg
       viewBox={`0 0 ${width * TILE} ${height * TILE}`}
@@ -116,14 +117,14 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
             aria-pressed={isSelected}
             onClick={() => onSelect(villager.name)}
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(villager.name))}
-            className="village-figure cursor-pointer outline-none transition-transform duration-[350ms] ease-linear motion-reduce:transition-none"
-            style={{ transform: `translate(${cx * TILE}px, ${cy * TILE}px)` }}
+            className="village-figure cursor-pointer outline-none transition-transform ease-linear motion-reduce:transition-none"
+            style={{ transform: `translate(${cx * TILE}px, ${cy * TILE}px)`, transitionDuration: `${glide}ms` }}
           >
             <title>{villager.title}</title>
             <rect className="village-ring" pointerEvents="none" x={-10} y={-13} width={20} height={21} rx={3} fill="none" stroke="#fffaf0" strokeWidth={1.5} />
             <rect x={-5} y={4} width={10} height={2} fill="#00000030" />
             <rect x={-4} y={3} width={8} height={4} fill="#00000018" />
-            <MovingFigure villager={villager} />
+            <MovingFigure villager={villager} glide={glide} />
             <g className="village-name" pointerEvents="none">
               <rect x={-nameWidth / 2} y={7} width={nameWidth} height={9} rx={2} fill="#fffaf0" stroke="#2a2340" strokeWidth={0.75} />
               <text y={13.6} textAnchor="middle" fontSize={7} fill="#2a2340" className="font-pixel">
@@ -161,26 +162,29 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
   );
 }
 
-const GLIDE_MS = 350; // the figure's transition between two cells
-
 /** True while a figure glides to a new cell, plus a moment, so consecutive moves blend. */
-function useMoving(x: number, y: number): boolean {
+function useMoving(x: number, y: number, glide: number): boolean {
   const [moving, setMoving] = useState(false);
   const last = useRef(`${x},${y}`);
+  // Read, not depended on: a pace change mid-glide must not cancel the timer that ends it.
+  const glideRef = useRef(glide);
+  useEffect(() => {
+    glideRef.current = glide;
+  }, [glide]);
   useEffect(() => {
     const cell = `${x},${y}`;
     if (cell === last.current) return;
     last.current = cell;
     setMoving(true);
-    const settle = setTimeout(() => setMoving(false), GLIDE_MS + 100);
+    const settle = setTimeout(() => setMoving(false), glideRef.current + 150);
     return () => clearTimeout(settle);
   }, [x, y]);
   return moving;
 }
 
 /** The walk plays only while the villager actually moves; standing still, it idles. */
-function MovingFigure({ villager }: { villager: Villager }) {
-  const moving = useMoving(villager.x, villager.y);
+function MovingFigure({ villager, glide }: { villager: Villager; glide: number }) {
+  const moving = useMoving(villager.x, villager.y, glide);
   return <VillagerFigure name={villager.name} activity={activity(villager, moving)} rhythm={rhythm(villager.name)} />;
 }
 

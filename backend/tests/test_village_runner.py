@@ -4,6 +4,7 @@ beliefs, storage and controls (US1 to US4)."""
 import asyncio
 import json
 from collections.abc import Callable
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -296,7 +297,7 @@ async def test_moves_are_staggered_within_a_step(tmp_path: Path) -> None:
         assert all(moved_in_order.count(n) <= CELLS_PER_STEP for n in moved_in_order)
         assert moved_in_order[:3] != [moved_in_order[0]] * 3  # rounds: they take turns
         first_movers.append(moved_in_order[0])
-    assert len(set(first_movers)) > 1  # the order rotates
+    assert len(set(first_movers)) == 1  # a fixed order keeps each walker's rhythm even
 
 
 @pytest.mark.anyio
@@ -1039,3 +1040,35 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> 
     assert RULES in hilde.config["blocks"][0]["system"]
     assert PREVIOUS_RULES not in hilde.config["blocks"][0]["system"]
     assert "MY OWN RULES" in jonas.config["blocks"][0]["system"]  # the owner's edit stays
+
+
+@pytest.mark.anyio
+async def test_moves_are_spread_evenly_over_the_step(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, move_gap=None)
+    morning(v)
+    v.world["interval"] = 0.6
+    v.world["running"] = True  # timing as in the loop, without starting it
+    for name in ("Hilde", "Greta"):
+        villager(v, name)["goal"] = {"kind": "place", "place": "pier"}
+    queue = v.bus.subscribe(CHANNEL)
+    times: dict[str, list[float]] = {"Hilde": [], "Greta": []}
+    before = {x["name"]: (x["x"], x["y"]) for x in v.world["villagers"]}
+    step = asyncio.create_task(v._step())  # pyright: ignore[reportPrivateUsage]
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    while not step.done() or not queue.empty():
+        try:
+            event = await asyncio.wait_for(queue.get(), 0.05)
+        except TimeoutError:
+            continue
+        if event["type"] != "state":
+            continue
+        now = {x["name"]: (x["x"], x["y"]) for x in event["state"]["villagers"]}
+        for name in times:
+            if now[name] != before[name]:
+                times[name].append(loop.time() - started)
+        before = now
+    for name, at in times.items():
+        assert len(at) == CELLS_PER_STEP, name
+        spacing = [b - a for a, b in pairwise(at)]
+        assert all(abs(s - 0.6 / CELLS_PER_STEP) < 0.08 for s in spacing), (name, spacing)

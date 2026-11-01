@@ -5,6 +5,7 @@ import {
   cellKind,
   clockText,
   dayOf,
+  glideMs,
   rhythm,
   eventLines,
   figures,
@@ -94,6 +95,11 @@ describe("map", () => {
     expect(activity(villager({ state: "deciding" }), false)).toBe("thinking");
     expect(activity(villager({ state: "idle" }), false)).toBe("working"); // idle at the town hall, its work place
     expect(activity(villager({ state: "idle", place: "market" }), false)).toBe("idle");
+  });
+
+  it("glides each move until the next one", () => {
+    expect(glideMs(state({ running: true, interval: 6 }))).toBe(2000);
+    expect(glideMs(state({ running: false }))).toBe(100); // Step
   });
 
   it("gives each villager its own rhythm", () => {

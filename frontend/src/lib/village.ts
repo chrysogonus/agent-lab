@@ -53,6 +53,14 @@ export function activity(villager: Villager, moving: boolean): Activity {
   return villager.place === villager.work ? "working" : "idle";
 }
 
+const CELLS_PER_STEP = 3; // as backend village/runner.py: a walker moves this often per step
+const STEP_GLIDE_MS = 100; // Step moves its walkers 0.1 s apart
+
+/** How long a figure glides to its next cell: until its next move, so walking looks continuous. */
+export function glideMs(state: VillageState): number {
+  return state.running ? (state.interval * 1000) / CELLS_PER_STEP : STEP_GLIDE_MS;
+}
+
 /** A stable offset in seconds per villager, so idle animations do not run in sync. */
 export function rhythm(name: string): number {
   return ([...name].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 7) % 50) / 10;
