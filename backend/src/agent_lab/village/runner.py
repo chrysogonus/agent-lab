@@ -67,6 +67,7 @@ from agent_lab.village.turn import (
     partners,
     villager_agent,
 )
+from agent_lab.village.work import listed, work_step
 from agent_lab.village.world import (
     FESTIVAL_EVENING,
     HEIGHT,
@@ -212,6 +213,8 @@ class Village:
             return "deciding"
         if partners(self.world, v["name"]):
             return "talking"
+        if v["working"]:
+            return "working"
         return "walking" if v["goal"] else "idle"
 
     def state(self) -> dict[str, Any]:
@@ -234,6 +237,7 @@ class Village:
                 "bed": hhmm(character.bed),
                 "goal": goal_text(goal),
                 "plan": self._plan_state(v["plan"], day, minute_of_day(world["tick"])),
+                "working": v["working"]["place"] if v["working"] else None,
                 "talking_with": partners(self.world, name),
                 "beliefs": [
                     {
@@ -445,7 +449,7 @@ class Village:
                     self._start_plan(name)
             return
         if not awake and not v["bedtime"]:
-            v |= {"bedtime": True, "goal": {"kind": "home"}, "triggers": []}
+            v |= {"bedtime": True, "goal": {"kind": "home"}, "triggers": [], "working": None}
             self._remember_festival(v)  # the evening is over for this villager
             self._end_conversations(name, f"{name} went home to bed")
             self._event(v, "bedtime", "It is your bedtime; you head home.")
@@ -483,7 +487,10 @@ class Village:
         if v["name"] in festival["present"]:
             others = [n for n in festival["present"] if n != v["name"]]
             company = f"with {' and '.join(others)}" if others else "on your own"
-            self._remember(v, "festival", f"The harvest festival on the square {company}.", others)
+            held = [goods for goods, n in self.world["stalls"].items() if n]
+            stalls = f"The stalls held {listed(held)}." if held else "The stalls stood empty."
+            text = f"The harvest festival on the square {company}. {stalls}"
+            self._remember(v, "festival", text, others)
 
     def _walks(self, v: Villager) -> bool:
         if v["asleep"] or not v["goal"]:
@@ -785,6 +792,10 @@ class Village:
             self._seek(v, action["villager"])
         elif kind == "say":
             self._say(v, action["text"], action["to"])
+        elif kind == "work":
+            self._work(v, action["place"])
+        elif kind == "give":
+            self._give(v, action["to"], action["goods"])
         else:  # goodbye, then perhaps on its way
             if action["text"] and awake_neighbours(self.world, name):
                 self._say(v, action["text"], None)
@@ -798,7 +809,30 @@ class Village:
             elif action.get("villager"):
                 self._seek(v, action["villager"])
 
+    def _work(self, v: Villager, place: str) -> None:
+        if v["working"] and v["working"]["place"] == place:
+            self._event(v, "worked", f"You went on working at the {label(place)}.")
+            return
+        v |= {"working": {"place": place, "steps": 0}, "goal": None}  # works where it stands
+        self._event(v, "worked", f"You started working at the {label(place)}.")
+
+    def _give(self, v: Villager, to: str | None, goods: str) -> None:
+        name = v["name"]
+        v["basket"] = None
+        if to is None:
+            self.world["stalls"][goods] += 1
+            self._event(v, "gave", f"You set out your {goods} on the festival stalls.")
+            self._note(f"{name} set out {goods} on the festival stalls.")
+            return
+        other = self._villager(to)
+        other["basket"] = goods
+        self._event(v, "gave", f"You gave your basket of {goods} to {to}.", to=to)
+        self._event(other, "received", f"{name} gave you a basket of {goods}.", **{"from": name})
+        self._trigger(other, "given")
+        self._note(f"{name} gave a basket of {goods} to {to}.")
+
     def _set_off(self, v: Villager, place: str) -> None:
+        v["working"] = None  # walking off ends work
         if place == "home":
             v["goal"] = {"kind": "home"}
             self._event(v, "set_off", "You set off for home.")
@@ -808,6 +842,7 @@ class Village:
             self._note(f"{v['name']} set off for the {label(place)}.")
 
     def _seek(self, v: Villager, other: str) -> None:
+        v["working"] = None
         v["goal"] = {"kind": "find", "villager": other, "target": self._find_target(v, other)}
         self._event(v, "set_off", f"You set off to find {other}.", to=other)
         self._look()  # already in sight: aim at them now
@@ -925,9 +960,11 @@ class Village:
                 self._publish()
         self._look()
         self._upkeep()
-        tended = world["tended"]
-        for place in {place_at(v["x"], v["y"]) for v in villagers if not v["asleep"]} & set(tended):
-            tended[place] += 1  # steps with an awake villager on the fields or the garden
+        for name, goods in work_step(world):
+            v = self._villager(name)
+            self._event(v, "basket", f"You filled a basket of {goods}.")
+            self._trigger(v, "basket")
+            self._note(f"{name} filled a basket of {goods}.")
         self._festival_guests()
         if self.outcomes:
             all_failed = not any(self.outcomes)

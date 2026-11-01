@@ -6,7 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from agent_lab.village.seasons import WEATHER_TEXT, date_text, growth_text, weather
+from agent_lab.village.seasons import WEATHER_TEXT, date_text, festival_in, growth_text, weather
+from agent_lab.village.work import stalls_text
 from agent_lab.village.world import clock
 
 CHRONICLE_KEPT = 28  # one village year
@@ -19,6 +20,7 @@ def chronicle_prompt(world: dict[str, Any], record: dict[str, Any]) -> str:
     lines = [
         f"Day {day} ({date_text(day)}). {WEATHER_TEXT[weather(day)]}.",
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
+        *([stalls_text(world["stalls"])] if festival_in(day) == 0 else []),
         "What happened (what villagers said are their claims, not events; never report a claim "
         "as an event; the weather is the one given above):",
         *([f"- {clock(i['tick'])[1]} {i['text']}" for i in record["items"]] or ["- nothing"]),

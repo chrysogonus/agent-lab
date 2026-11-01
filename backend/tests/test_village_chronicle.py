@@ -65,3 +65,11 @@ def test_the_chronicler_is_a_valid_block_agent() -> None:
     assert write.kind == "model" and '"learnings"' not in write.system  # not a reflection
     assert check.kind == "check" and check.rule == "valid_json"
     assert not body["description"].endswith("in the village.")  # not counted as a villager
+
+
+def test_the_festival_day_names_the_stalls() -> None:
+    world = new_world()
+    world["stalls"] = {"fish": 1, "vegetables": 0, "flowers": 2}
+    stalls = "The festival stalls on the square hold fish and flowers; they still lack vegetables."
+    assert stalls in chronicle_prompt(world, {"day": 21, "items": []})
+    assert "festival stalls" not in chronicle_prompt(world, {"day": 20, "items": []})

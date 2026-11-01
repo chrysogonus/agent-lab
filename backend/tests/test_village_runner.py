@@ -108,9 +108,10 @@ def village_for(
     plan: dict[str, list[str | Exception]] | None = None,
     calls: int = 400,
     delay: float = 0,
+    respond: Callable[[list[Message]], ChatResponse | Exception] | None = None,
     **kw: Any,
 ) -> tuple[Village, FakeLLM]:
-    script: list[ScriptItem] = [responder(plan or {})] * calls
+    script: list[ScriptItem] = [respond or responder(plan or {})] * calls
     llm = FakeLLM(script, delay=delay)
     store = Store(db if db == ":memory:" else Path(db) / "lab.db")
     kw.setdefault("move_gap", 0)
@@ -1063,10 +1064,15 @@ async def test_goodbye_to_find_someone_and_an_ignored_destination(tmp_path: Path
 async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
-    m7, m9 = OLD_RULES
+    m7, m9, m11_plans = OLD_RULES
     v, _ = village_for(tmp_path)
     ids = {x["name"]: x["agent_id"] for x in v.world["villagers"]}
-    for name, old in (("Hilde", m7), ("Greta", m9), ("Jonas", "MY OWN RULES")):
+    for name, old in (
+        ("Hilde", m7),
+        ("Greta", m9),
+        ("Lina", m11_plans),
+        ("Jonas", "MY OWN RULES"),
+    ):
         agent = v.store.get_agent(ids[name])
         assert agent is not None
         blocks = agent.config["blocks"]
@@ -1084,12 +1090,13 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> 
         agent = v.store.get_agent(ids[name])
         assert agent is not None
         systems[name] = agent.config["blocks"][0]["system"]
-    for name in ("Hilde", "Greta", "Lina"):  # Lina was created with the new rules
+    for name in ("Hilde", "Greta", "Lina"):
         assert systems[name].endswith(RULES) and systems[name].count(RULES) == 1
         assert all(old not in systems[name] for old in OLD_RULES)
     assert systems["Jonas"].endswith("MY OWN RULES")  # the owner's edit stays
     assert "Trust what you see over what you hear" in RULES
     assert "Follow your plan for the day" in RULES
+    assert '{"action": "work"}' in RULES and "Trust what you see" in m11_plans
 
 
 @pytest.mark.anyio
@@ -1296,17 +1303,20 @@ async def test_reset_clears_the_chronicle_and_keeps_the_chronicler(tmp_path: Pat
 
 
 @pytest.mark.anyio
-async def test_awake_villagers_on_the_fields_and_garden_count_as_tending(tmp_path: Path) -> None:
+async def test_only_working_villagers_tend(tmp_path: Path) -> None:
     v, _ = village_for(tmp_path)
     morning(v, tick=6)  # 05:30: Lina sleeps until 06:30
     fx, fy = place_cells("fields")[0]
     gx, gy = place_cells("flower_garden")[0]
-    put(v, "Greta", fx, fy)
-    put(v, "Jonas", fx + 1, fy)  # two on the fields still count once per step
-    put(v, "Lina", gx, gy, asleep=True)  # asleep: no help
+    put(v, "Greta", fx, fy)  # standing: no help
+    put(v, "Jonas", fx + 1, fy, working={"place": "fields", "steps": 0})
+    put(v, "Lina", gx, gy, asleep=True)
     await v.step()
     await v.step()
     assert v.world["tended"] == {"fields": 2, "flower_garden": 0}
+    villager(v, "Greta")["working"] = {"place": "fields", "steps": 0}
+    await v.step()
+    assert v.world["tended"] == {"fields": 4, "flower_garden": 0}
 
 
 @pytest.mark.anyio
@@ -1344,7 +1354,7 @@ async def test_festival_guests_remember_who_else_was_there(tmp_path: Path) -> No
     assert v.world["festival"] == {"day": 21, "present": ["Jonas", "Lina"]}
     memory = villager(v, "Jonas")["memories"][-1]
     assert (memory["kind"], memory["importance"]) == ("festival", 5)
-    assert memory["text"] == "The harvest festival on the square with Lina."
+    assert memory["text"] == "The harvest festival on the square with Lina. The stalls stood empty."
     assert memory["about"] == ["Lina"]
     assert not any(m["kind"] == "festival" for m in villager(v, "Greta")["memories"])
     greta_events = [e for e in villager(v, "Greta")["events"] if e["kind"] == "festival"]
@@ -1602,3 +1612,179 @@ async def test_a_villager_keeps_its_last_three_lines_as_spoken(tmp_path: Path) -
         villager(v, "Hilde")["triggers"] = ["met"]
         await v.step()
     assert villager(v, "Hilde")["said"] == ["Two.", "Three.", long[:SPEECH_SHOWN]]
+
+
+# --- US4: work and festival deliveries ---
+
+WORK = '{"action": "work"}'
+
+
+def give(to: str | None = None) -> str:
+    return json.dumps({"action": "give", "to": to})
+
+
+def notes(v: Village) -> list[str]:
+    return [i["text"] for i in v.world["day_record"]["items"]]
+
+
+def texts(v: Village, name: str, kind: str) -> list[str]:
+    return [e["text"] for e in villager(v, name)["events"] if e["kind"] == kind]
+
+
+@pytest.mark.anyio
+async def test_work_starts_and_goes_on_where_the_villager_stands(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Greta": [WORK, WORK]})
+    morning(v)
+    fx, fy = place_cells("fields")[0]
+    put(v, "Greta", fx, fy, triggers=["arrived"])
+    await v.step()
+    greta = villager(v, "Greta")
+    assert greta["working"] == {"place": "fields", "steps": 0}
+    assert texts(v, "Greta", "worked") == ["You started working at the fields."]
+    [turn] = v.store.list_turns("Greta")
+    assert turn.village_action == {"action": "work", "place": "fields"}
+    state = next(x for x in v.state()["villagers"] if x["name"] == "Greta")
+    assert (state["working"], state["state"], state["basket"]) == ("fields", "working", None)
+    assert v.state()["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
+    greta["triggers"] = ["spoken to"]
+    await v.step()
+    assert greta["working"] == {"place": "fields", "steps": 1}  # kept, not restarted
+
+
+@pytest.mark.anyio
+async def test_working_together_fills_a_basket_in_half_a_village_hour(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v)
+    v.world["growth"]["fields"]["stage"] = "ripe"
+    v.world["day_record"] = {"day": 1, "items": []}
+    fx, fy = place_cells("fields")[0]
+    put(v, "Greta", fx, fy, working={"place": "fields", "steps": 0})
+    put(v, "Lina", fx + 1, fy, working={"place": "fields", "steps": 0})
+    for _ in range(3):
+        await v.step()
+    assert v.world["tended"]["fields"] == 6
+    assert (villager(v, "Greta")["basket"], villager(v, "Lina")["basket"]) == ("vegetables", None)
+    assert texts(v, "Greta", "basket") == ["You filled a basket of vegetables."]
+    assert "Greta filled a basket of vegetables." in notes(v)
+    assert "You carry a basket of vegetables." in calls_of(llm, "Greta")[-1]  # it decided
+
+
+@pytest.mark.anyio
+async def test_fishing_needs_jonas_to_start_but_not_to_go_on(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [WORK, WORK], "Jonas": [move("market")]})
+    morning(v)
+    pier = place_cells("pier")
+    put(v, "Hilde", *pier[0], triggers=["arrived"], neighbours=["Jonas"])
+    put(v, "Jonas", *pier[1], neighbours=["Hilde"])
+    await v.step()
+    assert villager(v, "Hilde")["last_action"] == {
+        "action": "wait",
+        "reason": "only Jonas fishes here; work with him while he fishes",
+    }
+    villager(v, "Jonas")["working"] = {"place": "pier", "steps": 0}
+    villager(v, "Hilde")["triggers"] = ["spoken to"]
+    await v.step()
+    assert villager(v, "Hilde")["working"] == {"place": "pier", "steps": 0}
+    villager(v, "Jonas")["triggers"] = ["spoken to"]
+    await v.step()
+    assert villager(v, "Jonas")["working"] is None
+    await v.step()  # Jonas walks off; Hilde fishes on
+    assert villager(v, "Hilde")["working"] == {"place": "pier", "steps": 2}
+
+
+@pytest.mark.anyio
+async def test_walking_off_and_bedtime_end_work_and_talking_does_not(tmp_path: Path) -> None:
+    leave = json.dumps({"action": "goodbye", "place": "market"})
+    v, _ = village_for(tmp_path, {"Greta": [say("Hard work!"), leave]})
+    morning(v)
+    fx, fy = place_cells("fields")[0]
+    put(v, "Greta", fx, fy, triggers=["met"], working={"place": "fields", "steps": 0})
+    put(v, "Lina", fx + 1, fy, working={"place": "fields", "steps": 0}, basket="flowers")
+    await v.step()
+    assert villager(v, "Greta")["working"] is not None  # talking while working
+    villager(v, "Greta")["triggers"] = ["spoken to"]
+    await v.step()
+    assert villager(v, "Greta")["working"] is None
+    v.world["tick"] = bedtime_tick("Lina", minutes_before=0) - 1
+    await v.step()
+    lina = villager(v, "Lina")
+    assert lina["bedtime"] and lina["working"] is None and lina["basket"] == "flowers"
+
+
+@pytest.mark.anyio
+async def test_give_a_basket_to_a_villager_and_onto_the_stalls(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [give("Jonas")], "Jonas": [give()]})
+    morning(v)
+    v.world["day_record"] = {"day": 1, "items": []}
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, basket="fish", triggers=["met"], neighbours=["Jonas"])
+    put(v, "Jonas", sx + 1, sy, neighbours=["Hilde"])  # already met: only Hilde decides
+    await v.step()
+    assert villager(v, "Hilde")["basket"] is None
+    assert villager(v, "Jonas")["basket"] == "fish"
+    assert texts(v, "Hilde", "gave") == ["You gave your basket of fish to Jonas."]
+    assert texts(v, "Jonas", "received") == ["Hilde gave you a basket of fish."]
+    assert villager(v, "Jonas")["triggers"] == ["given"]
+    await v.step()  # Jonas decides on it
+    assert villager(v, "Jonas")["basket"] is None
+    assert v.world["stalls"] == {"fish": 1, "vegetables": 0, "flowers": 0}
+    assert texts(v, "Jonas", "gave") == ["You set out your fish on the festival stalls."]
+    assert notes(v)[-2:] == [
+        "Hilde gave a basket of fish to Jonas.",
+        "Jonas set out fish on the festival stalls.",
+    ]
+    [turn] = v.store.list_turns("Jonas")
+    assert turn.village_action == {"action": "give", "to": None, "goods": "fish"}
+    assert next(x for x in v.state()["villagers"] if x["name"] == "Jonas")["basket"] is None
+
+
+def delivering(work_only: bool = False) -> Callable[[list[Message]], ChatResponse | Exception]:
+    """Villagers work where they stand, carry a basket to the square and set it out there."""
+    others = responder({})
+
+    def respond(messages: list[Message]) -> ChatResponse | Exception:
+        if is_plan(messages) or is_reflection(messages) or is_chronicle(messages):
+            return others(messages)
+        seen = messages[1]["content"] or ""
+        if "You carry a basket" in seen and not work_only:
+            return answer(give() if "You are at the square." in seen else move("square"))
+        return answer(WAIT if "You are working here." in seen else WORK)
+
+    return respond
+
+
+@pytest.mark.parametrize(("work_only", "stalls"), [(False, 1), (True, 0)])
+@pytest.mark.anyio
+async def test_a_scripted_autumn_day_fills_the_stalls_only_with_deliveries(
+    tmp_path: Path, work_only: bool, stalls: int
+) -> None:
+    v, _ = village_for(tmp_path, respond=delivering(work_only), calls=600)
+    morning(v, tick=20 * 144 + 30)  # day 21, the festival, 09:30
+    v.world["growth"]["fields"]["stage"] = "harvested"
+    v.world["growth"]["flower_garden"]["stage"] = "blooming"
+    for name, place in (("Jonas", "pier"), ("Greta", "fields"), ("Lina", "flower_garden")):
+        put(v, name, *place_cells(place)[0], triggers=["arrived"])
+    for _ in range(20):
+        await v.step()
+    assert v.world["stalls"] == {"fish": stalls, "vegetables": stalls, "flowers": stalls}
+
+
+@pytest.mark.anyio
+async def test_the_festival_memory_names_the_goods_on_the_stalls(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.world["stalls"] = {"fish": 2, "vegetables": 0, "flowers": 1}
+    await _festival_evening(v, 21)
+    assert villager(v, "Jonas")["memories"][-1]["text"] == (
+        "The harvest festival on the square with Lina. The stalls held fish and flowers."
+    )
+
+
+@pytest.mark.anyio
+async def test_work_on_the_way_stops_the_walk(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Greta": [WORK]})
+    morning(v)
+    fx, fy = place_cells("fields")[0]
+    put(v, "Greta", fx, fy, triggers=["met"], goal={"kind": "place", "place": "market"})
+    await v.step()
+    greta = villager(v, "Greta")
+    assert greta["goal"] is None and greta["working"] == {"place": "fields", "steps": 0}

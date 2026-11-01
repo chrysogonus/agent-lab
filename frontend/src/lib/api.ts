@@ -71,11 +71,15 @@ export type VillageAction =
   | { action: "wait"; reason?: string }
   | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string }
   | { action: "chronicle"; day: number; title?: string; text?: string; reason?: string }
-  | { action: "plan"; revision: number; entries?: string[]; reason?: string }; // M11
+  | { action: "plan"; revision: number; entries?: string[]; reason?: string } // M11
+  | { action: "work"; place: string; reason?: string }
+  | { action: "give"; to: string | null; goods: Goods; reason?: string };
 
 export type VillageEvent = {
   tick: number;
-  kind: "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival" | "planned";
+  kind:
+    | "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival"
+    | "planned" | "worked" | "basket" | "gave" | "received"; // M11
   text: string;
   from?: string;
   to?: string | null;
@@ -97,7 +101,7 @@ export type Villager = {
   speech: { text: string; to: string | null; tick: number } | null;
   events: VillageEvent[];
   asleep: boolean;
-  state: "asleep" | "bedtime" | "deciding" | "talking" | "walking" | "idle";
+  state: "asleep" | "bedtime" | "deciding" | "talking" | "working" | "walking" | "idle";
   wake: string; // "05:00"
   bed: string;
   goal: string | null; // "walking to the market", "going home", "looking for Lina"
@@ -107,10 +111,14 @@ export type Villager = {
   views: { villager: string; text: string; day: number }[];
   memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival"; text: string }[]; // newest first
   plan: Plan | null; // today's plan (M11)
+  basket: Goods | null; // one at a time, kept overnight
+  working: "fields" | "flower_garden" | "pier" | null; // where it works until it walks off
 };
 
 // M11: plans and purpose. See specs/011-plans-and-purpose/contracts/http-api.md.
 export type PlanEntry = { time: string; place: string | null; villager: string | null; purpose: string }; // place: its label or "home"
+export type Goods = "fish" | "vegetables" | "flowers";
+export type Stalls = Record<Goods, number>; // goods set out on the square for the festival
 export type Plan = { entries: PlanEntry[]; current: number | null; next: number | null; revisions: number };
 
 // M10: seasons, weather, growth and the chronicle. See specs/010-village-seasons/contracts/http-api.md.
@@ -143,6 +151,7 @@ export type VillageState = {
   dark: boolean; // lamps and windows lit
   growth: { fields: { stage: FieldStage; neglected: boolean }; flower_garden: { stage: GardenStage } };
   chronicle: ChronicleEntry[]; // newest first, at most 28
+  stalls: Stalls; // M11
   running: boolean;
   ticking: boolean;
   interval: number;

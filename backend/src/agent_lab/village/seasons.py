@@ -84,7 +84,7 @@ def snow_cover(day: int) -> bool:
 FIELD_STAGES = ("resting", "tilled", "sown", "sprouting", "growing", "ripe", "harvested")
 GARDEN_STAGES = ("resting", "budding", "blooming", "wilting")
 GROWS = {"sown": 3, "sprouting": 5, "growing": 6}  # points to the next stage
-TENDED_STEPS = 6  # one village hour of awake villagers on the place
+TENDED_STEPS = 6  # one village hour of work on the place, added up over its workers
 LABELS = {"fields": "fields", "flower_garden": "flower garden"}
 
 
@@ -167,8 +167,8 @@ def _grow_garden(garden: dict[str, Any], watered: bool) -> str:
 
 
 def end_day(world: dict[str, Any], day: int) -> list[str]:
-    """Grows the fields and the flower garden for `day`, from how long awake villagers stood on
-    them and the day's rain, then turns the season; returns the news for the chronicle."""
+    """Grows the fields and the flower garden for `day`, from how long villagers worked on them
+    and the day's rain, then turns the season; returns the news for the chronicle."""
     growth, tended = world["growth"], world["tended"]
     fields, garden = growth["fields"], growth["flower_garden"]
     season, wet = date(day)[1], weather(day) in WET
@@ -188,6 +188,7 @@ def end_day(world: dict[str, Any], day: int) -> list[str]:
         if fields["stage"] == "ripe":
             news.append("The unharvested crop was lost to the frost.")
         growth |= new_growth("winter")
+        world["stalls"] = {"fish": 0, "vegetables": 0, "flowers": 0}  # the festival is over
         news.append("Winter came: the fields and the flower garden rest.")
     elif coming == "spring" and season == "winter":
         growth |= new_growth("spring")

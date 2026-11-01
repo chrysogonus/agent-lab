@@ -409,3 +409,75 @@ def test_a_long_line_repeats_what_was_spoken_of_it() -> None:
     world = world_with(Jonas=at(hx + 1, hy), Hilde={"said": [long[:SPEECH_SHOWN]]})
     answer = json.dumps({"action": "say", "text": long})
     assert parse_action(answer, world, "Hilde")[1] == "you already said that"
+
+
+def test_work_where_there_is_work() -> None:
+    fields = place_cells("fields")[0]
+    world = world_with(Greta=at(*fields))
+    assert parse_action('{"action": "work"}', world, "Greta") == (
+        {"action": "work", "place": "fields"},
+        None,
+    )
+    assert parse_action('{"action": "work"}', world_with(), "Greta") == (
+        {"action": "wait"},
+        "there is no work for you here",
+    )
+    pier = place_cells("pier")[0]
+    assert parse_action('{"action": "work"}', world_with(Hilde=at(*pier)), "Hilde") == (
+        {"action": "wait"},
+        "only Jonas fishes here; work with him while he fishes",
+    )
+
+
+def test_working_while_talking_is_allowed() -> None:
+    fx, fy = place_cells("fields")[0]
+    world = world_with(Greta=at(fx, fy), Lina=at(fx + 1, fy))
+    world["conversations"] = [{"a": "Greta", "b": "Lina", "lines": 2, "last_tick": 30}]
+    assert parse_action('{"action": "work"}', world, "Greta")[1] is None
+
+
+def test_give_to_a_villager_or_onto_the_stalls() -> None:
+    sx, sy = label_cell("square")
+    world = world_with(Hilde={**at(sx, sy), "basket": "fish"}, Jonas=at(sx + 1, sy))
+    assert parse_action('{"action": "give", "to": "jonas"}', world, "Hilde") == (
+        {"action": "give", "to": "Jonas", "goods": "fish"},
+        None,
+    )
+    assert parse_action('{"action": "give"}', world, "Hilde") == (
+        {"action": "give", "to": None, "goods": "fish"},
+        None,
+    )
+    assert parse_action('{"action": "give"}', world, "Jonas") == (
+        {"action": "wait"},
+        "your hands are empty",
+    )
+
+
+def test_the_facts_name_work_the_basket_and_in_autumn_the_stalls() -> None:
+    fields = place_cells("fields")[0]
+    autumn = _at(15, 9)
+    world = world_with(
+        tick=autumn,
+        Greta={**at(*fields), "working": {"place": "fields", "steps": 2}, "basket": "vegetables"},
+    )
+    world["stalls"]["fish"] = 1
+    facts = observation(world, "Greta").split("What others told you")[0]
+    assert "You are at the fields. You are working here." in facts
+    assert "You carry a basket of vegetables." in facts
+    assert (
+        "The festival stalls on the square hold fish; they still lack vegetables and flowers."
+        in facts
+    )
+    summer = observation(world_with(tick=_at(8, 9)), "Greta")
+    assert (
+        "festival stalls" not in summer
+        and "You carry" not in summer
+        and "working here" not in summer
+    )
+
+
+def test_the_rules_describe_work_and_give() -> None:
+    rules = villager_agent("Jonas")["config"]["blocks"][0]["system"]
+    assert '{"action": "work"}' in rules
+    assert '{"action": "give", "to": "Hilde"}' in rules
+    assert '{"action": "give"} on the square' in rules

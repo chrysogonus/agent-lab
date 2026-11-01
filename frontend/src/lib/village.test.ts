@@ -23,6 +23,7 @@ import {
   calendarText,
   newEntries,
   planEntryText,
+  stallsText,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -51,6 +52,8 @@ const villager = (fields: Partial<Villager>): Villager => ({
   views: [],
   memories: [],
   plan: null,
+  basket: null,
+  working: null,
   ...fields,
 });
 
@@ -73,6 +76,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   dark: false,
   growth: { fields: { stage: "resting", neglected: false }, flower_garden: { stage: "budding" } },
   chronicle: [],
+  stalls: { fish: 0, vegetables: 0, flowers: 0 },
   ...fields,
 });
 
@@ -245,5 +249,28 @@ describe("plans", () => {
     expect(turnLabel(run({ action: "plan", revision: 0, reason: "a plan needs at least 2 entries" }))).toBe(
       "05:00 could not plan: a plan needs at least 2 entries",
     );
+  });
+});
+
+describe("work and the festival stalls", () => {
+  it("says where a villager works", () => {
+    expect(stateText(villager({ state: "working", place: "fields", working: "fields" }))).toBe("Working at the fields");
+    expect(stateText(villager({ state: "working", place: "flower_garden", working: "flower_garden" }))).toBe("Working at the flower garden");
+  });
+
+  it("labels work and give turns", () => {
+    const run = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(run({ action: "work", place: "flower_garden" }))).toBe("05:00 works at the flower garden");
+    expect(turnLabel(run({ action: "give", to: "Hilde", goods: "fish" }))).toBe("05:00 gives a basket of fish to Hilde");
+    expect(turnLabel(run({ action: "give", to: null, goods: "flowers" }))).toBe("05:00 sets out flowers on the festival stalls");
+    expect(turnLabel(run({ action: "wait", reason: "your hands are empty" }))).toBe("05:00 waited: your hands are empty");
+  });
+
+  it("says what the stalls hold and lack", () => {
+    expect(stallsText({ fish: 0, vegetables: 0, flowers: 0 })).toBe(
+      "The festival stalls on the square are empty; they still lack fish, vegetables and flowers.",
+    );
+    expect(stallsText({ fish: 2, vegetables: 0, flowers: 1 })).toBe("The festival stalls on the square hold fish and flowers; they still lack vegetables.");
+    expect(stallsText({ fish: 1, vegetables: 1, flowers: 1 })).toBe("The festival stalls on the square hold fish, vegetables and flowers.");
   });
 });

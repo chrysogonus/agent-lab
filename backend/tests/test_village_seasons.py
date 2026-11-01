@@ -190,3 +190,12 @@ def test_a_dry_garden_wilts_and_recovers_with_rain_or_a_visit(
 def test_budding_flowers_bloom_after_two_watered_days(monkeypatch: pytest.MonkeyPatch) -> None:
     _, stages, _ = _year(monkeypatch, "sun", fields=False, garden=True)
     assert [stages[d][1] for d in (1, 2, 20, 21)] == ["budding", "blooming", "blooming", "resting"]
+
+
+def test_the_stalls_are_cleared_when_winter_comes() -> None:
+    world = new_world()
+    world["stalls"] = {"fish": 2, "vegetables": 1, "flowers": 0}
+    end_day(world, 20)  # autumn goes on: the goods stay out until the festival is over
+    assert world["stalls"] == {"fish": 2, "vegetables": 1, "flowers": 0}
+    end_day(world, 21)
+    assert world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}

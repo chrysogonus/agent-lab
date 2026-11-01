@@ -2,8 +2,8 @@
  * All decoration: nothing here is clickable. */
 
 import type { CSSProperties } from "react";
-import type { FieldStage, GardenStage, Season, Weather } from "../../lib/api"; // relative, as in pixels.tsx
-import type { Area } from "../../lib/village";
+import type { FieldStage, GardenStage, Goods, Season, Stalls as StallCounts, Weather } from "../../lib/api"; // relative, as in pixels.tsx
+import { GOODS, type Area } from "../../lib/village";
 import { INK, TILE, type Palette } from "./pixels";
 
 // --- season colours ---
@@ -290,6 +290,72 @@ export function Festival({ area, lit }: { area: Area; lit: boolean }) {
           <rect x={x} y={y + 2} width={4} height={1} fill={lit ? "#ff9a3c" : "#b83a32"} />
         </g>
       ))}
+    </g>
+  );
+}
+
+// --- the festival stalls and carried baskets (M11) ---
+
+const GOODS_COLOR: Record<Goods, string> = { fish: "#9fc4dc", vegetables: "#f08a3c", flowers: "#f7a8cc" };
+const AWNING: Record<Goods, string> = { fish: "#4fa6de", vegetables: "#7cc35a", flowers: "#e85a4f" };
+const WOOD = "#a8703a";
+
+/** Three stalls along the square's lower edge, each showing its goods or standing bare. */
+export function Stalls({ area, stalls }: { area: Area; stalls: StallCounts }) {
+  const width = (area.x1 - area.x0 + 1) * TILE;
+  const ground = (area.y1 + 1) * TILE - 2;
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {GOODS.map((goods, i) => (
+        <g key={goods} transform={`translate(${area.x0 * TILE + (width * (i + 0.5)) / GOODS.length - 10} ${ground})`}>
+          <rect x={1} y={-14} width={1} height={14} fill={INK} />
+          <rect x={18} y={-14} width={1} height={14} fill={INK} />
+          {[0, 1, 2, 3, 4].map((s) => (
+            <rect key={s} x={s * 4} y={-17} width={4} height={4} fill={s % 2 ? "#fffaf0" : AWNING[goods]} />
+          ))}
+          <rect x={0} y={-17} width={20} height={4} fill="none" stroke={INK} strokeWidth={0.5} />
+          <rect x={1} y={-6} width={18} height={4} fill={WOOD} stroke={INK} strokeWidth={0.5} />
+          {stalls[goods] > 0 && <StallGoods goods={goods} />}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/** Fish, vegetable crates or flower pots on a stall's counter. */
+function StallGoods({ goods }: { goods: Goods }) {
+  if (goods === "fish") {
+    return [3, 8, 13].map((x) => (
+      <g key={x}>
+        <rect x={x} y={-8} width={4} height={2} fill={GOODS_COLOR.fish} />
+        <path d={`M${x + 4} -7l2 -1.5v3z`} fill={GOODS_COLOR.fish} />
+      </g>
+    ));
+  }
+  if (goods === "vegetables") {
+    return [3, 11].map((x) => (
+      <g key={x}>
+        <rect x={x} y={-9} width={6} height={3} fill="#b07a3e" stroke={INK} strokeWidth={0.5} />
+        <rect x={x + 1} y={-10} width={2} height={1.5} fill={GOODS_COLOR.vegetables} />
+        <rect x={x + 3.5} y={-10} width={2} height={1.5} fill="#5b9a3a" />
+      </g>
+    ));
+  }
+  return [3, 8.5, 14].map((x, i) => (
+    <g key={x}>
+      <rect x={x} y={-8.5} width={3} height={2.5} fill="#c4643a" />
+      <rect x={x} y={-10.5} width={3} height={2} fill={i % 2 ? "#ffd75e" : GOODS_COLOR.flowers} />
+    </g>
+  ));
+}
+
+/** A small basket in the goods' colour beside a carrying villager's sprite. */
+export function Basket({ goods }: { goods: Goods }) {
+  return (
+    <g pointerEvents="none" aria-hidden>
+      <path d="M7.5 -1.5q2.5 -3 5 0" fill="none" stroke={INK} strokeWidth={0.75} />
+      <rect x={7} y={-1.5} width={6} height={1.5} fill={GOODS_COLOR[goods]} />
+      <rect x={7} y={0} width={6} height={3.5} fill={WOOD} stroke={INK} strokeWidth={0.5} />
     </g>
   );
 }

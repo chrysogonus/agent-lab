@@ -158,3 +158,16 @@ def test_the_planner_is_a_block_agent() -> None:
     assert model.kind == "model" and model.name == "plan" and '"plan"' in model.system
     assert '"learnings"' not in model.system  # that marks a reflection
     assert check.kind == "check" and check.rule == "valid_json"
+
+
+def test_in_autumn_the_plan_sees_the_stalls_and_the_basket() -> None:
+    world = new_world()
+    world["tick"] = 16 * 144 + 3  # day 17, autumn
+    jonas(world)["basket"] = "fish"
+    prompt = plan_prompt(world, "Jonas")
+    assert "You carry a basket of fish." in prompt
+    assert "The festival stalls on the square are empty; they still lack fish, " in prompt
+    world["tick"] = 3  # spring
+    jonas(world)["basket"] = None
+    prompt = plan_prompt(world, "Jonas")
+    assert "festival stalls" not in prompt and "basket" not in prompt

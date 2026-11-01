@@ -13,11 +13,11 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { PACES, PERIOD_SKY, activity, calendarText, clockText, glideMs, figures, logLines, narration, newEntries, placeAreas, rhythm, stateText, statusLine } from "@/lib/village";
+import { GOODS, PACES, PERIOD_SKY, activity, calendarText, clockText, glideMs, figures, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
-import { Festival, Puddles, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
+import { Basket, Festival, Puddles, Stalls, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
 import { VillagerPanel } from "./VillagerPanel";
 
 const SEEN_KEY = "village-chronicle-seen";
@@ -124,6 +124,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
       <rect width={width * TILE} height={height * TILE} fill="url(#village-sky)" pointerEvents="none" aria-hidden />
       <Lights map={map} on={dark} />
       {calendar.festival_in === 0 && areas.S && <Festival area={areas.S} lit={dark} />}
+      {(calendar.season === "autumn" || GOODS.some((g) => state.stalls[g] > 0)) && areas.S && <Stalls area={areas.S} stalls={state.stalls} />}
       {dark && calendar.season !== "winter" && !wet && <Fireflies map={map} />}
       {homes.map((h) => owners.get(h.villager)?.asleep && areas[h.letter] && <Snores key={h.letter} area={areas[h.letter]} />)}
       {places.map((p) => {
@@ -157,6 +158,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
             <rect x={-5} y={4} width={10} height={2} fill="#00000030" />
             <rect x={-4} y={3} width={8} height={4} fill="#00000018" />
             <MovingFigure villager={villager} glide={glide} />
+            {villager.basket && <Basket goods={villager.basket} />}
             <g className="village-name" pointerEvents="none">
               <rect x={-nameWidth / 2} y={7} width={nameWidth} height={9} rx={2} fill="#fffaf0" stroke="#2a2340" strokeWidth={0.75} />
               <text y={13.6} textAnchor="middle" fontSize={7} fill="#2a2340" className="font-pixel">
@@ -338,6 +340,7 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
               {WEATHER_WORDS[state.weather]}, {state.period}
               {state.calendar.festival_in === 0 ? ", harvest festival" : ""}
             </p>
+            {state.calendar.season === "autumn" && <p className="text-sm text-dusk-muted">{stallsText(state.stalls)}</p>}
           </div>
         </div>
         <p className={`text-base ${state.paused_reason && state.paused_reason !== "owner" ? "text-fault" : "text-dusk-muted"}`} role="status">

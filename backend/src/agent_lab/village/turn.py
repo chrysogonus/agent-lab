@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
-from agent_lab.village.seasons import WEATHER_TEXT, date_text, growth_text, weather
+from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
+from agent_lab.village.work import give_refusal, stalls_text, work_refusal
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -55,13 +56,21 @@ class Goodbye(BaseModel):
     villager: str | None = None  # or whom it goes looking for
 
 
+class Work(BaseModel):
+    action: Literal["work"]
+
+
+class Give(BaseModel):
+    action: Literal["give"]
+    to: str | None = None  # without a name: onto the festival stalls
+
+
 class Wait(BaseModel):
     action: Literal["wait"]
 
 
-ACTION = TypeAdapter[Move | Find | Say | Goodbye | Wait](
-    Annotated[Move | Find | Say | Goodbye | Wait, Field(discriminator="action")]
-)
+type Action = Move | Find | Say | Goodbye | Work | Give | Wait
+ACTION = TypeAdapter[Action](Annotated[Action, Field(discriminator="action")])
 
 Villager = dict[str, Any]
 
@@ -237,7 +246,9 @@ def observation(world: dict[str, Any], name: str) -> str:
         f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}; "
         "this is the real weather.",
         *festival_lines(world["tick"]),
-        where_text(world, me),
+        where_text(world, me) + (" You are working here." if me["working"] else ""),
+        *([f"You carry a basket of {me['basket']}."] if me["basket"] else []),
+        *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
         *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
         + _usually(name, world["tick"]),
@@ -310,6 +321,19 @@ def parse_action(
     if isinstance(action, Find):
         other, why = _seek(world, name, action.villager)
         return ({"action": "find", "villager": other}, None) if other else (wait, why)
+    if isinstance(action, Work):
+        why = work_refusal(world, name)
+        me = villager_of(world, name)
+        return (
+            (wait, why) if why else ({"action": "work", "place": place_at(me["x"], me["y"])}, None)
+        )
+    if isinstance(action, Give):
+        to = action.to or None
+        why = give_refusal(world, name, to)
+        if why:
+            return wait, why
+        goods = villager_of(world, name)["basket"]
+        return {"action": "give", "to": to and villager_named(to), "goods": goods}, None
     text = (action.text or "").strip() if isinstance(action, Say | Goodbye) else ""
     if isinstance(action, Goodbye):
         repeated = _repeats(villager_of(world, name), text)
@@ -427,10 +451,7 @@ _M9_RULES = (
 )
 
 
-OLD_RULES = (_M7_RULES, _M9_RULES)
-
-
-RULES = (
+_M11_PLAN_RULES = (
     "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
     "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
@@ -453,6 +474,39 @@ RULES = (
     "something more important comes up. Say short things, stay in character, answer people who "
     "talk to you, and say goodbye when you have said what you wanted."
 )
+
+
+RULES = (
+    "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
+    "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
+    "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
+    "something happens: you woke up, arrived somewhere, met someone, someone spoke to you, or a "
+    "while passed. Reply with only one JSON object and nothing else:\n"
+    '{"action": "move", "place": "market"} to walk to a place or "home" (a few steps every 10 '
+    "minutes until you arrive),\n"
+    '{"action": "find", "villager": "Lina"} to go and look for someone where you think they '
+    "are,\n"
+    '{"action": "say", "text": "Good morning!", "to": "Jonas"} to talk to someone standing right '
+    'next to you ("to" is optional). You can only talk to people right next to you: to talk to '
+    "someone else, find them first,\n"
+    '{"action": "goodbye", "text": "See you later!", "place": "market"} to end a conversation '
+    'and leave: "text" is optional, and "place" (or "villager": "Lina" to go looking for '
+    "someone) says where you go next; leave both out to stay,\n"
+    '{"action": "work"} to work where you stand until you walk off: anyone may tend the fields '
+    "or the flower garden, and fish at the pier with Jonas while he fishes there; an hour of "
+    "work fills a basket with fish, ripe vegetables or blooming flowers,\n"
+    '{"action": "give", "to": "Hilde"} to hand your basket to someone next to you, or '
+    '{"action": "give"} on the square to set it out on the festival stalls,\n'
+    '{"action": "wait"} to go on with what you are doing.\n'
+    "While you talk with someone, you both stay where you are: say goodbye before you walk "
+    "off. You go home to sleep at your bedtime by yourself. Trust what you see over what you "
+    "hear; the weather you are told is the real weather. Follow your plan for the day unless "
+    "something more important comes up. Say short things, stay in character, answer people who "
+    "talk to you, and say goodbye when you have said what you wanted."
+)
+
+
+OLD_RULES = (_M7_RULES, _M9_RULES, _M11_PLAN_RULES)
 
 
 def villager_agent(name: str) -> dict[str, Any]:

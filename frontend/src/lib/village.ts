@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { ChronicleEntry, PlanEntry, Run, VillageEvent, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Goods, PlanEntry, Run, Stalls, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
@@ -104,6 +104,8 @@ export function stateText(villager: Villager): string {
       return "Thinking…";
     case "talking":
       return `Talking with ${villager.talking_with.join(" and ")}`;
+    case "working":
+      return `Working at the ${placeLabel(villager.working)}`;
     case "walking":
       return villager.goal ? villager.goal[0].toUpperCase() + villager.goal.slice(1) : "Walking";
     default:
@@ -200,12 +202,30 @@ export function turnLabel(turn: Run): string {
   if (action.action === "find") return `${time}goes looking for ${action.villager}`;
   if (action.action === "goodbye") return `${time}says goodbye${action.text ? `: ${action.text}` : ""}`;
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
+  if (action.action === "work") return `${time}works at the ${placeLabel(action.place)}`;
+  if (action.action === "give") {
+    return action.to ? `${time}gives a basket of ${action.goods} to ${action.to}` : `${time}sets out ${action.goods} on the festival stalls`;
+  }
   return `${time}waits`;
 }
 
 /** "07:30 town hall: Go through the list", "11:00 see Jonas: Ask for fish" */
 export function planEntryText(entry: PlanEntry): string {
   return `${entry.time} ${entry.villager ? `see ${entry.villager}` : entry.place}: ${entry.purpose}`;
+}
+
+export const GOODS: Goods[] = ["fish", "vegetables", "flowers"];
+
+function listed(items: string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : (items[0] ?? "");
+}
+
+/** As the villagers are told: "The festival stalls on the square hold fish; they still lack …" */
+export function stallsText(stalls: Stalls): string {
+  const held = GOODS.filter((g) => stalls[g] > 0);
+  const lacking = GOODS.filter((g) => stalls[g] === 0);
+  const text = `The festival stalls on the square ${held.length ? `hold ${listed(held)}` : "are empty"}`;
+  return text + (lacking.length ? `; they still lack ${listed(lacking)}.` : ".");
 }
 
 /** "Day 3 of autumn, year 1" */
