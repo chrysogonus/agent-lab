@@ -57,7 +57,8 @@ talking is allowed (working together depends on it), and FR-014 no longer lists 
   - `parse_action` handles work, give and repeated lines; `same_line`.
   - `observation` is regrouped into facts and claims, with plan, basket, working, stalls and
     "What you said lately"; `seen_text`.
-  - `RULES` (M11), `OLD_RULES = (M7, M9)`.
+  - `RULES` (M11, in two steps: US1–US2 sentences, then work and give), `OLD_RULES = (M7, M9,
+    the first M11 step)`.
 - `chronicle.py`: claims marking in `chronicle_prompt`; plans arrive through the day record; the
   stalls line on the festival day.
 - `runner.py`:
