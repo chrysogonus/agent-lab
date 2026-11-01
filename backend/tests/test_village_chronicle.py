@@ -20,7 +20,10 @@ def test_the_prompt_names_the_day_its_weather_the_places_and_what_happened() -> 
     prompt = chronicle_prompt(world, record)
     assert prompt.startswith(f"Day 17 (day 3 of autumn, year 1). {WEATHER_TEXT[weather(17)]}.")
     assert "The fields are resting." in prompt and "The flower garden is budding." in prompt
-    assert "- 09:30 Greta met Jonas." in prompt
+    assert (
+        "What happened (what villagers said are their claims, not events; never report a claim "
+        "as an event; the weather is the one given above):\n- 09:30 Greta met Jonas." in prompt
+    )
     assert '"learnings"' not in prompt
 
 

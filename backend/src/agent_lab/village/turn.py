@@ -107,19 +107,37 @@ def _place_phrase(where: str | None, at: tuple[int, int]) -> str:
     return f"near the {label(nearest)}"
 
 
-def belief_text(world: dict[str, Any], name: str, other: str) -> str:
-    """Where `name` thinks `other` is, and how it knows."""
-    belief = villager_of(world, name)["beliefs"].get(other)
-    if belief:
-        where = _place_phrase(belief["where"], (belief["cell"][0], belief["cell"][1]))
-        when = clock(belief["tick"])[1]
-        if belief["source"] == "seen":
-            return f"{where} (seen {when})"
-        return f"{where} (heard from {belief['from']} at {when})"
+def _routine_text(world: dict[str, Any], other: str) -> str:
     usual = usual_place(other, world["tick"])
     if usual == "home":
         return "at home asleep at this hour (their routine)"
     return f"usually at the {label(usual)} around now (their routine)"
+
+
+def _belief_where(belief: dict[str, Any]) -> tuple[str, str]:
+    return _place_phrase(belief["where"], (belief["cell"][0], belief["cell"][1])), clock(
+        belief["tick"]
+    )[1]
+
+
+def belief_text(world: dict[str, Any], name: str, other: str) -> str:
+    """Where `name` thinks `other` is, and how it knows."""
+    belief = villager_of(world, name)["beliefs"].get(other)
+    if not belief:
+        return _routine_text(world, other)
+    where, when = _belief_where(belief)
+    if belief["source"] == "seen":
+        return f"{where} (seen {when})"
+    return f"{where} (heard from {belief['from']} at {when})"
+
+
+def seen_text(world: dict[str, Any], name: str, other: str) -> str:
+    """Where `name` last saw `other`, or their routine: what it knows for itself."""
+    belief = villager_of(world, name)["beliefs"].get(other)
+    if not belief or belief["source"] != "seen":
+        return _routine_text(world, other)
+    where, when = _belief_where(belief)
+    return f"{where} (seen {when})"
 
 
 def where_text(world: dict[str, Any], v: Villager) -> str:
@@ -199,19 +217,26 @@ def observation(world: dict[str, Any], name: str) -> str:
         matters.add(me["goal"]["villager"])
     remembered = recall(me["memories"], world["tick"], matters, here)
     views = me["views"]
+    heard = {
+        o: b
+        for o, b in me["beliefs"].items()
+        if b["source"] == "heard" and o in VILLAGERS and o != name
+    }
     lines = [
-        f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}.",
+        "What you know for sure:",
+        f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}; "
+        "this is the real weather.",
         *festival_lines(world["tick"]),
         where_text(world, me),
         *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
         + _usually(name, world["tick"]),
-        *([f"You are {goal}."] if goal else []),
         *(
             plan_lines(me["plan"]["entries"], minute)
             if me["plan"] and me["plan"]["day"] == day
             else []
         ),
+        *([f"You are {goal}."] if goal else []),
         f"Next to you: {', '.join(VILLAGERS[n].title for n in next_to) or 'nobody'}.",
         f"In sight: {', '.join(in_sight) or 'nobody else'}.",
         f"{conversation}."
@@ -220,20 +245,30 @@ def observation(world: dict[str, Any], name: str) -> str:
             if tired
             else ""
         ),
-        "Said to you since your last turn:",
-        *([_heard(e, name) for e in me["inbox"]] or ["- nothing"]),
+        f"Places: {', '.join(places)}.",
         "Where the others are, as far as you know:",
         *[
-            f"- {o}: {belief_text(world, name, o)}"
+            f"- {o}: {seen_text(world, name, o)}"
             + (f"; you think: {views[o]['text']}" if o in views else "")
             for o in VILLAGERS
             if o != name
         ],
+        "What others told you (claims; they may be wrong):",
+        "Said to you since your last turn:",
+        *([_heard(e, name) for e in me["inbox"]] or ["- nothing"]),
+        "Heard about where others are:",
+        *(
+            [
+                f"- {o}: {where} ({b['from']} said at {when})"
+                for o, b in heard.items()
+                for where, when in [_belief_where(b)]
+            ]
+            or ["- nothing"]
+        ),
         "What you have learned:",
         *([f"- {item['text']}" for item in me["learnings"]] or ["- nothing yet"]),
         "What you remember:",
         *([f"- {when(m['tick'])} {m['text']}" for m in remembered] or ["- nothing yet"]),
-        f"Places: {', '.join(places)}.",
         "Your last events:",
         *([f"- {clock(e['tick'])[1]} {e['text']}" for e in me["events"]] or ["- none yet"]),
         "What do you do? Answer with one JSON object.",
@@ -331,8 +366,8 @@ def heard_places(text: str, speaker: str, hearer: str) -> dict[str, str]:
     return found
 
 
-# The M7 rules: stored villager agents still holding them verbatim get RULES on load (M9).
-PREVIOUS_RULES = (
+# Earlier rules: stored villager agents still holding one verbatim get RULES on load.
+_M7_RULES = (
     "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
     "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
@@ -353,7 +388,7 @@ PREVIOUS_RULES = (
 )
 
 
-RULES = (
+_M9_RULES = (
     "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
     "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
@@ -374,6 +409,34 @@ RULES = (
     "off. You go home to sleep at your bedtime by yourself. Say short things, stay in "
     "character, answer people who talk to you, and say goodbye when you have said what you "
     "wanted."
+)
+
+
+OLD_RULES = (_M7_RULES, _M9_RULES)
+
+
+RULES = (
+    "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
+    "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
+    "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
+    "something happens: you woke up, arrived somewhere, met someone, someone spoke to you, or a "
+    "while passed. Reply with only one JSON object and nothing else:\n"
+    '{"action": "move", "place": "market"} to walk to a place or "home" (a few steps every 10 '
+    "minutes until you arrive),\n"
+    '{"action": "find", "villager": "Lina"} to go and look for someone where you think they '
+    "are,\n"
+    '{"action": "say", "text": "Good morning!", "to": "Jonas"} to talk to someone standing right '
+    'next to you ("to" is optional). You can only talk to people right next to you: to talk to '
+    "someone else, find them first,\n"
+    '{"action": "goodbye", "text": "See you later!", "place": "market"} to end a conversation '
+    'and leave: "text" is optional, and "place" (or "villager": "Lina" to go looking for '
+    "someone) says where you go next; leave both out to stay,\n"
+    '{"action": "wait"} to go on with what you are doing.\n'
+    "While you talk with someone, you both stay where you are: say goodbye before you walk "
+    "off. You go home to sleep at your bedtime by yourself. Trust what you see over what you "
+    "hear; the weather you are told is the real weather. Follow your plan for the day unless "
+    "something more important comes up. Say short things, stay in character, answer people who "
+    "talk to you, and say goodbye when you have said what you wanted."
 )
 
 

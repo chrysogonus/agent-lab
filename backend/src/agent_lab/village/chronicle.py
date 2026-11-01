@@ -19,7 +19,8 @@ def chronicle_prompt(world: dict[str, Any], record: dict[str, Any]) -> str:
     lines = [
         f"Day {day} ({date_text(day)}). {WEATHER_TEXT[weather(day)]}.",
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
-        "What happened:",
+        "What happened (what villagers said are their claims, not events; never report a claim "
+        "as an event; the weather is the one given above):",
         *([f"- {clock(i['tick'])[1]} {i['text']}" for i in record["items"]] or ["- nothing"]),
         "Write the chronicle entry for this day. Answer with one JSON object.",
     ]

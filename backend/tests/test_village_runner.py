@@ -646,7 +646,7 @@ async def test_hearing_where_someone_is(tmp_path: Path) -> None:
     belief = villager(v, "Jonas")["beliefs"]["Lina"]
     assert (belief["where"], belief["source"], belief["from"]) == ("square", "heard", "Hilde")
     await v.step()
-    assert "- Lina: at the square (heard from Hilde at 09:40)" in calls_of(llm, "Jonas")[0]
+    assert "- Lina: at the square (Hilde said at 09:40)" in calls_of(llm, "Jonas")[0]
 
 
 @pytest.mark.anyio
@@ -1061,17 +1061,16 @@ async def test_goodbye_to_find_someone_and_an_ignored_destination(tmp_path: Path
 
 @pytest.mark.anyio
 async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> None:
-    from agent_lab.village.turn import PREVIOUS_RULES, RULES
+    from agent_lab.village.turn import OLD_RULES, RULES
 
+    m7, m9 = OLD_RULES
     v, _ = village_for(tmp_path)
     ids = {x["name"]: x["agent_id"] for x in v.world["villagers"]}
-    for name, edited in (("Hilde", False), ("Jonas", True)):
+    for name, old in (("Hilde", m7), ("Greta", m9), ("Jonas", "MY OWN RULES")):
         agent = v.store.get_agent(ids[name])
         assert agent is not None
         blocks = agent.config["blocks"]
-        old = PREVIOUS_RULES + (" Always mention the weather." if edited else "")
-        rules_free = blocks[0]["system"].replace(RULES, "")
-        system = rules_free + (old.replace(PREVIOUS_RULES, "MY OWN RULES") if edited else old)
+        system = blocks[0]["system"].replace(RULES, old)
         v.store.update_agent(
             agent.agent_id,
             name=agent.name,
@@ -1080,12 +1079,17 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> 
             config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
         )
     Village(store=v.store, models=v.models, bus=Bus())  # loading refreshes the rules
-    hilde = v.store.get_agent(ids["Hilde"])
-    jonas = v.store.get_agent(ids["Jonas"])
-    assert hilde is not None and jonas is not None
-    assert RULES in hilde.config["blocks"][0]["system"]
-    assert PREVIOUS_RULES not in hilde.config["blocks"][0]["system"]
-    assert "MY OWN RULES" in jonas.config["blocks"][0]["system"]  # the owner's edit stays
+    systems: dict[str, str] = {}
+    for name in ("Hilde", "Greta", "Jonas", "Lina"):
+        agent = v.store.get_agent(ids[name])
+        assert agent is not None
+        systems[name] = agent.config["blocks"][0]["system"]
+    for name in ("Hilde", "Greta", "Lina"):  # Lina was created with the new rules
+        assert systems[name].endswith(RULES) and systems[name].count(RULES) == 1
+        assert all(old not in systems[name] for old in OLD_RULES)
+    assert systems["Jonas"].endswith("MY OWN RULES")  # the owner's edit stays
+    assert "Trust what you see over what you hear" in RULES
+    assert "Follow your plan for the day" in RULES
 
 
 @pytest.mark.anyio
@@ -1557,3 +1561,17 @@ def test_the_planner_agent_is_created_once_and_listed() -> None:
     v.ensure_agents()
     planners = [a for a in v.store.list_agents() if a.name.startswith("Village planner")]
     assert [a.agent_id for a in planners] == [v.world["planner_agent_id"]]
+
+
+@pytest.mark.anyio
+async def test_the_day_record_marks_what_villagers_said_as_claims(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    record: dict[str, Any] = {"day": 1, "items": []}
+    v.world["day_record"] = record
+    v._end_conversation(talk(v, "Greta", "Lina", 2), "test")  # pyright: ignore[reportPrivateUsage]
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    notes = [i["text"] for i in record["items"]]
+    assert "Greta and Lina talked; what they said (their claims): Greta: line 0 / Lina: line 1" in (
+        notes
+    )

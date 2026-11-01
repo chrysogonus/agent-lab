@@ -53,7 +53,7 @@ from agent_lab.village.seasons import (
     weather,
 )
 from agent_lab.village.turn import (
-    PREVIOUS_RULES,
+    OLD_RULES,
     RULES,
     SPEECH_SHOWN,
     awake_neighbours,
@@ -177,7 +177,7 @@ class Village:
         return world
 
     def _refresh_rules(self) -> None:
-        """Villager agents still holding the previous rules text verbatim get the current one;
+        """Villager agents still holding an earlier rules text verbatim get the current one;
         the owner's edits to the rules are left alone."""
         for v in self.world["villagers"]:
             agent = self.store.get_agent(v["agent_id"] or "")
@@ -185,9 +185,10 @@ class Village:
                 continue
             blocks: list[dict[str, Any]] = agent.config.get("blocks") or []
             system: str = blocks[0].get("system", "") if blocks else ""
-            if PREVIOUS_RULES not in system:
+            old = next((rules for rules in OLD_RULES if rules in system), None)
+            if old is None:
                 continue
-            first = {**blocks[0], "system": system.replace(PREVIOUS_RULES, RULES)}
+            first = {**blocks[0], "system": system.replace(old, RULES)}
             self.store.update_agent(
                 agent.agent_id,
                 name=agent.name,
@@ -393,7 +394,7 @@ class Village:
         """Both remember it; the one who ended it (`by`) has no reason to decide again."""
         self.world["conversations"].remove(c)
         transcript = " / ".join(c.get("transcript", []))
-        self._note(f"{c['a']} and {c['b']} talked: {transcript}")
+        self._note(f"{c['a']} and {c['b']} talked; what they said (their claims): {transcript}")
         day = clock(self.world["tick"])[0]
         for me, other in ((c["a"], c["b"]), (c["b"], c["a"])):
             v = self._villager(me)
@@ -837,7 +838,8 @@ class Village:
             hearer = self._villager(h)
             hearer["inbox"].append({"from": name, "to": to, "text": text, "tick": tick})
             heard_to = f" to {'you' if to == h else to}" if to else ""
-            self._event(hearer, "heard", f'{name}{heard_to}: "{text}"', **{"from": name, "to": to})
+            heard = f'{name} said{heard_to}: "{text}"'
+            self._event(hearer, "heard", heard, **{"from": name, "to": to})
             self._trigger(hearer, "spoken to")
             for other, where in heard_places(text, name, h).items():
                 hearer["beliefs"][other] = {

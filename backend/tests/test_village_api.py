@@ -164,7 +164,9 @@ def test_turns_per_villager(store: Store) -> None:
     assert [t["village_tick"] for t in listed if t not in turns] == [3]  # his plan on waking
     first = turns[-1]
     assert first["village_action"] == {"action": "wait", "reason": "unknown place 'harbour'"}
-    assert first["prompt"].startswith("Day 1 (day 1 of spring, year 1), 05:00, morning.")
+    assert first["prompt"].startswith(
+        "What you know for sure:\nDay 1 (day 1 of spring, year 1), 05:00, morning."
+    )
     assert "\nYou are at your home's door." in first["prompt"]
 
 

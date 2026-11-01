@@ -12,6 +12,7 @@ from agent_lab.village.turn import (
     heard_places,
     observation,
     parse_action,
+    seen_text,
     villager_agent,
 )
 from agent_lab.village.world import VILLAGERS, door, label_cell, new_world, place_cells, steps_to
@@ -61,7 +62,11 @@ def test_observation() -> None:
     world["conversations"] = [{"a": "Hilde", "b": "Jonas", "lines": 2, "last_tick": 29}]
     text = observation(world, "Jonas")
     weather_line = WEATHER_TEXT[weather(1)]
-    assert text.startswith(f"Day 1 (day 1 of spring, year 1), 09:30, morning. {weather_line}.\n")
+    assert text.startswith(
+        "What you know for sure:\n"
+        f"Day 1 (day 1 of spring, year 1), 09:30, morning. {weather_line}; "
+        "this is the real weather.\n"
+    )
     assert "\nYou are at the market." in text
     assert "You get up at 05:00 and go to bed at 21:00." in text
     assert "At this hour you are usually at the pier." in text
@@ -70,7 +75,8 @@ def test_observation() -> None:
     assert "You are talking with Hilde (2 lines so far)." in text
     assert '- Hilde to you: "Fish for the festival?"' in text and '- Hilde: "Hello all!"' in text
     assert "- Greta: at the fields (seen 08:40)" in text
-    assert "- Lina: at the square (heard from Hilde at 09:00)" in text
+    assert "- Lina: usually at the flower garden around now (their routine)" in text
+    assert "Heard about where others are:\n- Lina: at the square (Hilde said at 09:00)" in text
     assert "- Hilde: usually at the town hall around now (their routine)" in text
     places = text.split("Places: ")[1].split("\n")[0]
     assert f"town hall {steps_to(mx + 1, my, place_cells('town_hall'))} steps" in places
@@ -242,9 +248,9 @@ def test_the_observation_names_date_season_and_weather(day: int) -> None:
     for v in world["villagers"]:
         v["asleep"] = False
     year, season, day_of_season = date(day)
-    first = observation(world, "Greta").split("\n")[0]
+    first = observation(world, "Greta").split("\n")[1]
     expected = f"Day {day} (day {day_of_season} of {season}, year {year}), 09:30, morning."
-    assert first == f"{expected} {WEATHER_TEXT[weather(day)]}."
+    assert first == f"{expected} {WEATHER_TEXT[weather(day)]}; this is the real weather."
 
 
 def test_villagers_are_told_how_the_places_they_work_at_or_see_are_doing() -> None:
@@ -292,3 +298,73 @@ def test_the_festival_is_counted_down_announced_and_expected_on_the_square() -> 
     assert "At this hour you are usually at the pier." in observation(world, "Jonas")
     world["tick"] = _at(10, 9)
     assert "harvest festival" not in observation(world, "Jonas")
+
+
+def test_facts_come_before_what_others_claim() -> None:
+    mx, my = MARKET
+    world = world_with(
+        Hilde=at(mx, my),
+        Jonas={
+            **at(mx + 1, my),
+            "inbox": [{"from": "Hilde", "to": "Jonas", "text": "Storm today!", "tick": 29}],
+            "events": [
+                {"tick": 29, "kind": "heard", "text": 'Hilde said to you: "Storm today!"'},
+            ],
+            "beliefs": {
+                "Lina": {
+                    "where": "pier",
+                    "cell": [12, 17],
+                    "tick": 27,
+                    "source": "heard",
+                    "from": "Hilde",
+                },
+            },
+        },
+    )
+    text = observation(world, "Jonas")
+    parts = [
+        "What you know for sure:",
+        "Places: ",
+        "Where the others are, as far as you know:",
+        "What others told you (claims; they may be wrong):",
+        "Said to you since your last turn:",
+        "Heard about where others are:",
+        "What you have learned:",
+        "What you remember:",
+        "Your last events:",
+        "What do you do?",
+    ]
+    assert [text.index(p) for p in parts] == sorted(text.index(p) for p in parts)
+    claims = text.split("What others told you")[1].split("What you have learned:")[0]
+    assert '- Hilde to you: "Storm today!"' in claims
+    assert "- Lina: at the pier (Hilde said at 09:00)" in claims
+    facts = text.split("What others told you")[0]
+    assert "Storm today!" not in facts and "Lina: at the pier" not in facts
+    assert '- 09:20 Hilde said to you: "Storm today!"' in text
+
+
+def test_nothing_heard_about_the_others() -> None:
+    text = observation(world_with(), "Jonas")
+    assert "Heard about where others are:\n- nothing" in text
+
+
+def test_seen_text_shows_only_what_a_villager_saw() -> None:
+    world = world_with(
+        Jonas={
+            "beliefs": {
+                "Greta": {"where": "fields", "cell": [2, 15], "tick": 25, "source": "seen"},
+                "Lina": {
+                    "where": "pier",
+                    "cell": [12, 17],
+                    "tick": 27,
+                    "source": "heard",
+                    "from": "Hilde",
+                },
+            }
+        }
+    )
+    assert seen_text(world, "Jonas", "Greta") == "at the fields (seen 08:40)"
+    assert seen_text(world, "Jonas", "Lina") == (
+        "usually at the flower garden around now (their routine)"
+    )
+    assert belief_text(world, "Jonas", "Lina") == "at the pier (heard from Hilde at 09:00)"
