@@ -18,8 +18,8 @@ later: they will have met, talked, worked and remembered.
 ## How a villager decides
 
 The clock moves in steps of 10 village minutes. A villager only thinks when something happens:
-it woke up, arrived, met someone, was spoken to, found (or missed) someone, or half an hour
-passed.
+it woke up, met someone, was spoken to, finished or gave up what it set out to do, or, with
+nothing to do, half an hour passed.
 
 ```mermaid
 sequenceDiagram
@@ -34,15 +34,40 @@ sequenceDiagram
     W->>W: validate → apply (or wait, with the reason)
 ```
 
-A villager can **move** to a place (or the building site), **find** someone where it thinks
-they are, **say** something to someone right next to it, say **goodbye** (and where it goes
-next), **work** where it stands, **give** what it carries to someone (or onto the festival stalls,
-or down at the building site), **buy** building goods from the trader or **wait**. Anything invalid becomes a wait, and the
-reason is recorded. Every decision is an ordinary
-traced run: click a villager, then a turn, to see the exact prompt and answer.
+**Intentions** (M14). Some answers set a villager on something, and it keeps at it until it is
+done, given up or replaced by the next one:
 
-Villagers only talk face to face and stay together until one says goodbye. Each keeps its own
-idea of where the others are (seen, heard, or their usual routine), which can be out of date.
+- **move** to a place, home or the building site;
+- **work** here, or at a named place, until a time (`{"action": "work", "place": "fields",
+  "until": "12:00"}`);
+- **build** at the building site, until a time;
+- **bring** the load it carries to the building site;
+- **find** someone, with a line to say on reaching them (`{"action": "find", "villager":
+  "Greta", "say": "Any vegetables?"}`).
+
+The village takes the certain steps without asking the model: it walks there, starts the work
+on arrival, sets a needed load down and says the line. The villager is asked again when the
+intention ends ("you are done with: work at the fields until 12:00: it is 12:00") or something
+happens. Every start and end is an event and a note for the chronicle, and the villager's panel
+shows what it is **Set on**.
+
+The other answers happen at once: **say** something to someone right next to it, say
+**goodbye** (and where it goes next), **give** what it carries, **buy** building goods from the
+trader, or **wait**. Anything invalid becomes a wait, and the reason is recorded. Every decision
+is an ordinary traced run: click a villager, then a turn, to see the exact prompt and answer.
+
+Each turn's facts end with **What you can do here**: up to six answers the village would accept
+right now, as exact JSON with why ("the building site holds 2 saplings"). It is built from the
+same checks that refuse answers, so it never offers one that would be refused, and it replaced
+the hints M11 and M12 had added one by one.
+
+Villagers only talk face to face. A say to someone in sight but further away becomes a find
+that says the line on arrival; a find follows the person while they are in sight and ends next
+to them, or with "you lost sight of Greta at the market". A villager that sets out elsewhere
+while talking says goodbye and goes (two talkers going the same way walk on together and keep
+talking). It gives what it carries only to the one it set out to see or to someone who asked
+for those goods in the last hour. Each keeps its own idea of where the others are (seen, heard,
+or their usual routine), which can be out of date.
 
 The observation puts **what a villager knows for sure** (the date and the real weather, where it
 is, its plan, who is next to it) before **what others told it**, which is marked as claims that
@@ -92,11 +117,10 @@ still ends the conversation, just without the words.
   building site, who builds. Not everyone has to help. The tasks show in the villagers' plans
   and in what they are told until the project is done; while a project is under way, the
   meeting only reviews it and may hand out the work again.
-- **The building site**: villagers walk there (`"building site"`), set down their loads and
-  work there. A villager carrying a load the project needs is told to take it there and set it
-  down, while loads lie at the site everyone is told to come and build, and while it has nothing
-  to build with, anyone carrying a basket is told what to buy; at 17:00 on a meeting day
-  everyone away is called to the town hall. Every village hour of work, added up over everyone at the site, works in one load.
+- **The building site**: villagers bring their loads there and build. What a villager can do
+  with its load, the loads at the site and the trader's goods shows in its **What you can do
+  here**; at 16:30 on a meeting day everyone away is called to the town hall. Every village hour
+  of work, added up over everyone at the site, works in one load.
   The site shows scaffolding and the loads lying there.
 - **What stays**: the catalogue holds ten projects: painting the town hall or one of the four
   houses (2 paint each), young trees by the square (3 saplings), a market stand (3 wood, 1
@@ -120,13 +144,16 @@ flowchart LR
 
 - **Memory**: every conversation, search and first meeting of the day becomes a memory (up to
   60 per villager). When deciding, a villager is reminded of the memories that matter right now:
-  about who is next to it, who it is looking for and where it is.
+  about who is next to it, who it is looking for and where it is. A memory from another season
+  counts for less unless it is about someone at hand, so last autumn's festival no longer fills
+  summer plans (M14).
 - **Reflection**: going to bed after an eventful day, a villager writes up to three learnings
   ("Jonas is at the market around midday") and one sentence about each villager it dealt with.
-  Both are part of every decision from then on.
+  Both are part of every decision from then on. Once it has more than five reflections older
+  than three days, the same reflection also folds them into one summary.
 - **Chronicle**: once everyone sleeps, the chronicler writes a diary entry about the day. If the
   entry names weather the day did not have (villagers often talk about storms that never come),
-  it is asked once more.
+  it is asked once more. Notes naming other weather are marked "(talk, not the day's weather)".
   **Read the chronicle** shows the last 28 entries, newest first, marks the new ones and opens
   the run behind each.
 
@@ -197,6 +224,11 @@ same village can finish a project or nothing at all. Three instruments show what
   and both go on), run 5 times on fresh copies in `backend/data/evals/`. Your village is only
   read.
 
+M14 added four checks, one per behaviour it improves: `intention-keeps-building`,
+`say-to-someone-in-sight`, `leave-talk-for-intention` and `summer-plan-without-festival` (a plan
+must not name the check's `"excludes"` words). The M13 checks stay as they were, as the
+baseline.
+
 Each result shows passes out of attempts with a 95% range: 7 of 10 means "somewhere between 40%
 and 89%". `python -m agent_lab.village.evals compare A B` marks a check better or worse only
 when the two ranges do not overlap, and says "no clear change" otherwise; run 20 repeats when a
@@ -204,7 +236,5 @@ change has to be seen.
 
 ## What's next
 
-- **M14 Better villagers**: intentions instead of hints, walking while talking, memory that
-  fades with age and season, measured against the M13 baseline.
 - **M15 Daily happenings**: something different every day: the postman, a visiting friend, boat
   trips on the lake in the boat the village built, and whispers to villagers.

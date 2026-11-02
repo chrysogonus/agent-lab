@@ -270,7 +270,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 7: Polish
 
-- [ ] T020 Docs:
+- [X] T020 Docs:
   - README.md: intentions and "what you can do here"; M14 done in the roadmap.
   - docs/village.md:
     - How a villager decides: the new answers and intentions;
