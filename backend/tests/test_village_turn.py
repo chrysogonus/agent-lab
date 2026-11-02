@@ -73,8 +73,8 @@ def test_observation() -> None:
     assert "\nYou are at the market." in text
     assert "You get up at 05:00 and go to bed at 21:00." in text
     assert "At this hour you are usually at the pier." in text
-    assert "Next to you: Mayor Hilde." in text
-    assert "In sight: Lina the flower girl (3 steps away)." in text
+    assert "Next to you: Hilde." in text
+    assert "In sight: Lina (3 steps away)." in text
     assert "You are talking with Hilde (2 lines so far)." in text
     assert '- Hilde to you: "Fish for the festival?"' in text and '- Hilde: "Hello all!"' in text
     assert "- Greta: at the fields (seen 08:40)" in text
@@ -164,7 +164,7 @@ def test_move_home() -> None:
         ('{"action": "move", "place": "harbour"}', "unknown place 'harbour'"),
         ('{"action": "move", "place": "home"}', "already at your home"),
         ('{"action": "find", "villager": "Bob"}', "unknown villager 'Bob'"),
-        ('{"action": "find", "villager": "Jonas"}', "Jonas is already next to you"),
+        ('{"action": "find", "villager": "Jonas"}', "Jonas is right next to you"),
         ('{"action": "say", "text": "   "}', "nothing to say"),
         ('{"action": "say", "text": "Hi", "to": "Bob"}', "unknown villager 'Bob'"),
         ('{"action": "say", "text": "Hi", "to": "Mayor Hilde"}', "unknown villager 'Mayor Hilde'"),
@@ -440,7 +440,10 @@ def test_working_while_talking_is_allowed() -> None:
 
 def test_give_to_a_villager_or_onto_the_stalls() -> None:
     sx, sy = label_cell("square")
-    world = world_with(Hilde={**at(sx, sy), "basket": "fish"}, Jonas=at(sx + 1, sy))
+    asked = [{"from": "Jonas", "goods": "fish", "tick": 30}]
+    world = world_with(
+        Hilde={**at(sx, sy), "basket": "fish", "requests": asked}, Jonas=at(sx + 1, sy)
+    )
     assert parse_action('{"action": "give", "to": "jonas"}', world, "Hilde") == (
         {"action": "give", "to": "Jonas", "goods": "fish"},
         None,
@@ -481,7 +484,10 @@ def test_the_facts_name_work_the_basket_and_in_autumn_the_stalls() -> None:
 def test_the_rules_describe_work_and_give() -> None:
     rules = villager_agent("Jonas")["config"]["blocks"][0]["system"]
     assert '{"action": "work", "place": "fields", "until": "12:00"}' in rules
-    assert '{"action": "give", "to": "Hilde"}' in rules
+    assert (
+        '{"action": "give", "to": "Hilde"} to hand what you carry to someone next to you who'
+        in rules
+    )
     assert '{"action": "give"} on the square' in rules
 
 
@@ -737,4 +743,28 @@ def test_build_at_the_site_is_work_there() -> None:
     assert parsed({"action": "build", "until": "15:00"}, world, "Greta") == (
         {"action": "work", "place": "site", "until": 900},
         None,
+    )
+
+
+# --- M14 US2: reaching each other (FR-005, FR-006) ---
+
+
+def test_a_say_to_someone_in_sight_becomes_a_find_that_says_it() -> None:
+    mx, my = MARKET
+    world = world_with(Jonas=at(mx, my), Greta=at(mx + 3, my + 1))
+    answer = {"action": "say", "text": "Any vegetables?", "to": "Greta"}
+    assert parsed(answer, world, "Jonas") == (
+        {"action": "find", "villager": "Greta", "say": "Any vegetables?"},
+        None,
+    )
+    world["villagers"][2]["asleep"] = True
+    assert parsed(answer, world, "Jonas") == ({"action": "wait"}, "Greta is not next to you")
+
+
+def test_finding_someone_next_to_you_is_a_wait_with_a_hint() -> None:
+    hx, hy = door("Hilde")
+    world = world_with(Jonas=at(hx + 1, hy))
+    assert parsed({"action": "find", "villager": "Jonas"}, world, "Hilde") == (
+        {"action": "wait"},
+        'Jonas is right next to you; say what you want: {"action": "say", "to": "Jonas", ...}',
     )

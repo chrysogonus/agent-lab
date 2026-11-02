@@ -1,5 +1,6 @@
 """Work, baskets, giving and the festival stalls (M11)."""
 
+import re
 from typing import Any
 
 from agent_lab.village.build import site_at, site_refusal
@@ -14,6 +15,15 @@ NO_GIVING = (
 )
 SITE_TAKES = "the building site takes loads of wood, paint or saplings"
 STALLS_TAKE = "the festival stalls take fish, vegetables and flowers"
+REQUEST_STEPS = 6  # a villager may give to whoever asked for the goods within the last hour (M14)
+_GOODS_WORDS = {
+    **{w: "fish" for w in ("fish", "fishes")},
+    **{w: "vegetables" for w in ("vegetable", "vegetables", "veg", "veggies")},
+    **{w: "flowers" for w in ("flower", "flowers")},
+    **{w: "wood" for w in ("wood", "timber", "planks")},
+    "paint": "paint",
+    **{w: "saplings" for w in ("sapling", "saplings")},
+}
 
 Villager = dict[str, Any]
 
@@ -69,6 +79,32 @@ def _given_by(v: Villager) -> str | None:
     return last.get("from") if last and last["kind"] == "received" else None
 
 
+def goods_asked(text: str) -> list[str]:
+    """The goods a line names, in order: a hearer may give them to the speaker for an hour."""
+    found: list[str] = []
+    for word in re.findall(r"[a-z]+", text.lower()):
+        goods = _GOODS_WORDS.get(word)
+        if goods and goods not in found:
+            found.append(goods)
+    return found
+
+
+def _wanted_by(world: dict[str, Any], me: Villager, other: str) -> bool:
+    """The one it set out to see (or just found), or who asked for its goods within the hour."""
+    tick, intention = world["tick"], me["intention"]
+    if intention and intention["kind"] == "see" and intention["villager"] == other:
+        return True
+    if any(
+        e["kind"] == "found" and e.get("to") == other and tick - e["tick"] <= REQUEST_STEPS
+        for e in me["events"]
+    ):
+        return True
+    return any(
+        r["from"] == other and r["goods"] == me["basket"] and tick - r["tick"] <= REQUEST_STEPS
+        for r in me["requests"]
+    )
+
+
 def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None:
     """Why a villager cannot give its basket to `to` (or, without a name, onto the stalls)."""
     me = _villager(world, name)
@@ -100,6 +136,14 @@ def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None
             f"{other} just gave you this load; set it down at the building site, or give it to "
             "someone else"
         )
+    if not _wanted_by(world, me, other):  # goods went to whoever stood near (M13 baseline)
+        goods = me["basket"]
+        meant = (
+            "it is for the festival stalls or for someone who asks"
+            if goods in BASKET_GOODS
+            else "it belongs at the building site"
+        )
+        return f"{other} did not ask for your {goods}; {meant}"
     return None
 
 

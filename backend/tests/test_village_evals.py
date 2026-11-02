@@ -512,6 +512,7 @@ def test_results_and_compare_on_the_command_line(
 SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
 IDEAL = {  # an answer each shipped check must accept: the checks can be passed
     "intention-keeps-building": '{"action": "say", "to": "Lina", "text": "Help me plant!"}',
+    "say-to-someone-in-sight": '{"action": "say", "to": "Greta", "text": "Any vegetables?"}',
     "load-at-site": '{"action": "give"}',
     "load-away": '{"action": "move", "place": "building site"}',
     "meeting-call-talking": '{"action": "goodbye", "place": "town hall"}',
@@ -545,6 +546,7 @@ def test_the_shipped_checks_load_and_can_be_passed() -> None:
         "You are set on: build at the building site until 15:00 (to plant the trees)."
         in by_name["intention-keeps-building"]
     )
+    assert "In sight: Greta (3 steps away)." in by_name["say-to-someone-in-sight"]
     assert "A trader is at the market until 14:00" in by_name["buy-saplings"]
     assert "Hand out the work" in by_name["work-plan-buys"]
     frozen = next(c for c in checks if c["name"] == "proposals-valid")

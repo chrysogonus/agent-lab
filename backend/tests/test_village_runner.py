@@ -21,7 +21,7 @@ from agent_lab.village.intention import start
 from agent_lab.village.plan import plan_prompt
 from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
 from agent_lab.village.seasons import weather
-from agent_lab.village.turn import SPEECH_SHOWN, observation, villager_agent
+from agent_lab.village.turn import SPEECH_SHOWN, observation, parse_action, villager_agent
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -1921,6 +1921,7 @@ async def test_give_a_basket_to_a_villager_and_onto_the_stalls(tmp_path: Path) -
     sx, sy = label_cell("square")
     put(v, "Hilde", sx, sy, basket="fish", triggers=["met"], neighbours=["Jonas"])
     put(v, "Jonas", sx + 1, sy, neighbours=["Hilde"])  # already met: only Hilde decides
+    villager(v, "Hilde")["requests"] = [{"from": "Jonas", "goods": "fish", "tick": MORNING}]
     await v.step()
     assert villager(v, "Hilde")["basket"] is None
     assert villager(v, "Jonas")["basket"] == "fish"
@@ -2001,6 +2002,8 @@ async def test_a_basket_that_came_while_deciding_is_not_given_on(tmp_path: Path)
     put(v, "Hilde", sx, sy, basket="fish", triggers=["met"], neighbours=["Greta"])
     put(v, "Greta", sx + 1, sy, triggers=["met"], neighbours=["Hilde", "Lina"])
     put(v, "Lina", sx + 2, sy, neighbours=["Greta"])
+    villager(v, "Hilde")["requests"] = [{"from": "Greta", "goods": "fish", "tick": MORNING}]
+    villager(v, "Greta")["requests"] = [{"from": "Lina", "goods": "fish", "tick": MORNING}]
     await v.step()  # both decide at once; Greta's empty hands are in her prompt
     assert villager(v, "Greta")["basket"] == "fish" and villager(v, "Lina")["basket"] is None
     assert villager(v, "Greta")["last_action"] == {
@@ -2883,3 +2886,54 @@ async def test_finishing_the_project_and_bedtime_end_intentions(tmp_path: Path) 
     await v.step()
     assert lina["bedtime"] and lina["intention"] is None
     assert texts(v, "Lina", "intention_ended")[-1].endswith(": the day is over.")
+
+
+# --- M14 US2: reaching each other (FR-005, FR-006) ---
+
+
+@pytest.mark.anyio
+async def test_a_find_follows_someone_walking_on_and_ends_next_to_them(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [find("Lina")]})
+    morning(v)
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, triggers=["woke"])
+    put(v, "Lina", sx + 5, sy, goal={"kind": "place", "place": "market"})
+    for _ in range(8):
+        await v.step()
+        if villager(v, "Hilde")["intention"] is None:
+            break
+    hilde, lina = villager(v, "Hilde"), villager(v, "Lina")
+    assert hilde["intention"] is None
+    assert max(abs(hilde["x"] - lina["x"]), abs(hilde["y"] - lina["y"])) <= 1
+    assert texts(v, "Hilde", "intention_ended") == ["You are done with: see Lina: you found Lina."]
+
+
+@pytest.mark.anyio
+async def test_a_find_ends_when_the_one_followed_goes_out_of_sight(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [find("Lina")]})
+    morning(v)
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, triggers=["woke"])
+    put(v, "Lina", sx + 6, sy)
+    await v.step()
+    hilde = villager(v, "Hilde")
+    assert hilde["intention"]["seen"]
+    put(v, "Lina", *place_cells("pier")[0])  # gone out of sight at once
+    await v.step()
+    assert hilde["intention"] is None
+    assert texts(v, "Hilde", "intention_ended")[-1].startswith(
+        "You are done with: see Lina: you lost sight of Lina"
+    )
+
+
+@pytest.mark.anyio
+async def test_a_line_naming_goods_is_a_request_the_hearer_may_give_to(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Hilde": [say("Any fish for the hall, Jonas?", "Jonas")]})
+    morning(v)
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, triggers=["met"], neighbours=["Jonas"])
+    put(v, "Jonas", sx + 1, sy, basket="fish", neighbours=["Hilde"])
+    await v.step()
+    jonas = villager(v, "Jonas")
+    assert jonas["requests"] == [{"from": "Hilde", "goods": "fish", "tick": MORNING + 1}]
+    assert parse_action(give("Hilde"), v.world, "Jonas")[1] is None

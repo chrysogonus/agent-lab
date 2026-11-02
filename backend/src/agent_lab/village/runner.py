@@ -88,7 +88,7 @@ from agent_lab.village.turn import (
     partners,
     villager_agent,
 )
-from agent_lab.village.work import work_step
+from agent_lab.village.work import REQUEST_STEPS, goods_asked, work_step
 from agent_lab.village.world import (
     FESTIVAL_EVENING,
     HEIGHT,
@@ -1116,6 +1116,12 @@ class Village(MeetingRuns):
             heard = f'{name} said{heard_to}: "{text}"'
             self._event(hearer, "heard", heard, **{"from": name, "to": to})
             self._trigger(hearer, "spoken to")
+            asked = [
+                {"from": name, "goods": goods, "tick": tick} for goods in goods_asked(text)
+            ]  # M14: so the hearer may give them to the speaker within the hour
+            hearer["requests"] = [
+                r for r in hearer["requests"] if tick - r["tick"] <= REQUEST_STEPS
+            ] + asked
             for other, where in heard_places(text, name, h).items():
                 hearer["beliefs"][other] = {
                     "where": where,

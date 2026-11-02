@@ -235,8 +235,7 @@ def observation(world: dict[str, Any], name: str) -> str:
     minute = minute_of_day(world["tick"])
     next_to = awake_neighbours(world, name)
     in_sight = [
-        f"{VILLAGERS[v['name']].title} ({max(abs(v['x'] - me['x']), abs(v['y'] - me['y']))}"
-        " steps away)"
+        f"{v['name']} ({max(abs(v['x'] - me['x']), abs(v['y'] - me['y']))} steps away)"
         for v in world["villagers"]
         if v is not me and not v["asleep"] and v["name"] not in next_to and sees(cell(me), cell(v))
     ]
@@ -291,7 +290,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         ),
         *([f"You are {goal}."] if goal else []),
         intention_text(world, me),
-        f"Next to you: {', '.join(VILLAGERS[n].title for n in next_to) or 'nobody'}.",
+        f"Next to you: {', '.join(next_to) or 'nobody'}.",  # M14: names, as answers use them
         f"In sight: {', '.join(in_sight) or 'nobody else'}.",
         f"{conversation}."
         + (
@@ -421,7 +420,12 @@ def parse_action(
                 return wait, f"unknown villager {action.to!r}"
         next_to = awake_neighbours(world, name)
         if to and to not in next_to:
-            return wait, f"{to} is not next to you"
+            them = villager_of(world, to)
+            if them["asleep"] or not sees(cell(villager_of(world, name)), cell(them)):
+                return wait, f"{to} is not next to you"
+            if talking:
+                return wait, f"you are talking with {' and '.join(talking)}; say goodbye first"
+            return {"action": "find", "villager": to, "say": text[:SPEECH_SHOWN]}, None
         if not next_to:
             return wait, "nobody is next to you"
         hearers = [to] if to else next_to
@@ -514,7 +518,8 @@ def _seek(world: dict[str, Any], name: str, text: str) -> tuple[str | None, str 
     if other is None or other == name:
         return None, f"unknown villager {text!r}"
     if other in awake_neighbours(world, name):
-        return None, f"{other} is already next to you"
+        hint = f'{{"action": "say", "to": "{other}", ...}}'
+        return None, f"{other} is right next to you; say what you want: {hint}"
     return other, None
 
 
@@ -675,9 +680,9 @@ RULES = (  # M14: intentions, and what you can do where you are
     '{"action": "goodbye", "text": "See you later!", "place": "market"} to end a conversation '
     'and leave: "text" is optional, and "place" (or "villager": "Lina" to go looking for '
     "someone) says where you go next; leave both out to stay,\n"
-    '{"action": "give", "to": "Hilde"} to hand your basket to someone next to you, or '
-    '{"action": "give"} on the square to set it out on the festival stalls, or at the building '
-    "site to set down a load,\n"
+    '{"action": "give", "to": "Hilde"} to hand what you carry to someone next to you who asked '
+    'for it or whom you set out to see, or {"action": "give"} on the square to set it out on '
+    "the festival stalls, or at the building site to set down a load,\n"
     '{"action": "buy", "goods": "wood"} at the market while the trader is there: trade the '
     "basket you carry for a load of wood, paint or saplings for building,\n"
     '{"action": "wait"} to go on with what you are doing.\n'

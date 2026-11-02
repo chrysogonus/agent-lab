@@ -8,6 +8,7 @@ from agent_lab.village.build import new_project
 from agent_lab.village.work import (
     delivery_text,
     give_refusal,
+    goods_asked,
     goods_at,
     stalls_text,
     work_refusal,
@@ -101,12 +102,44 @@ def test_give_refusals() -> None:
     assert give_refusal(world, "Hilde", "jonas") == "Jonas's hands are full"
     assert give_refusal(world, "Hilde", None) is None  # onto the stalls
     villager(world, "Jonas")["basket"] = None
+    villager(world, "Hilde")["requests"] = [{"from": "Jonas", "goods": "fish", "tick": 30}]
     assert give_refusal(world, "Hilde", "Jonas") is None
     villager(world, "Hilde").update(at(PIER[0]))
     assert give_refusal(world, "Hilde", None) == (
         "nobody to give it to: name someone next to you, stand on the square to set it out for "
         "the festival, or stand at the building site to set down a load"
     )
+
+
+def test_a_villager_gives_only_to_whom_it_set_out_to_see_or_who_asked() -> None:
+    sx, sy = SQUARE
+    world = world_with(Hilde=at((sx, sy), basket="fish"), Jonas=at((sx + 1, sy)))
+    hilde = villager(world, "Hilde")
+    assert give_refusal(world, "Hilde", "Jonas") == (
+        "Jonas did not ask for your fish; it is for the festival stalls or for someone who asks"
+    )
+    hilde["requests"] = [{"from": "Jonas", "goods": "vegetables", "tick": 30}]
+    assert give_refusal(world, "Hilde", "Jonas") is not None  # asked for something else
+    hilde["requests"] = [{"from": "Jonas", "goods": "fish", "tick": 24}]  # an hour ago
+    assert give_refusal(world, "Hilde", "Jonas") is None
+    world["tick"] = 31  # longer ago than an hour: forgotten
+    assert give_refusal(world, "Hilde", "Jonas") is not None
+    hilde["requests"] = []
+    hilde["intention"] = {"kind": "see", "villager": "Jonas"}
+    assert give_refusal(world, "Hilde", "Jonas") is None
+    hilde["intention"] = None
+    hilde["events"] = [{"tick": 28, "kind": "found", "text": "You found Jonas.", "to": "Jonas"}]
+    assert give_refusal(world, "Hilde", "Jonas") is None  # just found: the one sought
+    hilde |= {"basket": "wood", "events": []}
+    assert give_refusal(world, "Hilde", "Jonas") == (
+        "Jonas did not ask for your wood; it belongs at the building site"
+    )
+
+
+def test_goods_named_in_a_line() -> None:
+    assert goods_asked("Jonas, any fish left? And a sapling?") == ["fish", "saplings"]
+    assert goods_asked("Fresh vegetable soup and flowers!") == ["vegetables", "flowers"]
+    assert goods_asked("Good morning!") == []
 
 
 def steps_until_basket(world: dict[str, Any], limit: int = 20) -> tuple[int, list[Any]]:
@@ -205,8 +238,9 @@ def test_a_basket_is_not_given_straight_back() -> None:
         "text": "Greta gave you a basket of flowers.",
         "from": "Greta",
     }
+    asked = [{"from": n, "goods": "flowers", "tick": 30} for n in ("Greta", "Jonas")]
     world = world_with(
-        Hilde=at((sx, sy), basket="flowers", events=[received]),
+        Hilde=at((sx, sy), basket="flowers", events=[received], requests=asked),
         Greta=at((sx + 1, sy)),
         Jonas=at((sx, sy + 1)),
     )
@@ -223,7 +257,8 @@ def test_a_basket_is_not_given_straight_back() -> None:
 
 def test_a_load_is_not_set_out_on_the_stalls_but_can_be_given() -> None:
     sx, sy = SQUARE
-    world = world_with(Hilde=at((sx, sy), basket="wood"), Jonas=at((sx + 1, sy)))
+    asked = [{"from": "Jonas", "goods": "wood", "tick": 30}]
+    world = world_with(Hilde=at((sx, sy), basket="wood", requests=asked), Jonas=at((sx + 1, sy)))
     assert give_refusal(world, "Hilde", None) == (
         "the festival stalls take fish, vegetables and flowers"
     )

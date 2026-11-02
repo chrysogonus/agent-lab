@@ -181,7 +181,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 4: User Story 2 — Reaching each other (P1)
 
-- [ ] T010 [US2] turn.py and runner.py:
+- [X] T010 [US2] turn.py and runner.py:
   - a say to an awake villager in sight but not next to the speaker becomes `{"action": "find",
     "villager", "say", "intention"}`;
   - a find of someone next to you becomes a wait "<name> is right next to you; talk to her"
@@ -191,7 +191,7 @@ first. Runner tests pass `move_gap=0`.
 
   Tests in test_village_turn.py and test_village_runner.py, including following someone who
   walks on and ending next to them. Requirements: FR-005, FR-006.
-- [ ] T011 [US2] The give rule and requests:
+- [X] T011 [US2] The give rule and requests:
   - runner `_say` notes a request on the hearer when the speaker's line names goods ("fish",
     "wood", …): `{from, goods, tick}`, kept for 6 steps;
   - `give_refusal` with a name refuses unless the receiver is the giver's see target, or
@@ -206,9 +206,9 @@ first. Runner tests pass `move_gap=0`.
   - a request kept for 6 steps and then forgotten.
 
   Requirement: FR-007.
-- [ ] T012 [US2] turn.py: "Next to you: Greta." and "In sight: Hilde (4 steps away)." give names,
+- [X] T012 [US2] turn.py: "Next to you: Greta." and "In sight: Hilde (4 steps away)." give names,
   not titles. Test in test_village_turn.py. Requirement: FR-008.
-- [ ] T013 [P] [US2] backend/evals/checks/say-to-someone-in-sight.json: Jonas, with Greta 3 steps
+- [X] T013 [P] [US2] backend/evals/checks/say-to-someone-in-sight.json: Jonas, with Greta 3 steps
   away and in sight, and a plan entry "see Greta: ask for vegetables". The expectation is
   `{"action": {"action": "find", "villager": "Greta"}}`, which a say to Greta also passes once
   T010 turns it into a find. Requirement: FR-014.

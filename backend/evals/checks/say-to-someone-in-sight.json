@@ -1,0 +1,46 @@
+{
+  "name": "say-to-someone-in-sight",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 66,
+      "time": "11:30",
+      "villagers": {
+        "Jonas": {
+          "at": [
+            22,
+            7
+          ],
+          "carrying": "fish",
+          "triggers": [
+            "arrived"
+          ],
+          "events": [
+            "You arrived at the market."
+          ],
+          "plan": [
+            {
+              "time": "11:00",
+              "villager": "Greta",
+              "purpose": "ask for vegetables for my fish"
+            }
+          ]
+        },
+        "Greta": {
+          "at": [
+            25,
+            7
+          ]
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "find",
+      "villager": "Greta"
+    }
+  }
+}
