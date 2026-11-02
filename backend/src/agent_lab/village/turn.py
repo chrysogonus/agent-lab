@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
+from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
@@ -255,6 +256,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         where_text(world, me) + (" You are working here." if me["working"] else ""),
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         trader_text(world),
+        meeting_text(world, name),
         *(
             [stalls_text(world["stalls"]), *filter(None, [delivery_text(world, name)])]
             if date(day)[1] == "autumn"
@@ -523,13 +525,18 @@ _M11_RULES = (
 )
 
 
-RULES = _M11_RULES.replace(
+_M12_BUY_RULES = _M11_RULES.replace(
     '{"action": "wait"} to go on',
     '{"action": "buy", "goods": "wood"} at the market while the trader is there: trade the '
     "basket you carry for a load of wood, paint or saplings for building,\n"
     '{"action": "wait"} to go on',
 )
-OLD_RULES = (_M7_RULES, _M9_RULES, _M11_PLAN_RULES, _M11_RULES)
+RULES = _M12_BUY_RULES.replace(
+    "something more important comes up.",
+    "something more important comes up. Hilde holds a town hall meeting every third day at "
+    "17:00 where the village chooses what to build.",
+)
+OLD_RULES = (_M7_RULES, _M9_RULES, _M11_PLAN_RULES, _M11_RULES, _M12_BUY_RULES)
 
 
 def villager_agent(name: str) -> dict[str, Any]:

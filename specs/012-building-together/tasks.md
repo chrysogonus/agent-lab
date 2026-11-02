@@ -147,7 +147,7 @@ contracts/http-api.md, quickstart.md)
 
 ## Phase 3: User Story 2 — The town hall meeting and vote (P1)
 
-- [ ] T008 [P] [US2] New backend/src/agent_lab/village/meeting.py (research §5):
+- [X] T008 [P] [US2] New backend/src/agent_lab/village/meeting.py (research §5):
   - `MEETING_OPENS = 17 * 60`, `MEETING_CLOSES = 17 * 60 + 30`.
   - `meeting_day(day)`: `day % 3 == 0` and not the festival day, or the day after a festival day divisible by 3. `next_meeting(day)` returns the next such day from `day` on.
   - Prompts, each with the persona and ending by naming its one JSON shape:
@@ -169,7 +169,7 @@ contracts/http-api.md, quickstart.md)
     - the meeting texts;
     - the agent validates as a block agent.
   - Requirements: FR-004, FR-005, FR-006.
-- [ ] T009 [US2] backend/src/agent_lab/village/runner.py:
+- [X] T009 [US2] backend/src/agent_lab/village/runner.py:
   - `ensure_agents` creates the meeting agent once, recreated if deleted.
   - `self.meetings: dict[str, Task]` keyed `"propose"`, `"vote:<name>"`, `"decide"`, `"tasks"`; `_settle` waits for them.
   - `_schedule`: when Hilde wakes on a meeting day:
@@ -202,15 +202,15 @@ contracts/http-api.md, quickstart.md)
     - meeting runs never pause the village, and Step and Reset wait for them;
     - the meeting agent is created once.
   - Requirements: FR-004–FR-007, FR-015.
-- [ ] T010 [US2] turn.py: `RULES` adds "Hilde holds a town hall meeting every third day at 17:00 where the village chooses what to build." and the T005 text joins `OLD_RULES`. Test in test_village_runner.py: an agent holding the T005 rules gets the new ones. Requirement: FR-016.
-- [ ] T011 [US2] Frontend:
+- [X] T010 [US2] turn.py: `RULES` adds "Hilde holds a town hall meeting every third day at 17:00 where the village chooses what to build." and the T005 text joins `OLD_RULES`. Test in test_village_runner.py: an agent holding the T005 rules gets the new ones. Requirement: FR-016.
+- [X] T011 [US2] Frontend:
   - frontend/src/lib/api.ts: `VillageState.meeting`, `next_meeting`; the `VillageAction`s propose, vote and decide; event kinds `proposed` and `meeting`.
   - frontend/src/lib/village.ts:
     - `meetingLines(meeting)` (proposals with reasons, each vote with its reason, the tally, the decision, "Hilde went against the vote", the outcome);
     - `turnLabel` for propose, vote and decide.
   - New frontend/src/components/village/ProjectsPanel.tsx, opened with **Village projects** next to **Read the chronicle** in VillageView.tsx. The meeting section links each run to its trace, as ChroniclePanel does.
   - Tests in village.test.ts: `meetingLines` for a vote meeting, a decision against the vote, a called-off and a review meeting; `turnLabel` propose, vote, decide, and refusals.
-  - Screenshot of the panel after a meeting.
+  - Screenshot of the panel after a meeting (taken with T021).
   - Requirement: FR-014.
 
 ## Phase 4: User Story 3 — Hilde plans and hands out the work (P1)

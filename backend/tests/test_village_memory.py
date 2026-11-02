@@ -42,6 +42,8 @@ def test_remember_sets_importance_by_kind_and_cuts_long_text() -> None:
         "met": 1,
         "reflection": 5,
         "festival": 5,
+        "meeting": 4,
+        "built": 5,
     }
 
 

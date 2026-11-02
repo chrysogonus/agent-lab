@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { BasketGoods, BuildingGoods, ChronicleEntry, Goods, PlanEntry, Run, Stalls, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, BuildingGoods, ChronicleEntry, Goods, Meeting, PlanEntry, Run, Stalls, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
@@ -181,6 +181,17 @@ export function dayOf(tick: number): number {
   return 1 + Math.floor((270 + tick * TICK_MINUTES) / 1440);
 }
 
+type MeetingAction = Extract<NonNullable<Run["village_action"]>, { action: "propose" | "vote" | "decide" }>;
+
+function meetingLabel(time: string, action: MeetingAction): string {
+  if (action.action === "propose") {
+    return action.proposals ? `${time}proposes ${action.proposals.length} projects for the meeting` : `${time}could not propose: ${action.reason}`;
+  }
+  if (action.action === "vote") return action.project ? `${time}votes for ${action.project}` : `${time}could not vote: ${action.reason}`;
+  if (!action.project) return `${time}could not decide: ${action.reason}`;
+  return `${time}decides on ${action.project}${action.by === "vote" ? " (the vote decided)" : action.against ? ", against the vote" : ""}`;
+}
+
 /** One line for a turn: its time and what it did (or why it waited). */
 export function turnLabel(turn: Run): string {
   const time = turn.village_tick == null ? "" : `${tickTime(turn.village_tick)} `;
@@ -197,6 +208,7 @@ export function turnLabel(turn: Run): string {
     const day = turn.village_tick == null ? "" : ` on day ${dayOf(turn.village_tick)}`;
     return action.reason ? `${time}could not reflect: ${action.reason}` : `${time}reflects${day}`;
   }
+  if (action.action === "propose" || action.action === "vote" || action.action === "decide") return meetingLabel(time, action);
   if (action.reason) return `${time}waited: ${action.reason}`;
   if (action.action === "move") return `${time}walks ${action.place === "home" ? "home" : `to the ${placeLabel(action.place)}`}`;
   if (action.action === "find") return `${time}goes looking for ${action.villager}`;
@@ -258,4 +270,31 @@ export function calendarText({ calendar }: Pick<VillageState, "calendar">): stri
 export function newEntries(chronicle: ChronicleEntry[], seenRunId: string | null): number {
   const seen = chronicle.findIndex((e) => e.run_id === seenRunId);
   return seen === -1 ? chronicle.length : seen;
+}
+
+export type MeetingLine = { text: string; runId: string | null };
+
+/** The latest town hall meeting as lines for the projects panel, each with the run behind it. */
+export function meetingLines(meeting: Meeting): MeetingLine[] {
+  const lines: MeetingLine[] = [];
+  if (meeting.kind === "review") lines.push({ text: "A meeting about how the building goes.", runId: null });
+  meeting.proposals.forEach((p, i) => lines.push({ text: `Hilde proposed ${p.name}: ${p.reason}`, runId: i === 0 ? p.run_id : null }));
+  lines.push({ text: meeting.present.length ? `At the town hall: ${listed(meeting.present)}` : "Nobody came to the town hall.", runId: null });
+  for (const v of meeting.votes) {
+    lines.push({ text: v.name ? `${v.villager} voted for ${v.name}: ${v.reason}` : `${v.villager}'s vote did not count: ${v.reason}`, runId: v.run_id });
+  }
+  const counts = new Map<string, number>();
+  for (const v of meeting.votes) if (v.name) counts.set(v.name, (counts.get(v.name) ?? 0) + 1);
+  if (counts.size) {
+    const ranked = [...counts].sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} (${n})`);
+    lines.push({ text: `Most votes: ${ranked.join(", ")}`, runId: null });
+  }
+  const d = meeting.decision;
+  if (d) {
+    const text = d.by === "vote" ? `The vote chose ${d.name}: Hilde gave no valid decision.` : `Hilde chose ${d.name}: ${d.reason}${d.against ? " She went against the vote." : ""}`;
+    lines.push({ text, runId: d.run_id });
+  } else if (meeting.outcome) {
+    lines.push({ text: `${meeting.outcome[0].toUpperCase()}${meeting.outcome.slice(1)}.`, runId: null });
+  }
+  return lines;
 }

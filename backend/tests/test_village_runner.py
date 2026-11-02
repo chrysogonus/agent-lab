@@ -44,6 +44,16 @@ A_PLAN = json.dumps(
     }
 )
 MORNING = 30  # tick of 09:30: everyone is awake
+PROPOSE = json.dumps(
+    {
+        "proposals": [
+            {"project": "Paint the town hall", "reason": "It looks shabby."},
+            {"project": "A market stand", "reason": "Greta needs a place to sell."},
+        ]
+    }
+)
+DECIDE = json.dumps({"decision": "Paint the town hall", "reason": "It is quick."})
+ASSIGN = json.dumps({"tasks": [{"task": "build", "villagers": ["Greta"]}]})
 
 
 def move(place: str) -> str:
@@ -70,10 +80,25 @@ def is_plan(messages: list[Message]) -> bool:
     return "plan its day" in (messages[0]["content"] or "")
 
 
+def is_meeting(messages: list[Message]) -> bool:
+    return "their town hall meeting" in (messages[0]["content"] or "")
+
+
+def meeting_kind(messages: list[Message]) -> str:
+    """proposals, vote, decision or tasks: the JSON shape the prompt ends by asking for."""
+    last = (messages[1]["content"] or "").splitlines()[-1]
+    return next(k for k in ("proposals", "vote", "decision", "tasks") if f'{{"{k}"' in last)
+
+
+def vote_for(project: str, reason: str = "I like it.") -> str:
+    return json.dumps({"vote": project, "reason": reason})
+
+
 def speaker(messages: list[Message]) -> str:
     """The villager a call is for: its persona opens the system prompt of a decision and the
-    prompt of a reflection or a plan."""
-    text = messages[1 if is_reflection(messages) or is_plan(messages) else 0]["content"] or ""
+    prompt of a reflection, a plan or a meeting run."""
+    own_prompt = is_reflection(messages) or is_plan(messages) or is_meeting(messages)
+    text = messages[1 if own_prompt else 0]["content"] or ""
     return next(n for n in VILLAGERS if f"You are {n}," in text)
 
 
@@ -82,7 +107,9 @@ def responder(
 ) -> Callable[[list[Message]], ChatResponse | Exception]:
     """Answers each villager from its own list (then waits), whatever order decisions run in;
     reflections come from the list "<name>:reflect" (then an empty reflection), plans from
-    "<name>:plan" (then A_PLAN), chronicles from "chronicle" (then a quiet day)."""
+    "<name>:plan" (then A_PLAN), chronicles from "chronicle" (then a quiet day); meeting runs
+    from "meeting:proposals", "<name>:vote", "meeting:decision" and "meeting:tasks" (then
+    PROPOSE, a vote for the town hall, DECIDE and ASSIGN)."""
     queues = {n: list(a) for n, a in plan.items()}
 
     def respond(messages: list[Message]) -> ChatResponse | Exception:
@@ -90,7 +117,17 @@ def responder(
             queue = queues.get("chronicle") or []
             item = queue.pop(0) if queue else QUIET_DAY
             return item if isinstance(item, Exception) else answer(item)
-        if is_plan(messages):
+        if is_meeting(messages):
+            kind = meeting_kind(messages)
+            defaults = {
+                "proposals": PROPOSE,
+                "vote": vote_for("Paint the town hall"),
+                "decision": DECIDE,
+                "tasks": ASSIGN,
+            }
+            who = speaker(messages) if kind == "vote" else "meeting"
+            key, default = f"{who}:{kind}", defaults[kind]
+        elif is_plan(messages):
             key, default = f"{speaker(messages)}:plan", A_PLAN
         elif is_reflection(messages):
             key, default = f"{speaker(messages)}:reflect", NOTHING_LEARNED
@@ -142,7 +179,8 @@ def calls_of(llm: FakeLLM, name: str) -> list[str]:
     return [
         c[1]["content"] or ""
         for c in llm.calls
-        if not is_chronicle(c) and not is_reflection(c) and not is_plan(c) and speaker(c) == name
+        if not (is_chronicle(c) or is_reflection(c) or is_plan(c) or is_meeting(c))
+        and speaker(c) == name
     ]
 
 
@@ -1084,12 +1122,12 @@ def system_of(v: Village, name: str) -> str:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("old", range(4))
+@pytest.mark.parametrize("old", range(5))
 async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old: int) -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
     v, _ = village_for(tmp_path)
-    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11
+    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11, M12 buy
     set_rules(v, "Jonas", "MY OWN RULES")
     Village(store=v.store, models=v.models, bus=Bus())  # loading refreshes the rules
     hilde = system_of(v, "Hilde")
@@ -1101,12 +1139,14 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old
 def test_the_rules_history() -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
-    _m7, _m9, m11_plans, m11 = OLD_RULES
+    _m7, _m9, m11_plans, m11, m12_buy = OLD_RULES
     assert "Trust what you see over what you hear" in RULES and "Trust what you see" in m11_plans
     assert "Follow your plan for the day" in RULES
     assert '{"action": "work"}' in RULES and '{"action": "work"}' in m11
     assert '{"action": "buy", "goods": "wood"}' in RULES and "buy" not in m11
-    assert len(set(OLD_RULES)) == 4 and RULES not in OLD_RULES
+    assert '{"action": "buy", "goods": "wood"}' in m12_buy and "town hall meeting" not in m12_buy
+    assert "Hilde holds a town hall meeting every third day at 17:00" in RULES
+    assert len(set(OLD_RULES)) == 5 and RULES not in OLD_RULES
 
 
 @pytest.mark.anyio
@@ -1472,9 +1512,11 @@ async def test_an_m11_world_keeps_going_with_nothing_built(tmp_path: Path) -> No
 @pytest.mark.anyio
 async def test_reset_clears_what_was_built_and_keeps_the_meeting_agent(tmp_path: Path) -> None:
     v, _ = village_for(tmp_path)
-    v.world |= {"built": [{"key": "boat", "day": 3}], "meeting_agent_id": "kept"}
+    kept = v.world["meeting_agent_id"]
+    assert kept
+    v.world["built"] = [{"key": "boat", "day": 3}]
     await v.reset()
-    assert v.world["built"] == [] and v.world["meeting_agent_id"] == "kept"
+    assert v.world["built"] == [] and v.world["meeting_agent_id"] == kept
     assert "meeting_agent_id" not in v.state()
 
 
@@ -1987,3 +2029,239 @@ async def test_a_basket_given_while_deciding_does_not_pay_the_trader(tmp_path: P
     await v._settle()  # pyright: ignore[reportPrivateUsage]
     assert lina["basket"] == "fish" and trader["stock"]["wood"] == 2
     assert lina["last_action"]["action"] == "wait"
+
+
+# --- M12 US2: the town hall meeting ---
+
+TOWN_HALL = place_cells("town_hall")
+
+
+def meeting_now(v: Village) -> dict[str, Any]:
+    meeting = v.world["meeting"]
+    assert meeting is not None
+    return meeting
+
+
+def actions(v: Village, name: str, kind: str) -> list[dict[str, Any]]:
+    """The village actions of a villager's runs of one kind (propose, vote, decide, …)."""
+    found = [t.village_action for t in v.store.list_turns(name)]
+    return [a for a in found if a is not None and a["action"] == kind]
+
+
+def meetings_of(llm: FakeLLM, kind: str) -> list[str]:
+    """The prompts of the meeting runs of one kind, in order."""
+    return [c[1]["content"] or "" for c in llm.calls if is_meeting(c) and meeting_kind(c) == kind]
+
+
+def voters(llm: FakeLLM) -> list[str]:
+    return [speaker(c) for c in llm.calls if is_meeting(c) and meeting_kind(c) == "vote"]
+
+
+def proposed_meeting(v: Village, day: int = 3) -> dict[str, Any]:
+    """Today's meeting with Hilde's two default proposals, before 17:00."""
+    meeting: dict[str, Any] = {
+        "day": day,
+        "kind": "vote",
+        "proposals": [
+            {"key": "paint_town_hall", "reason": "It looks shabby.", "run_id": None},
+            {"key": "market_stand", "reason": "Greta needs it.", "run_id": None},
+        ],
+        "votes": {},
+        "present": [],
+        "decision": None,
+        "outcome": None,
+    }
+    v.world["meeting"] = meeting
+    return meeting
+
+
+async def steps(v: Village, n: int) -> None:
+    for _ in range(n):
+        await v.step()
+
+
+@pytest.mark.anyio
+async def test_hilde_proposes_on_a_meeting_day_only(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(9, day=2))
+    await v.step()
+    assert v.world["meeting"] is None and meetings_of(llm, "proposals") == []
+    morning(v, tick_at(9, day=3))
+    v.world["day_record"] = {"day": 3, "items": []}
+    await v.step()
+    meeting = meeting_now(v)
+    assert meeting["day"] == 3 and meeting["kind"] == "vote" and meeting["outcome"] is None
+    assert [p["key"] for p in meeting["proposals"]] == ["paint_town_hall", "market_stand"]
+    assert len(meetings_of(llm, "proposals")) == 1
+    proposed = texts(v, "Hilde", "proposed")
+    assert proposed == [
+        "You proposed for the town hall meeting: Paint the town hall (It looks shabby.); "
+        "A market stand (Greta needs a place to sell.)."
+    ]
+    assert any(n.startswith("Hilde proposed for the town hall meeting") for n in notes(v))
+    [turn] = actions(v, "Hilde", "propose")
+    assert turn["proposals"][0] == "Paint the town hall: It looks shabby."
+    villager(v, "Greta")["triggers"] = ["arrived"]
+    await v.step()
+    assert len(meetings_of(llm, "proposals")) == 1  # once a day
+    assert "Hilde proposes: Paint the town hall" in calls_of(llm, "Greta")[-1]
+    assert v.state()["next_meeting"] == 3
+
+
+@pytest.mark.anyio
+async def test_everyone_at_the_town_hall_but_hilde_votes_once(tmp_path: Path) -> None:
+    v, llm = village_for(
+        tmp_path,
+        {
+            "Greta:vote": [vote_for("a market stand", "I sell there.")],
+            "Jonas:vote": [vote_for("market stand")],
+        },
+    )
+    morning(v, tick_at(16, 50, day=3))
+    v.world["day_record"] = {"day": 3, "items": []}
+    proposed_meeting(v)
+    for name, cell in zip(("Hilde", "Greta", "Jonas"), TOWN_HALL, strict=False):
+        put(v, name, *cell)
+    await steps(v, 2)  # 17:00, 17:10
+    assert sorted(voters(llm)) == ["Greta", "Jonas"]
+    put(v, "Lina", *TOWN_HALL[3])
+    await v.step()  # 17:20: Lina arrives in time
+    await v.step()  # 17:30: the decision
+    assert sorted(voters(llm)) == ["Greta", "Jonas", "Lina"]
+    meeting = v.world["meeting"]
+    assert meeting["present"] == ["Hilde", "Jonas", "Greta", "Lina"]  # villager order
+    assert meeting["votes"]["Greta"]["key"] == "market_stand"
+    assert len(meetings_of(llm, "decision")) == 1
+    assert "- Greta: A market stand (I sell there.)" in meetings_of(llm, "decision")[0]
+    assert meeting["outcome"] == "decided" and meeting["decision"]["key"] == "paint_town_hall"
+    assert v.world["project"]["key"] == "paint_town_hall"
+    assert meeting["decision"]["against"] is True  # two wanted the stand
+    told = texts(v, "Lina", "meeting")
+    assert told[-1] == (
+        "At the town hall meeting Hilde chose Paint the town hall: It is quick. She went against "
+        "the vote (most wanted A market stand)."
+    )
+    assert told[-1] in notes(v)
+    assert any(m["kind"] == "meeting" for m in villager(v, "Greta")["memories"])
+    state = v.state()["meeting"]
+    assert state["decision"]["name"] == "Paint the town hall"
+    assert {"villager": "Greta", "key": "market_stand", "name": "A market stand"}.items() <= next(
+        x for x in state["votes"] if x["villager"] == "Greta"
+    ).items()
+
+
+@pytest.mark.anyio
+async def test_coming_after_half_past_five_is_too_late_to_vote(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(17, 20, day=3))
+    proposed_meeting(v)
+    put(v, "Hilde", *TOWN_HALL[0])
+    await v.step()  # 17:30: Hilde decides alone
+    put(v, "Lina", *TOWN_HALL[1])
+    await v.step()
+    assert voters(llm) == [] and v.world["meeting"]["present"] == ["Hilde"]
+    assert "- nobody else came to vote" in meetings_of(llm, "decision")[0]
+    assert v.world["meeting"]["decision"]["against"] is False
+
+
+@pytest.mark.anyio
+async def test_a_meeting_hilde_does_not_come_to_is_called_off(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(16, 50, day=3))
+    v.world["day_record"] = {"day": 3, "items": []}
+    proposed_meeting(v)
+    put(v, "Greta", *TOWN_HALL[0])
+    await steps(v, 4)
+    meeting = v.world["meeting"]
+    assert meeting["outcome"] == "called off: Hilde did not come"
+    assert meeting["votes"]["Greta"]["key"] == "paint_town_hall"  # the vote stays on record
+    assert meetings_of(llm, "decision") == [] and v.world["project"] is None
+    assert texts(v, "Greta", "meeting")[-1] == (
+        "Today's town hall meeting was called off: Hilde did not come."
+    )
+
+
+@pytest.mark.anyio
+async def test_invalid_proposals_call_the_meeting_off(tmp_path: Path) -> None:
+    v, _ = village_for(
+        tmp_path, {"meeting:proposals": ['{"proposals": [{"project": "a castle"}]}']}
+    )
+    morning(v, tick_at(9, day=3))
+    await v.step()
+    assert v.world["meeting"]["outcome"] == "called off: Hilde had no proposals"
+    [turn] = actions(v, "Hilde", "propose")
+    assert turn == {
+        "action": "propose",
+        "reason": "no project Hilde proposed can be built",
+    }
+
+
+@pytest.mark.anyio
+async def test_an_invalid_decision_lets_the_vote_decide(tmp_path: Path) -> None:
+    v, _ = village_for(
+        tmp_path,
+        {
+            "meeting:decision": ['{"decision": "a castle"}'],
+            "Greta:vote": [vote_for("A market stand")],
+        },
+    )
+    morning(v, tick_at(16, 50, day=3))
+    proposed_meeting(v)
+    put(v, "Hilde", *TOWN_HALL[0])
+    put(v, "Greta", *TOWN_HALL[1])
+    await steps(v, 4)
+    decision = v.world["meeting"]["decision"]
+    assert (decision["key"], decision["by"]) == ("market_stand", "vote")
+    [turn] = actions(v, "Hilde", "decide")
+    assert turn["by"] == "vote"
+
+
+@pytest.mark.anyio
+async def test_a_meeting_with_a_project_under_way_proposes_nothing(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(9, day=3))
+    v.world["project"] = {"key": "barn", "site": {}, "used": {}, "work": 0, "tasks": [], "day": 2}
+    villager(v, "Greta")["triggers"] = ["arrived"]
+    await v.step()
+    assert meeting_now(v)["kind"] == "review" and meetings_of(llm, "proposals") == []
+    assert "to talk about how the building goes" in calls_of(llm, "Greta")[-1]
+
+
+@pytest.mark.anyio
+async def test_no_meeting_on_the_festival_day_but_the_day_after(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(9, day=21))
+    await v.step()
+    assert v.world["meeting"] is None and meetings_of(llm, "proposals") == []
+    morning(v, tick_at(9, day=22))
+    await v.step()
+    assert meeting_now(v)["day"] == 22
+
+
+@pytest.mark.anyio
+async def test_a_failing_meeting_run_does_not_pause_the_village(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"meeting:proposals": [RuntimeError("model down")]})
+    morning(v, tick_at(9, day=3))
+    for _ in range(3):
+        await v.step()
+    assert v.world["meeting"]["outcome"] == "called off: Hilde had no proposals"
+    assert v.world["failed_ticks"] == 0
+
+
+@pytest.mark.anyio
+async def test_reset_waits_for_a_meeting_run(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, delay=0.05)
+    morning(v, tick_at(9, day=3))
+    v.world["tick"] -= 1
+    stepping = asyncio.create_task(v.step())
+    await asyncio.sleep(0.01)
+    await stepping
+    await v.reset()
+    assert not v.meetings and v.world["meeting"] is None
+
+
+def test_the_meeting_agent_is_created_once(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.ensure_agents()
+    meeting_agents = [a for a in v.store.list_agents() if a.name == "Village meeting"]
+    assert [a.agent_id for a in meeting_agents] == [v.world["meeting_agent_id"]]

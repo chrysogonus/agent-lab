@@ -559,3 +559,10 @@ def test_the_facts_name_the_trader_and_a_carried_load() -> None:
 def test_the_rules_describe_buy() -> None:
     rules = villager_agent("Jonas")["config"]["blocks"][0]["system"]
     assert '{"action": "buy", "goods": "wood"} at the market while the trader is there' in rules
+
+
+def test_the_facts_name_the_town_hall_meeting() -> None:
+    facts = observation(world_with(), "Greta").split("What others told you")[0]
+    assert "The next town hall meeting is on day 3 at 17:00." in facts
+    on_the_day = observation(world_with(tick=_at(3, 9)), "Hilde")
+    assert "You chair today's town hall meeting at 17:00; be there." in on_the_day

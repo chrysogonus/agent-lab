@@ -20,6 +20,7 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
+from agent_lab.village.build import buildable, entry, new_project
 from agent_lab.village.chronicle import (
     CHRONICLE_KEPT,
     chronicle_prompt,
@@ -27,6 +28,21 @@ from agent_lab.village.chronicle import (
     parse_entry,
     retry_prompt,
     weather_slips,
+)
+from agent_lab.village.meeting import (
+    MEETING_CLOSES,
+    MEETING_OPENS,
+    decision_prompt,
+    meeting_agent,
+    meeting_day,
+    meeting_text,
+    next_meeting,
+    parse_decision,
+    parse_proposals,
+    parse_vote,
+    proposal_prompt,
+    tally,
+    vote_prompt,
 )
 from agent_lab.village.memory import (
     LEARNINGS_KEPT,
@@ -146,6 +162,7 @@ class Village:
         self.reflections: dict[str, asyncio.Task[None]] = {}  # never count as decisions
         self.chronicle: asyncio.Task[None] | None = None  # nor does the chronicle
         self.plans: dict[str, asyncio.Task[None]] = {}  # nor do plans
+        self.meetings: dict[str, asyncio.Task[None]] = {}  # nor meeting runs, by what they are for
         self.outcomes: list[bool] = []  # decisions finished since the last step: succeeded?
         self.in_step = False  # inside Step: its own decisions may start while paused
         self.resetting = False
@@ -302,6 +319,8 @@ class Village:
             "chronicle": world["chronicle"][::-1],
             "trader": world["trader"]
             and {"stock": world["trader"]["stock"], "leaves": hhmm(TRADER_LEAVES)},
+            "meeting": self._meeting_state(world["meeting"]),
+            "next_meeting": next_meeting(day),
             "ticking": self.ticking,
             "log": [{**line, "time": clock(line["tick"])[1]} for line in world["log"]],
             "map": {
@@ -341,6 +360,26 @@ class Village:
             "revisions": plan["revisions"],
         }
 
+    @staticmethod
+    def _meeting_state(meeting: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The latest meeting with project names, and the votes as a list."""
+        if meeting is None:
+            return None
+
+        def name(key: str | None) -> str | None:
+            return entry(key).name if key else None
+
+        decision = meeting["decision"]
+        return {
+            **meeting,
+            "proposals": [{**p, "name": name(p["key"])} for p in meeting["proposals"]],
+            "votes": [
+                {"villager": who, **vote, "name": name(vote["key"])}
+                for who, vote in meeting["votes"].items()
+            ],
+            "decision": decision and {**decision, "name": name(decision["key"])},
+        }
+
     def _publish(self) -> None:
         self.store.save_village(self.world)
         self.bus.publish(CHANNEL, {"type": "state", "state": self.state()})
@@ -367,6 +406,8 @@ class Village:
             self.world["chronicler_agent_id"] = self._create_agent(chronicler_agent())
         if missing(self.world["planner_agent_id"]):
             self.world["planner_agent_id"] = self._create_agent(planner_agent())
+        if missing(self.world["meeting_agent_id"]):
+            self.world["meeting_agent_id"] = self._create_agent(meeting_agent())
         self.store.save_village(self.world)
 
     def _create_agent(self, body: dict[str, Any]) -> str:
@@ -979,11 +1020,188 @@ class Village:
             self.decisions
             or self.reflections
             or self.plans
+            or self.meetings
             or (self.chronicle and not self.chronicle.done())
         ):
             tasks = [*self.decisions.values(), *self.reflections.values(), *self.plans.values()]
+            tasks += self.meetings.values()
             tasks += [self.chronicle] if self.chronicle else []
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    # --- the town hall meeting (M12) ---
+
+    def _meeting(self) -> None:
+        """Every third day: Hilde's proposals once she is up, votes from whoever comes to the
+        town hall between 17:00 and 17:30, then her decision."""
+        tick = self.world["tick"]
+        day, minute = clock(tick)[0], minute_of_day(tick)
+        if not meeting_day(day) or self.resetting:
+            return
+        meeting = self.world["meeting"]
+        if meeting is None or meeting["day"] != day:
+            hilde = self._villager("Hilde")
+            if not (hilde["asleep"] or hilde["bedtime"]) and minute < MEETING_CLOSES:
+                self._open_meeting(day)
+            return
+        if meeting["outcome"]:
+            return
+        if MEETING_OPENS <= minute <= MEETING_CLOSES:
+            for v in self.world["villagers"]:
+                name = v["name"]
+                here = place_at(v["x"], v["y"]) == "town_hall"
+                if here and not (v["asleep"] or v["bedtime"]) and name not in meeting["present"]:
+                    meeting["present"].append(name)
+                    self._note(f"{name} came to the town hall meeting.")
+            for name in meeting["present"]:  # also when the proposals came late
+                key = f"vote:{name}"
+                if (
+                    name != "Hilde"
+                    and meeting["kind"] == "vote"
+                    and meeting["proposals"]
+                    and name not in meeting["votes"]
+                    and key not in self.meetings
+                ):
+                    self.meetings[key] = asyncio.create_task(self._vote(name, meeting))
+        if minute < MEETING_CLOSES or self.meetings:
+            return
+        if "Hilde" not in meeting["present"]:
+            self._end_meeting(meeting, "called off: Hilde did not come")
+        elif meeting["kind"] == "vote":
+            if meeting["present"] == ["Hilde"]:
+                self._note("Nobody but Hilde came to the town hall meeting.")
+            self.meetings["decide"] = asyncio.create_task(self._decide_meeting(meeting))
+        else:
+            self._end_meeting(meeting, "reviewed")
+
+    def _open_meeting(self, day: int) -> None:
+        meeting: dict[str, Any] = {
+            "day": day,
+            "kind": "review" if self.world["project"] else "vote",
+            "proposals": [],
+            "votes": {},
+            "present": [],
+            "decision": None,
+            "outcome": None,
+        }
+        self.world["meeting"] = meeting
+        if self.world["project"]:
+            return
+        if not buildable(self.world):
+            self._end_meeting(meeting, "nothing left to build")
+            return
+        self.meetings["propose"] = asyncio.create_task(self._propose(meeting))
+
+    def _end_meeting(self, meeting: dict[str, Any], outcome: str) -> None:
+        meeting["outcome"] = outcome
+        text = meeting_text(self.world, "Lina")  # what everyone but Hilde is told
+        for v in self.world["villagers"]:
+            if not v["asleep"]:
+                self._event(v, "meeting", text)
+        self._note(text)
+
+    async def _meeting_call(
+        self, key: str, name: str, prompt: str
+    ) -> tuple[str | None, str | None, str | None]:
+        """One run of the meeting agent; it leaves `self.meetings` when it ends."""
+        try:
+            return await self._run(self.world["meeting_agent_id"], name, prompt, self.world["tick"])
+        finally:
+            if self.meetings.get(key) is asyncio.current_task():
+                del self.meetings[key]
+
+    def _still(self, meeting: dict[str, Any]) -> bool:
+        """A meeting run's result counts only for the meeting it was asked for."""
+        return not self.resetting and self.world["meeting"] is meeting
+
+    async def _propose(self, meeting: dict[str, Any]) -> None:
+        run_id, answer, failed = await self._meeting_call(
+            "propose", "Hilde", proposal_prompt(self.world)
+        )
+        if not self._still(meeting):
+            return
+        found, why = (None, failed) if failed else parse_proposals(answer, self.world)
+        found, why = redact(found, self.secrets), redact(why, self.secrets)
+        action: dict[str, Any] = {"action": "propose"}
+        if found:
+            meeting["proposals"] = [{**p, "run_id": run_id} for p in found]
+            listed_text = "; ".join(f"{entry(p['key']).name} ({p['reason']})" for p in found)
+            self._event(
+                self._villager("Hilde"),
+                "proposed",
+                f"You proposed for the town hall meeting: {listed_text}.",
+            )
+            self._note(f"Hilde proposed for the town hall meeting (proposals only): {listed_text}.")
+            action["proposals"] = [f"{entry(p['key']).name}: {p['reason']}" for p in found]
+        else:
+            self._end_meeting(meeting, "called off: Hilde had no proposals")
+            action["reason"] = why
+        if run_id:
+            self.store.set_village_action(run_id, action)
+        self._publish()
+
+    async def _vote(self, name: str, meeting: dict[str, Any]) -> None:
+        run_id, answer, failed = await self._meeting_call(
+            f"vote:{name}", name, vote_prompt(self.world, name)
+        )
+        if not self._still(meeting):
+            return
+        vote, why = (None, failed) if failed else parse_vote(answer, meeting["proposals"])
+        vote, why = redact(vote, self.secrets), redact(why, self.secrets)
+        if vote:
+            project = entry(vote["key"]).name
+            meeting["votes"][name] = {**vote, "run_id": run_id}
+            self._event(self._villager(name), "meeting", f"You voted for {project}.")
+            self._note(f"{name} voted for {project} (their claim): {vote['reason']}")
+            action = {"action": "vote", "project": project, "reason": vote["reason"]}
+        else:
+            meeting["votes"][name] = {"key": None, "reason": why, "run_id": run_id}
+            action = {"action": "vote", "reason": why}
+        if run_id:
+            self.store.set_village_action(run_id, action)
+        self._publish()
+
+    async def _decide_meeting(self, meeting: dict[str, Any]) -> None:
+        run_id, answer, failed = await self._meeting_call(
+            "decide", "Hilde", decision_prompt(self.world)
+        )
+        if not self._still(meeting):
+            return
+        decision, why = parse_decision(
+            None if failed else answer, meeting["proposals"], meeting["votes"]
+        )
+        why = failed or why
+        decision, why = redact(decision, self.secrets), redact(why, self.secrets)
+        if decision:
+            self._decided(meeting, {**decision, "run_id": run_id})
+            action = {"action": "decide", "project": entry(decision["key"]).name}
+            action |= {k: decision[k] for k in ("reason", "against", "by")}
+        else:
+            self._end_meeting(meeting, "no decision")
+            action = {"action": "decide", "reason": why}
+        if run_id:
+            self.store.set_village_action(run_id, action)
+        self._publish()
+
+    def _decided(self, meeting: dict[str, Any], decision: dict[str, Any]) -> None:
+        day = clock(self.world["tick"])[0]
+        meeting |= {"decision": decision, "outcome": "decided"}
+        self.world["project"] = new_project(decision["key"], day)
+        project = entry(decision["key"]).name
+        text = f"At the town hall meeting Hilde chose {project}: {decision['reason']}"
+        if decision["against"]:
+            counts = tally(meeting["votes"])
+            wanted = [entry(k).name for k, n in counts.items() if n == max(counts.values())]
+            text += f" She went against the vote (most wanted {listed(wanted)})."
+        for v in self.world["villagers"]:
+            if not v["asleep"]:
+                self._event(v, "meeting", text)
+        for name in meeting["present"]:
+            mine = meeting["votes"].get(name, {}).get("key")
+            others = [n for n in meeting["present"] if n != name]
+            memory = f"The town hall meeting: Hilde chose {project}."
+            memory += f" I voted for {entry(mine).name}." if mine else ""
+            self._remember(self._villager(name), "meeting", memory, others)
+        self._note(text)
 
     # --- one step ---
 
@@ -1032,6 +1250,7 @@ class Village:
             self._trigger(v, "basket")
             self._note(f"{name} filled a basket of {goods}.")
         self._festival_guests()
+        self._meeting()
         if self.outcomes:
             all_failed = not any(self.outcomes)
             world["failed_ticks"] = world["failed_ticks"] + 1 if all_failed else 0

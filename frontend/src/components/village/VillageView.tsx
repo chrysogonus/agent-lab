@@ -17,6 +17,7 @@ import { GOODS, PACES, PERIOD_SKY, activity, calendarText, clockText, glideMs, f
 import { RunViewer } from "../RunViewer";
 import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
+import { ProjectsPanel } from "./ProjectsPanel";
 import { Basket, Festival, Puddles, Stalls, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
 import { Load, Trader } from "./building";
 import { VillagerPanel } from "./VillagerPanel";
@@ -275,6 +276,7 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
   const [turn, setTurn] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chronicleOpen, setChronicleOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   // The newest chronicle entry the owner saw; read on the client only (the map renders after load).
   const [seen, setSeen] = useState<string | null>(readSeen);
   const [seenAtOpen, setSeenAtOpen] = useState<string | null>(null);
@@ -301,7 +303,13 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
     setSeenAtOpen(seen);
     markSeen();
     setSelected(null);
+    setProjectsOpen(false);
     setChronicleOpen(true);
+  };
+  const openProjects = () => {
+    setSelected(null);
+    setChronicleOpen(false);
+    setProjectsOpen(true);
   };
   const fresh = newEntries(state.chronicle, seen);
 
@@ -400,6 +408,8 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
             }}
             onOpenTurn={setTurn}
           />
+        ) : projectsOpen ? (
+          <ProjectsPanel state={state} onClose={() => setProjectsOpen(false)} onOpenTurn={setTurn} />
         ) : villager ? (
           <VillagerPanel
             turnsStarted={turnsStarted}
@@ -425,9 +435,14 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
               ))}
             </ul>
             <p className="text-sm text-dusk-muted">Pick a villager to see what it remembers and every turn it took.</p>
-            <button type="button" onClick={openChronicle} className="village-button self-start">
-              Read the chronicle{fresh > 0 ? ` (${fresh} new)` : ""}
-            </button>
+            <div className="flex flex-wrap gap-2.5">
+              <button type="button" onClick={openChronicle} className="village-button">
+                Read the chronicle{fresh > 0 ? ` (${fresh} new)` : ""}
+              </button>
+              <button type="button" onClick={openProjects} className="village-button">
+                Village projects
+              </button>
+            </div>
           </>
         )}
       </aside>

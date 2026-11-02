@@ -74,14 +74,17 @@ export type VillageAction =
   | { action: "plan"; revision: number; entries?: string[]; reason?: string } // M11
   | { action: "work"; place: string; reason?: string }
   | { action: "give"; to: string | null; goods: Goods; reason?: string }
-  | { action: "buy"; goods: BuildingGoods; paid: BasketGoods; reason?: string }; // M12
+  | { action: "buy"; goods: BuildingGoods; paid: BasketGoods; reason?: string } // M12
+  | { action: "propose"; proposals?: string[]; reason?: string }
+  | { action: "vote"; project?: string; reason?: string }
+  | { action: "decide"; project?: string; reason?: string; against?: boolean; by?: "hilde" | "vote" };
 
 export type VillageEvent = {
   tick: number;
   kind:
     | "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival"
     | "planned" | "worked" | "basket" | "gave" | "received" // M11
-    | "traded"; // M12
+    | "traded" | "proposed" | "meeting"; // M12
   text: string;
   from?: string;
   to?: string | null;
@@ -111,7 +114,7 @@ export type Villager = {
   beliefs: { villager: string; text: string; view: string | null }[];
   learnings: { day: number; text: string }[]; // oldest first (M8)
   views: { villager: string; text: string; day: number }[];
-  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival"; text: string }[]; // newest first
+  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival" | "meeting" | "built"; text: string }[]; // newest first
   plan: Plan | null; // today's plan (M11)
   basket: Goods | null; // one thing at a time, kept overnight: a basket (M11) or a load (M12)
   working: "fields" | "flower_garden" | "pier" | null; // where it works until it walks off
@@ -127,6 +130,18 @@ export type Plan = { entries: PlanEntry[]; current: number | null; next: number 
 export type BuildingGoods = "wood" | "paint" | "saplings";
 export type Goods = BasketGoods | BuildingGoods;
 export type Trader = { stock: Record<BuildingGoods, number>; leaves: string };
+export type MeetingProposal = { key: string; name: string; reason: string; run_id: string | null };
+export type MeetingVote = { villager: string; key: string | null; name: string | null; reason: string; run_id: string | null }; // key null: not counted
+export type MeetingDecision = { key: string; name: string; reason: string; against: boolean; by: "hilde" | "vote"; run_id: string | null };
+export type Meeting = {
+  day: number;
+  kind: "vote" | "review";
+  proposals: MeetingProposal[];
+  votes: MeetingVote[];
+  present: string[];
+  decision: MeetingDecision | null;
+  outcome: string | null; // "decided", "called off: …", "reviewed", "nothing left to build", "no decision"
+};
 
 // M10: seasons, weather, growth and the chronicle. See specs/010-village-seasons/contracts/http-api.md.
 export type Season = "spring" | "summer" | "autumn" | "winter";
@@ -160,6 +175,8 @@ export type VillageState = {
   chronicle: ChronicleEntry[]; // newest first, at most 28
   stalls: Stalls; // M11
   trader: Trader | null; // M12: at the market from 09:00 to 14:00
+  meeting: Meeting | null; // the latest town hall meeting
+  next_meeting: number; // the day of the next one
   running: boolean;
   ticking: boolean;
   interval: number;

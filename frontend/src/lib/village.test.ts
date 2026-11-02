@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChronicleEntry, Run, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Meeting, Run, VillageState, Villager } from "./api";
 import {
   activity,
   cellKind,
@@ -26,6 +26,7 @@ import {
   stallsText,
   carriedText,
   traderText,
+  meetingLines,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -80,6 +81,8 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   chronicle: [],
   stalls: { fish: 0, vegetables: 0, flowers: 0 },
   trader: null,
+  meeting: null,
+  next_meeting: 3,
   ...fields,
 });
 
@@ -303,5 +306,75 @@ describe("the daily trader", () => {
     expect(turnLabel(run({ action: "buy", goods: "wood", paid: "fish" }))).toBe("05:00 trades a basket of fish for a load of wood");
     expect(turnLabel(run({ action: "give", to: "Hilde", goods: "paint" }))).toBe("05:00 gives a load of paint to Hilde");
     expect(turnLabel(run({ action: "wait", reason: "the trader has no paint left" }))).toBe("05:00 waited: the trader has no paint left");
+  });
+});
+
+describe("the town hall meeting", () => {
+  const meeting = (fields: Partial<Meeting>): Meeting => ({
+    day: 3,
+    kind: "vote",
+    proposals: [
+      { key: "market_stand", name: "A market stand", reason: "Greta needs it.", run_id: "p1" },
+      { key: "paint_lina", name: "Paint Lina's house", reason: "It is grey.", run_id: "p1" },
+    ],
+    votes: [],
+    present: [],
+    decision: null,
+    outcome: null,
+    ...fields,
+  });
+
+  it("lists the proposals, who came and the votes", () => {
+    const votes = [
+      { villager: "Greta", key: "market_stand", name: "A market stand", reason: "I sell there.", run_id: "v1" },
+      { villager: "Jonas", key: "market_stand", name: "A market stand", reason: "Why not.", run_id: "v2" },
+      { villager: "Lina", key: null, name: null, reason: "a castle is not one of Hilde's proposals", run_id: "v3" },
+    ];
+    expect(meetingLines(meeting({ votes, present: ["Hilde", "Greta", "Jonas", "Lina"] }))).toEqual([
+      { text: "Hilde proposed A market stand: Greta needs it.", runId: "p1" },
+      { text: "Hilde proposed Paint Lina's house: It is grey.", runId: null },
+      { text: "At the town hall: Hilde, Greta, Jonas and Lina", runId: null },
+      { text: "Greta voted for A market stand: I sell there.", runId: "v1" },
+      { text: "Jonas voted for A market stand: Why not.", runId: "v2" },
+      { text: "Lina's vote did not count: a castle is not one of Hilde's proposals", runId: "v3" },
+      { text: "Most votes: A market stand (2)", runId: null },
+    ]);
+  });
+
+  it("tells the decision, against the vote or by it", () => {
+    const against = { key: "paint_lina", name: "Paint Lina's house", reason: "Lina deserves it.", against: true, by: "hilde" as const, run_id: "d1" };
+    expect(meetingLines(meeting({ decision: against, outcome: "decided", present: ["Hilde"] })).slice(-1)).toEqual([
+      { text: "Hilde chose Paint Lina's house: Lina deserves it. She went against the vote.", runId: "d1" },
+    ]);
+    const byVote = { ...against, against: false, by: "vote" as const, key: "market_stand", name: "A market stand", reason: "Hilde gave no valid decision; the vote decided" };
+    expect(meetingLines(meeting({ decision: byVote, outcome: "decided" })).slice(-1)).toEqual([
+      { text: "The vote chose A market stand: Hilde gave no valid decision.", runId: "d1" },
+    ]);
+  });
+
+  it("says when a meeting was called off or reviewed", () => {
+    expect(meetingLines(meeting({ outcome: "called off: Hilde did not come" })).slice(-1)).toEqual([{ text: "Called off: Hilde did not come.", runId: null }]);
+    expect(meetingLines(meeting({ kind: "review", proposals: [], outcome: "reviewed" }))).toEqual([
+      { text: "A meeting about how the building goes.", runId: null },
+      { text: "Nobody came to the town hall.", runId: null },
+      { text: "Reviewed.", runId: null },
+    ]);
+  });
+
+  it("labels proposal, vote and decision runs", () => {
+    const run = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(run({ action: "propose", proposals: ["A market stand: x", "Paint Lina's house: y"] }))).toBe("05:00 proposes 2 projects for the meeting");
+    expect(turnLabel(run({ action: "propose", reason: "no project Hilde proposed can be built" }))).toBe(
+      "05:00 could not propose: no project Hilde proposed can be built",
+    );
+    expect(turnLabel(run({ action: "vote", project: "A market stand", reason: "x" }))).toBe("05:00 votes for A market stand");
+    expect(turnLabel(run({ action: "vote", reason: "the answer is not JSON" }))).toBe("05:00 could not vote: the answer is not JSON");
+    expect(turnLabel(run({ action: "decide", project: "Paint Lina's house", reason: "x", against: true, by: "hilde" }))).toBe(
+      "05:00 decides on Paint Lina's house, against the vote",
+    );
+    expect(turnLabel(run({ action: "decide", project: "A market stand", reason: "x", against: false, by: "vote" }))).toBe(
+      "05:00 decides on A market stand (the vote decided)",
+    );
+    expect(turnLabel(run({ action: "decide", reason: "no answer" }))).toBe("05:00 could not decide: no answer");
   });
 });

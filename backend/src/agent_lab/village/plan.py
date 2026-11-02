@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
 from agent_lab.village.trade import BASKET_GOODS, carried_text, trader_text
@@ -79,6 +80,7 @@ def plan_prompt(world: dict[str, Any], name: str, revise: str | None = None) -> 
         *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         trader_text(world),
+        meeting_text(world, name),
         *(
             ["Plan to take your basket to the square and set it out on the festival stalls."]
             if me["basket"] in BASKET_GOODS and date(day)[1] == "autumn"
