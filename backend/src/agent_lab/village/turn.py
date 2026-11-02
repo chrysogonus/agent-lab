@@ -2,7 +2,7 @@
 
 import json
 import re
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
@@ -275,7 +275,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         "What you know for sure:",
         f"Day {day} ({date_text(day)}), {time}, {period}. {WEATHER_TEXT[weather(day)]}; "
         "this is the real weather.",
-        *festival_lines(world["tick"]),
+        *festival_lines(world["tick"], name),
         where_text(world, me) + (" You are working here." if me["working"] else ""),
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         trader_text(world),
@@ -342,7 +342,7 @@ def parse_action(
     if not answer:
         return wait, "no answer"
     try:
-        action = ACTION.validate_python(json.loads(answer))
+        action = ACTION.validate_python(_slips(json.loads(answer)))
     except json.JSONDecodeError:
         return wait, "the answer is not JSON"
     except ValidationError as exc:
@@ -350,9 +350,9 @@ def parse_action(
     extra: dict[str, Any] = {}
     if isinstance(action, Work | Build) and action.until:
         until, why = _until(world, action.until)
-        if until is None:
+        if why:
             return wait, why
-        extra["until"] = until
+        extra |= {} if until is None else {"until": until}
     if isinstance(action, Move | Find | Work | Build | Bring):
         purpose = (action.purpose or "").strip()
         extra |= {"purpose": purpose} if purpose else {}
@@ -487,15 +487,30 @@ def _leaving(world: dict[str, Any], name: str, action: dict[str, Any]) -> dict[s
     return {"action": "goodbye", "text": None, "then": action}
 
 
+def _slips(data: object) -> object:
+    """Answers small models give a few times a day for a move: "walk", "go", "home"."""
+    if not isinstance(data, dict):
+        return data
+    found = cast(dict[str, Any], data)
+    if not isinstance(found.get("action"), str):
+        return found
+    action = str(found["action"]).strip().lower()
+    if action in ("walk", "go"):
+        return {**found, "action": "move"}
+    if action in ("home", "go home"):
+        return {"action": "move", "place": "home"}
+    return found
+
+
 def _until(world: dict[str, Any], text: str) -> tuple[int | None, str | None]:
     """A minute of the day later than now, from "HH:MM", or why not."""
     found = re.fullmatch(r"(\d{1,2}):(\d{2})", text.strip())
     if not found or int(found[1]) > 23 or int(found[2]) > 59:
         return None, f'"until" must be a time like 12:00, not {text!r}'
     until, now = int(found[1]) * 60 + int(found[2]), minute_of_day(world["tick"])
-    if until <= now:
+    if until < now:
         return None, f'"until" must be later than now ({hhmm(now)})'
-    return until, None
+    return (None if until == now else until), None  # until now: no end time
 
 
 def _work_place(

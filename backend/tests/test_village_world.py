@@ -7,6 +7,7 @@ import pytest
 from agent_lab.village.world import (
     HEIGHT,
     HOMES,
+    OLD_PERSONAS,
     PLACES,
     PLOT_EXITS,
     ROWS,
@@ -17,6 +18,7 @@ from agent_lab.village.world import (
     awake_at,
     clock,
     door,
+    festival_lines,
     label_cell,
     letter_cells,
     new_world,
@@ -211,3 +213,18 @@ def test_a_version_6_world_gets_intentions_and_requests() -> None:
         assert v["intention"] is None and v["requests"] == []
     assert upgraded["project"] == {"key": "boat"}  # M12 state is kept
     assert upgraded["villagers"][1]["basket"] == "wood"
+
+
+def test_hilde_plans_the_festival_only_in_autumn() -> None:
+    """M14 cleanup: her persona named it all year, and summer plans were "for the festival"."""
+    assert "festival" not in VILLAGERS["Hilde"].persona
+    autumn, summer = (17 - 1) * 144 + 30, (10 - 1) * 144 + 30
+    organise = (
+        "You organise the harvest festival: you need fish from Jonas, vegetables from Greta "
+        "and flowers from Lina for the stalls."
+    )
+    assert organise in festival_lines(autumn, "Hilde")
+    assert organise not in festival_lines(autumn, "Jonas")
+    assert festival_lines(summer, "Hilde") == []
+    assert OLD_PERSONAS["Hilde"][0].startswith("You are Hilde, the mayor.")
+    assert "harvest festival" in OLD_PERSONAS["Hilde"][0]

@@ -238,6 +238,28 @@ def test_an_answer_must_not_name_some_words(answer: str, passed: bool, why: str 
     assert ok is passed and (reason is None if why is None else why in (reason or ""))
 
 
+@pytest.mark.parametrize(
+    ("answer", "passed"),
+    [
+        ('{"action": "give"}', True),
+        ('{"action": "bring"}', True),
+        ('{"action": "build"}', True),  # at the site: work there, setting the load down first
+        ('{"action": "move", "place": "market"}', False),
+    ],
+)
+def test_any_of_several_answers(answer: str, passed: bool) -> None:
+    expect = {
+        "any_of": [
+            {"action": {"action": "give", "to": None}},
+            {"action": {"action": "bring"}},
+            {"action": {"action": "work", "place": "site"}},
+        ]
+    }
+    check = a_check(expect)
+    ok, why = judge(check, answer, prompt_of(check)[1])
+    assert ok is passed and (why is None) is passed
+
+
 def test_a_cell_fixture_and_a_place_fixture_agree() -> None:
     cell = place_cells("pier")[0]
     world = build_world({"day": 2, "time": "06:00", "villagers": {"Jonas": {"at": list(cell)}}})
@@ -565,6 +587,8 @@ def test_results_and_compare_on_the_command_line(
 
 SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
 IDEAL = {  # an answer each shipped check must accept: the checks can be passed
+    "load-at-site-m14": '{"action": "bring"}',
+    "load-away-m14": '{"action": "bring"}',
     "summer-plan-without-festival": A_PLAN_ANSWER,
     "intention-keeps-building": '{"action": "say", "to": "Lina", "text": "Help me plant!"}',
     "say-to-someone-in-sight": '{"action": "say", "to": "Greta", "text": "Any vegetables?"}',

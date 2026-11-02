@@ -675,7 +675,6 @@ def test_work_somewhere_else_until_a_time() -> None:
     [
         ("noon", "\"until\" must be a time like 12:00, not 'noon'"),
         ("25:00", "\"until\" must be a time like 12:00, not '25:00'"),
-        ("09:30", '"until" must be later than now (09:30)'),
         ("08:00", '"until" must be later than now (09:30)'),
     ],
 )
@@ -820,3 +819,30 @@ def test_giving_to_the_stalls_or_the_site_by_name_is_giving_there(to: str) -> No
         {"action": "give", "to": None, "goods": "saplings"},
         None,
     )
+
+
+# --- M14 cleanup ---
+
+
+def test_until_now_means_no_end_time() -> None:
+    fields = place_cells("fields")[0]
+    world = world_with(Greta=at(*fields))
+    assert parsed({"action": "work", "until": "09:30"}, world, "Greta") == (
+        {"action": "work", "place": "fields"},
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("answer", "place"),
+    [
+        ({"action": "walk", "place": "square"}, "square"),
+        ({"action": "go", "place": "the pier"}, "pier"),
+        ({"action": "home"}, "home"),
+        ({"action": "go home"}, "home"),
+        ({"action": "Walk", "place": "fields"}, "fields"),
+    ],
+)
+def test_common_slips_for_move_are_moves(answer: dict[str, Any], place: str) -> None:
+    world = world_with(Hilde=at(*MARKET))
+    assert parsed(answer, world, "Hilde") == ({"action": "move", "place": place}, None)

@@ -1097,6 +1097,20 @@ async def test_goodbye_to_find_someone_and_an_ignored_destination(tmp_path: Path
     ]
 
 
+def set_system(v: Village, name: str, system: str) -> None:
+    """The villager's stored agent with `system` as its whole system text."""
+    agent = v.store.get_agent(villager(v, name)["agent_id"])
+    assert agent is not None
+    blocks = agent.config["blocks"]
+    v.store.update_agent(
+        agent.agent_id,
+        name=agent.name,
+        description=agent.description,
+        sample_prompt=agent.sample_prompt,
+        config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
+    )
+
+
 def set_rules(v: Village, name: str, text: str) -> None:
     """The villager's stored agent with `text` in place of the current rules."""
     from agent_lab.village.turn import RULES
@@ -2733,9 +2747,9 @@ async def test_the_trail_keeps_28_days_and_reset_clears_it(tmp_path: Path) -> No
     await v.step()  # 05:00: Jonas wakes, the day record opens
     ticks = [t for t, _ in v.store.trail(0, 10**6)]
     assert 5 not in ticks and 30 * 144 in ticks  # older than 28 days: pruned
-    born = v.world["born"]
+    v.world["born"] = 1.0  # long ago: a Reset starts the count again from now
     await v.reset()
-    assert v.store.trail(0, 10**6) == [] and v.world["born"] > born
+    assert v.store.trail(0, 10**6) == [] and v.world["born"] > 1.0
     assert "born" not in v.state()
 
 
@@ -3016,3 +3030,17 @@ async def test_stored_reflection_agents_get_the_summary_text_unless_edited(tmp_p
     store("MY OWN REFLECTION")
     Village(store=v.store, models=v.models, bus=Bus())
     assert system() == "MY OWN REFLECTION"
+
+
+@pytest.mark.anyio
+async def test_stored_villager_agents_get_the_new_persona_unless_edited(tmp_path: Path) -> None:
+    from agent_lab.village.world import OLD_PERSONAS
+
+    v, _ = village_for(tmp_path)
+    old = system_of(v, "Hilde").replace(VILLAGERS["Hilde"].persona, OLD_PERSONAS["Hilde"][0])
+    set_system(v, "Hilde", old)
+    set_system(v, "Jonas", "MY OWN JONAS")
+    Village(store=v.store, models=v.models, bus=Bus())
+    assert system_of(v, "Hilde").startswith(VILLAGERS["Hilde"].persona)
+    assert "harvest festival" not in system_of(v, "Hilde")
+    assert system_of(v, "Jonas") == "MY OWN JONAS"

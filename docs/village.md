@@ -227,7 +227,8 @@ same village can finish a project or nothing at all. Three instruments show what
 M14 added four checks, one per behaviour it improves: `intention-keeps-building`,
 `say-to-someone-in-sight`, `leave-talk-for-intention` and `summer-plan-without-festival` (a plan
 must not name the check's `"excludes"` words). The M13 checks stay as they were, as the
-baseline.
+baseline; `load-at-site-m14` and `load-away-m14` ask the same with `"any_of"`, which also
+accepts M14's answers (`bring`, or building at the site).
 
 Each result shows passes out of attempts with a 95% range: 7 of 10 means "somewhere between 40%
 and 89%". `python -m agent_lab.village.evals compare A B` marks a check better or worse only

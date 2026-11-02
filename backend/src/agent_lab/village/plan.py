@@ -76,7 +76,7 @@ def plan_prompt(world: dict[str, Any], name: str, revise: str | None = None) -> 
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}. "
         f"Your usual day: {usual}.",
         f"Day {day} ({date_text(day)}), {clock(tick)[1]}. {WEATHER_TEXT[weather(day)]}.",
-        *festival_lines(tick),
+        *festival_lines(tick, name),
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
         *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),

@@ -1,0 +1,36 @@
+{
+  "name": "load-away-m14",
+  "agent": "villager",
+  "as": "Lina",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "11:00",
+      "project": {
+        "key": "trees_square"
+      },
+      "villagers": {
+        "Lina": {
+          "at": "flower_garden",
+          "carrying": "saplings"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "any_of": [
+      {
+        "action": {
+          "action": "move",
+          "place": "site"
+        }
+      },
+      {
+        "action": {
+          "action": "bring"
+        }
+      }
+    ]
+  }
+}

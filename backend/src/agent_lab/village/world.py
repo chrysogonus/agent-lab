@@ -143,6 +143,22 @@ def clock(tick: int) -> tuple[int, str, str]:
     return day, hhmm(minutes % 1440), period
 
 
+HILDE = (  # M14: the festival only in autumn (festival_lines)
+    "You are Hilde, the mayor. Sociable and a little self-important, you want the village to look "
+    "good and to get things done together. Mornings you spend at the town hall, around midday "
+    "you walk through the square and the market, evenings you like the square."
+)
+OLD_PERSONAS = {  # stored villager agents still holding one verbatim get the current persona
+    "Hilde": (
+        "You are Hilde, the mayor. Sociable and a little self-important, you want the village "
+        "to look good. You are planning a harvest festival on the square and need fish from "
+        "Jonas, vegetables from Greta and flowers from Lina, so you go and find them. "
+        "Mornings you spend at the town hall, around midday you walk through the square and "
+        "the market, evenings you like the square.",
+    ),
+}
+
+
 @dataclass(frozen=True)
 class Character:
     name: str  # first name: unique, what others use as "to"
@@ -172,11 +188,7 @@ VILLAGERS = {
             7 * 60 + 30,
             23 * 60,
             ((7, "town_hall"), (11, "square"), (12, "market"), (14, "town_hall"), (18, "square")),
-            "You are Hilde, the mayor. Sociable and a little self-important, you want the village "
-            "to look good. You are planning a harvest festival on the square and need fish from "
-            "Jonas, vegetables from Greta and flowers from Lina, so you go and find them. "
-            "Mornings you spend at the town hall, around midday you walk through the square and "
-            "the market, evenings you like the square.",
+            HILDE,
         ),
         Character(
             "Jonas",
@@ -250,11 +262,20 @@ def usual_place(name: str, tick: int) -> str:
     return next((p for hour, p in reversed(routine) if hour * 60 <= minute), routine[0][1])
 
 
-def festival_lines(tick: int) -> list[str]:
-    """The harvest festival news at a step, for whoever plans or decides then."""
+ORGANISE = (
+    "You organise the harvest festival: you need fish from Jonas, vegetables from Greta and "
+    "flowers from Lina for the stalls."
+)
+
+
+def festival_lines(tick: int, name: str | None = None) -> list[str]:
+    """The harvest festival news at a step, for whoever plans or decides then; Hilde organises
+    it (autumn only: her persona named it all year, and summer plans were for the festival)."""
     days = festival_in(clock(tick)[0])
     if days is None:
         return []
+    if name == "Hilde":
+        return [*festival_lines(tick), ORGANISE]
     if days:
         return [f"The harvest festival is on the square in {days} day{'s' if days > 1 else ''}."]
     if minute_of_day(tick) < FESTIVAL_EVENING:

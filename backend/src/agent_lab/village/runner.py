@@ -95,6 +95,7 @@ from agent_lab.village.world import (
     FESTIVAL_EVENING,
     HEIGHT,
     HOMES,
+    OLD_PERSONAS,
     PLACES,
     ROWS,
     VERSION,
@@ -208,18 +209,24 @@ class Village(MeetingRuns):
         return world
 
     def _refresh_rules(self) -> None:
-        """Villager agents still holding an earlier rules text verbatim get the current one;
-        the owner's edits to the rules are left alone."""
+        """Villager agents still holding an earlier rules text or persona verbatim get the
+        current one; the owner's edits are left alone."""
         for v in self.world["villagers"]:
             agent = self.store.get_agent(v["agent_id"] or "")
             if agent is None:
                 continue
             blocks: list[dict[str, Any]] = agent.config.get("blocks") or []
             system: str = blocks[0].get("system", "") if blocks else ""
+            refreshed = system
             old = next((rules for rules in OLD_RULES if rules in system), None)
-            if old is None:
+            if old is not None:
+                refreshed = refreshed.replace(old, RULES)
+            persona = VILLAGERS[v["name"]].persona
+            for old_persona in OLD_PERSONAS.get(v["name"], ()):
+                refreshed = refreshed.replace(old_persona, persona)
+            if refreshed == system:
                 continue
-            first = {**blocks[0], "system": system.replace(old, RULES)}
+            first = {**blocks[0], "system": refreshed}
             self.store.update_agent(
                 agent.agent_id,
                 name=agent.name,
