@@ -920,11 +920,15 @@ class Village:
     async def _decide(self, name: str) -> None:
         v = self._villager(name)
         tick = self.world["tick"]
-        prompt = observation(self.world, name)
         carried = v["basket"]
-        v |= {"triggers": [], "inbox": [], "last_decided": tick}  # all of it is in the prompt
         try:
+            prompt = observation(self.world, name)
+            v |= {"triggers": [], "inbox": [], "last_decided": tick}  # all of it is in the prompt
             run_id, action, reason = await self._turn(v, prompt, tick)
+        except Exception as exc:  # a bug in the prompt must not leave the villager deciding forever
+            v["last_decided"] = tick
+            run_id, action = None, {"action": "wait"}
+            reason = f"turn failed: could not build the prompt: {type(exc).__name__}: {exc}"
         finally:
             self.decisions.pop(name, None)
         self.outcomes.append(not (reason and reason.startswith("turn failed")))

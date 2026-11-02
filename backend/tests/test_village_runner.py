@@ -2675,3 +2675,22 @@ async def test_the_trail_keeps_28_days_and_reset_clears_it(tmp_path: Path) -> No
     await v.reset()
     assert v.store.trail(0, 10**6) == [] and v.world["born"] > born
     assert "born" not in v.state()
+
+
+@pytest.mark.anyio
+async def test_a_prompt_that_cannot_be_built_is_a_failed_turn_not_a_hang(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(world: dict[str, Any], name: str) -> str:
+        raise KeyError("saplings")
+
+    v, _ = village_for(tmp_path)
+    morning(v)
+    villager(v, "Lina")["triggers"] = ["arrived"]
+    monkeypatch.setattr(runner, "observation", broken)
+    await asyncio.wait_for(v.step(), timeout=5)  # Step settles: no decision may stay in flight
+    assert not v.decisions
+    action = villager(v, "Lina")["last_action"]
+    assert action["action"] == "wait"
+    assert action["reason"] == "turn failed: could not build the prompt: KeyError: 'saplings'"
+    await asyncio.wait_for(v.reset(), timeout=5)

@@ -285,3 +285,18 @@ def test_work_step_leaves_the_site_to_the_building() -> None:
     world = with_stand(wood=1)
     villager(world, "Greta").update(at(STAND[0]), **working("site"))
     assert work_step(world) == [] and villager(world, "Greta")["working"]["steps"] == 0
+
+
+def test_a_load_handed_straight_back_belongs_at_the_building_site() -> None:
+    sx, sy = SQUARE
+    received = {
+        "tick": 29,
+        "kind": "received",
+        "text": "Greta gave you a load of wood.",
+        "from": "Greta",
+    }
+    world = world_with(Hilde=at((sx, sy), basket="wood", events=[received]), Greta=at((sx + 1, sy)))
+    assert give_refusal(world, "Hilde", "Greta") == (
+        "Greta just gave you this load; set it down at the building site, or give it to someone "
+        "else"
+    )

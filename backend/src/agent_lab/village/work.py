@@ -3,7 +3,7 @@
 from typing import Any
 
 from agent_lab.village.build import site_at, site_refusal
-from agent_lab.village.trade import BASKET_GOODS, carried_text
+from agent_lab.village.trade import BASKET_GOODS
 from agent_lab.village.world import adjacent, listed, place_at, villager_named
 
 GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers"}
@@ -91,10 +91,14 @@ def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None
     if them["basket"]:
         return f"{other}'s hands are full"
     if _given_by(me) == other:  # baskets went back and forth instead of onto the stalls
-        thing = carried_text(me["basket"]).split()[0]  # basket or load
+        if me["basket"] in BASKET_GOODS:
+            return (
+                f"{other} just gave you this basket; set it out on the festival stalls on the "
+                "square, or give it to someone else"
+            )
         return (
-            f"{other} just gave you this {thing}; set it out on the festival stalls on the "
-            "square, or give it to someone else"
+            f"{other} just gave you this load; set it down at the building site, or give it to "
+            "someone else"
         )
     return None
 
