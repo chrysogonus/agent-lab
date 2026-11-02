@@ -1160,6 +1160,8 @@ class Village:
             if meeting["present"] == ["Hilde"]:
                 self._note("Nobody but Hilde came to the town hall meeting.")
             self._start_meeting_run("decide", self._decide_meeting(meeting))
+        elif self.world["project"] is None:  # finished since the morning: nothing to review
+            self._end_meeting(meeting, "reviewed")
         else:
             self._start_meeting_run("tasks", self._assign(meeting))
 
@@ -1214,8 +1216,9 @@ class Village:
             )
 
     def _still(self, meeting: dict[str, Any]) -> bool:
-        """A meeting run's result counts only for the meeting it was asked for."""
-        return not self.resetting and self.world["meeting"] is meeting
+        """A meeting run's result counts only for the meeting it was asked for, on its day."""
+        today = clock(self.world["tick"])[0]
+        return not self.resetting and self.world["meeting"] is meeting and meeting["day"] == today
 
     async def _propose(self, meeting: dict[str, Any], again: bool = True) -> None:
         run_id, answer, failed = await self._meeting_call("Hilde", proposal_prompt(self.world))
@@ -1308,6 +1311,10 @@ class Village:
 
     async def _assign(self, meeting: dict[str, Any], again: bool = True) -> None:
         """Hilde hands out the work of the project: after a decision, or at a review meeting."""
+        if self.world["project"] is None:  # finished meanwhile (a second ask comes later)
+            if meeting["kind"] == "review" and self._still(meeting):
+                self._end_meeting(meeting, "reviewed")
+            return
         run_id, answer, failed = await self._meeting_call("Hilde", work_plan_prompt(self.world))
         project = self.world["project"]
         if not self._still(meeting) or project is None:

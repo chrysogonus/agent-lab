@@ -2524,3 +2524,32 @@ def test_the_chronicle_and_the_map_know_what_is_built(tmp_path: Path) -> None:
         "site": [[16, 16], [17, 16], [18, 16]],
         "at": [[20, 17]],
     }
+
+
+@pytest.mark.anyio
+async def test_a_review_meeting_after_the_project_was_finished_ends_quietly(
+    tmp_path: Path,
+) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(17, 20, day=6))
+    v.world["meeting"] = {
+        "day": 6,
+        "kind": "review",  # opened in the morning, while the project was still under way
+        "proposals": [],
+        "votes": {},
+        "present": [],
+        "decision": None,
+        "outcome": None,
+    }
+    put(v, "Hilde", *TOWN_HALL[0])
+    await v.step()  # 17:30, the project finished earlier today
+    assert meeting_now(v)["outcome"] == "reviewed" and meetings_of(llm, "tasks") == []
+
+
+def test_meeting_answers_count_only_on_their_day(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.world["tick"] = tick_at(17, 30, day=3)
+    meeting = proposed_meeting(v)
+    assert v._still(meeting)  # pyright: ignore[reportPrivateUsage]
+    v.world["tick"] = tick_at(5, day=4)  # a slow answer, the next morning
+    assert not v._still(meeting)  # pyright: ignore[reportPrivateUsage]
