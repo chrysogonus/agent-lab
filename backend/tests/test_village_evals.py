@@ -755,6 +755,25 @@ def test_load_at_site_reads_the_deliveries(tmp_path: Path) -> None:
     assert late == (False, "no saplings set down at the site by 11:00")
 
 
+def test_load_at_site_reads_a_set_down_by_an_intention(tmp_path: Path) -> None:
+    """M14: a bring sets the load down on arrival, without a give answer: the note says so."""
+    store = Store(tmp_path / "copy.db")
+    world = build_world(MEETING_START | {"time": "10:00"})
+    world["day_record"]["items"].append(
+        {
+            "tick": world["tick"] + 5,
+            "text": "Lina set down a load of saplings at the building site.",
+        }
+    )
+    params = {"goods": "saplings", "by": "12:00"}
+    assert CONDITIONS["load_at_site"](store, world, world["tick"], params) == (
+        True,
+        "Lina set down saplings at 10:50",
+    )
+    params["by"] = "10:40"
+    assert CONDITIONS["load_at_site"](store, world, world["tick"], params)[0] is False
+
+
 def test_a_fixture_can_give_a_reason_to_decide() -> None:
     world = build_world(
         {"day": 67, "time": "10:00", "villagers": {"Jonas": {"at": [10, 5], "triggers": ["met"]}}}

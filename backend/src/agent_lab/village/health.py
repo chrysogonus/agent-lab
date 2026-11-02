@@ -28,8 +28,9 @@ def trail_row(world: dict[str, Any], state_of: Callable[[Villager], str]) -> dic
     }
 
 
-DECISIONS = ("move", "find", "say", "goodbye", "work", "give", "buy", "wait")
+DECISIONS = ("move", "find", "say", "goodbye", "work", "give", "buy", "wait", "build", "bring")
 MEETING_RUNS = ("propose", "vote", "decide", "assign")
+SET_DOWN = re.compile(r"^\w+ set down a load of \w+ at the building site\.$")
 TALK = re.compile(r"^(\w+) and (\w+) talked; what they said \(their claims\): (.*)$")
 ENTRY = re.compile(r"^(\d{2}):(\d{2}) (?:see (\w+)|([^:]+)): ")
 STUCK_STEPS = 6  # a village hour in the same place and state, awake and not working
@@ -148,7 +149,7 @@ def _loads_worked_in(trail: Trail) -> int:
     return worked
 
 
-def _load_minutes(runs: list[Run]) -> int | None:
+def _load_minutes(runs: list[Run], trail: Trail) -> int | None:
     bought: dict[tuple[str, str], int] = {}
     minutes: list[int] = []
     for r in runs:
@@ -159,6 +160,17 @@ def _load_minutes(runs: list[Run]) -> int | None:
             start = bought.pop((r["villager"], a["goods"]), None)
             if start is not None:
                 minutes.append((r["village_tick"] - start) * 10)
+    for (who, goods), start in bought.items():  # set down by an intention (M14): the trail
+        down = next(
+            (
+                t
+                for t, row in trail
+                if t > start and any(v[0] == who and v[5] != goods for v in row["v"])
+            ),
+            None,
+        )
+        if down is not None:
+            minutes.append((down - start) * 10)
     return round(median(minutes)) if minutes else None
 
 
@@ -236,13 +248,18 @@ def day_health(
         "plan_adherence": _plan_adherence(day, runs, trail) if has_trail else None,
         "meeting": _meeting(runs, notes),
         "trades": sum(1 for a in actions if a["action"] == "buy"),
-        "loads_set_down": sum(
-            1
-            for a in actions
-            if a["action"] == "give" and a.get("to") is None and a.get("goods") in BUILDING_GOODS
+        "loads_set_down": max(  # a give answer, or an intention setting it down (M14)
+            sum(
+                1
+                for a in actions
+                if a["action"] == "give"
+                and a.get("to") is None
+                and a.get("goods") in BUILDING_GOODS
+            ),
+            sum(1 for n in notes if SET_DOWN.match(n)),
         ),
         "loads_worked_in": _loads_worked_in(trail) if has_trail else None,
-        "load_minutes": _load_minutes(decisions),
+        "load_minutes": _load_minutes(decisions, trail),
         "given_back": _given_back(decisions),
         "weather_slips": (
             weather_slips(f"{chronicle['title']} {chronicle['text']}", weather(day))

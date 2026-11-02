@@ -55,6 +55,11 @@ def _load_at_site(store: Store, world: World, start: int, p: dict[str, Any]) -> 
         if given and action.get("goods") == p["goods"]:
             when = clock(run["village_tick"])[1]
             return True, f"{run['villager']} set down {p['goods']} at {when}"
+    record: dict[str, Any] = world["day_record"] or {}
+    for item in record.get("items", []):  # set down by an intention, with no give answer (M14)
+        found = re.match(r"^(\w+) set down a load of (\w+) at the building site\.$", item["text"])
+        if found and found[2] == p["goods"] and start <= item["tick"] <= by:
+            return True, f"{found[1]} set down {p['goods']} at {clock(item['tick'])[1]}"
     return False, f"no {p['goods']} set down at the site by {p['by']}"
 
 

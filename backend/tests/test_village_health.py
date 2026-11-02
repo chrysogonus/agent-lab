@@ -316,3 +316,22 @@ def test_a_day_runs_from_midnight_to_midnight(tmp_path: Path) -> None:
     today, yesterday = days_health(store, a_world(2), days=2)
     assert [r["reason"] for r in today["refusals"]] == ["y"] and today["trail"] is True
     assert [r["reason"] for r in yesterday["refusals"]] == ["x"] and yesterday["trail"] is False
+
+
+def test_loads_set_down_by_an_intention_count_from_notes_and_trail() -> None:
+    """M14: a bring sets the load down on arrival, without a give answer."""
+    runs = [
+        run("Lina", tick(10), {"action": "buy", "goods": "saplings", "paid": "flowers"}),
+        run("Lina", tick(10, 10), {"action": "bring"}),
+    ]
+    notes = ["Lina set down a load of saplings at the building site."]
+    lina = ("Lina", 18, 10)
+    trail = [
+        (tick(10, 10), row((*lina, None, "walking", "saplings"))),
+        (tick(10, 40), row((*lina, None, "walking", "saplings"))),
+        (tick(10, 50), row((*lina, None, "idle", None))),
+    ]
+    health = day_health(DAY, runs, notes, trail, None, final=True)
+    assert health is not None
+    assert (health["loads_set_down"], health["load_minutes"]) == (1, 50)
+    assert health["decisions"] == 2  # bring is a decision
