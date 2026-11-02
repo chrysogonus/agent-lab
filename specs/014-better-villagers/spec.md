@@ -320,7 +320,8 @@ All are measured with M13's instruments against the M13 baseline, on the same mo
 - **SC-004**: Over the same three days, waits are at most 35% of decisions (45% at baseline), and
   model calls per village day are no more than at baseline.
 - **SC-005**: On those days, no summer or winter plan or decision prompt is dominated by festival
-  memories: at most 1 of the 8 recalled memories is from another season. At most 1 of 3
+  memories: at most 1 of the memories recalled into a plan (8) or a decision (5) is from another
+  season. At most 1 of 3
   chronicles names weather the day did not have.
 - **SC-006**: The new checks (one per user story at least) pass in at least 15 of 20 attempts on
   the real model.
