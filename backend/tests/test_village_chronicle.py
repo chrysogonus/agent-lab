@@ -9,6 +9,8 @@ from agent_lab.village.chronicle import (
     chronicle_prompt,
     chronicler_agent,
     parse_entry,
+    retry_prompt,
+    weather_slips,
 )
 from agent_lab.village.seasons import WEATHER_TEXT, weather
 from agent_lab.village.world import new_world
@@ -21,8 +23,9 @@ def test_the_prompt_names_the_day_its_weather_the_places_and_what_happened() -> 
     assert prompt.startswith(f"Day 17 (day 3 of autumn, year 1). {WEATHER_TEXT[weather(17)]}.")
     assert "The fields are resting." in prompt and "The flower garden is budding." in prompt
     assert (
-        "What happened (what villagers said are their claims, not events; never report a claim "
-        "as an event; the weather is the one given above):\n- 09:30 Greta met Jonas." in prompt
+        "What happened (what villagers said or planned are their claims and intentions, not "
+        "events; never report one as an event; the weather is the one given above):\n"
+        "- 09:30 Greta met Jonas." in prompt
     )
     assert '"learnings"' not in prompt
 
@@ -73,3 +76,29 @@ def test_the_festival_day_names_the_stalls() -> None:
     stalls = "The festival stalls on the square hold fish and flowers; they still lack vegetables."
     assert stalls in chronicle_prompt(world, {"day": 21, "items": []})
     assert "festival stalls" not in chronicle_prompt(world, {"day": 20, "items": []})
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "slips"),
+    [
+        ("sun", "They hurried before the storm arrived.", ["storm"]),
+        ("sun", "A sunny day; Greta met Jonas.", []),
+        ("rain", "The storm worsened under low clouds.", ["storm"]),
+        ("storm", "Rain lashed the pier under dark clouds.", []),
+        ("fog", "The mist lifted by noon.", []),
+        ("clouds", "It rained at noon.", ["rain"]),
+        ("snow", "Snow fell from grey clouds.", []),
+        ("sun", "Fog and thunder.", ["storm", "fog"]),
+    ],
+)
+def test_weather_other_than_the_days_is_found(kind: str, text: str, slips: list[str]) -> None:
+    assert weather_slips(text, kind) == slips
+
+
+def test_an_entry_naming_other_weather_is_sent_back() -> None:
+    entry = {"title": "Storm coming", "text": "They hurried before the storm arrived."}
+    prompt = retry_prompt("Day 1 …\nWrite the chronicle entry.", entry, ["storm"], "sun")
+    assert prompt.startswith("Day 1 …\nWrite the chronicle entry.\n")
+    assert '"They hurried before the storm arrived."' in prompt
+    assert "It mentions storm, but the day's weather was: Sunny." in prompt
+    assert prompt.endswith("Answer with one JSON object.")

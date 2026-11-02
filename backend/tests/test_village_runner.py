@@ -1274,6 +1274,34 @@ async def test_an_invalid_chronicle_adds_nothing(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_a_chronicle_naming_other_weather_is_asked_again_once(tmp_path: Path) -> None:
+    stormy = json.dumps({"title": "Storm coming", "text": "They hurried before the storm arrived."})
+    v, llm = village_for(tmp_path, {"chronicle": [stormy, QUIET_DAY]})
+    assert weather(1) == "sun"
+    run_id = await _night(v)
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    first, again = chronicles_of(llm)
+    assert "They hurried before the storm arrived." in again and again.startswith(first)
+    assert [e["title"] for e in v.world["chronicle"]] == ["A quiet day"]
+    run = v.store.get_run(run_id or "")
+    assert run is not None and run.village_action == {
+        "action": "chronicle",
+        "day": 1,
+        "reason": "it named weather other than the day's (storm); asked again",
+    }
+
+
+@pytest.mark.anyio
+async def test_a_chronicle_slipping_twice_keeps_the_second_entry(tmp_path: Path) -> None:
+    stormy = json.dumps({"title": "Storm coming", "text": "They hurried before the storm arrived."})
+    v, llm = village_for(tmp_path, {"chronicle": [stormy, stormy]})
+    await _night(v)
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert len(chronicles_of(llm)) == 2  # asked again once, not more
+    assert [e["title"] for e in v.world["chronicle"]] == ["Storm coming"]
+
+
+@pytest.mark.anyio
 async def test_a_failing_chronicle_does_not_pause_the_village(tmp_path: Path) -> None:
     v, _ = village_for(tmp_path, {"chronicle": [RuntimeError("model down")]})
     await _night(v)
@@ -1465,7 +1493,9 @@ async def test_a_villager_plans_its_day_on_waking(tmp_path: Path) -> None:
     }
     assert len(plans_of(llm, "Jonas")) == 1 and plans_of(llm, "Hilde") == []  # still asleep
     assert "planned" in kinds(v, "Jonas")
-    assert "Jonas's plan for the day: 05:00 pier: Catch fish" in json.dumps(v.world["day_record"])
+    assert "Jonas planned the day (intentions, not events): 05:00 pier: Catch fish" in json.dumps(
+        v.world["day_record"]
+    )
     assert plan_turn(v, "Jonas") == {
         "action": "plan",
         "revision": 0,
@@ -1806,3 +1836,21 @@ async def test_work_on_the_way_stops_the_walk(tmp_path: Path) -> None:
     await v.step()
     greta = villager(v, "Greta")
     assert greta["goal"] is None and greta["working"] == {"place": "fields", "steps": 0}
+
+
+@pytest.mark.anyio
+async def test_a_basket_that_came_while_deciding_is_not_given_on(tmp_path: Path) -> None:
+    plan: dict[str, list[str | Exception]] = {"Hilde": [give("Greta")], "Greta": [give("Lina")]}
+    v, _ = village_for(tmp_path, plan, delay=0.01)  # both prompts are written before either answer
+    morning(v)
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, basket="fish", triggers=["met"], neighbours=["Greta"])
+    put(v, "Greta", sx + 1, sy, triggers=["met"], neighbours=["Hilde", "Lina"])
+    put(v, "Lina", sx + 2, sy, neighbours=["Greta"])
+    await v.step()  # both decide at once; Greta's empty hands are in her prompt
+    assert villager(v, "Greta")["basket"] == "fish" and villager(v, "Lina")["basket"] is None
+    assert villager(v, "Greta")["last_action"] == {
+        "action": "wait",
+        "reason": "the basket came to you after you decided; decide again what to do with it",
+    }
+    assert villager(v, "Greta")["triggers"] == ["given"]  # so she decides again

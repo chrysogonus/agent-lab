@@ -137,3 +137,26 @@ Observed, not fixed:
   foggy one. The source is the villagers' plan notes ("Cast the nets in the rain"), which reach
   the record unmarked; only conversations are marked as claims.
 - One plan run failed when the model server dropped a connection; the village kept going.
+
+Fixed after the checks (2026-11-02):
+- Baskets: in run B, 3 of the back-and-forth pairs were a race (both villagers decided in the same
+  step; the receiver's "give" was validated against the basket that had arrived after it decided)
+  and 5 were straight give-backs. A give whose basket came while the villager decided is now a
+  wait ("the basket came to you after you decided; decide again what to do with it"), and giving
+  a basket straight back to whoever just gave it is refused with a pointer to the stalls.
+- Chronicle: plan notes read "Hilde planned the day (intentions, not events): …" and the heading
+  names plans as intentions. Replaying the 9 recorded chronicle prompts 3 times each on the real
+  model showed the storms come from the villagers' own talk: rewording the prompt (13–18 of 27
+  entries naming other weather) or dropping plan notes (15 of 27) did not help. An entry naming
+  weather the day did not have (a storm day may rain and cloud, …) is now asked for once more,
+  with the entry and the real weather: 5–6 of 27 still slip after it (a second retry: 4 of 27,
+  not kept).
+
+Run C (real model, a fresh copy, autumn day 1 to the festival as run B, with both fixes): 27 min,
+1129 decisions. Baskets: 2 given to villagers and 2 set out (run B: 24 and 5); neither new refusal
+was needed, so this run's villagers simply gave less, and at bedtime on the festival day all four
+still held a basket. The stalls held fish and vegetables; all four were on the square and every
+festival memory names them. Chronicle: 6 of 7 first entries named other weather and were asked
+again; the kept entries are clean on 5 of 7 nights (day 16's retry was invalid JSON so the first
+entry stayed, day 18's retry still named a storm). Open: villagers keep baskets instead of setting
+them out; nothing yet points a carrying villager to the square.

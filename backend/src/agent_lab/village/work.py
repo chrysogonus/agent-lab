@@ -53,6 +53,12 @@ def work_refusal(world: dict[str, Any], name: str) -> str | None:
     return "there is no work for you here"
 
 
+def _given_by(v: Villager) -> str | None:
+    """Who gave the villager the basket it holds, if it was given (and not filled since)."""
+    last = next((e for e in reversed(v["events"]) if e["kind"] in ("received", "basket")), None)
+    return last.get("from") if last and last["kind"] == "received" else None
+
+
 def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None:
     """Why a villager cannot give its basket to `to` (or, without a name, onto the stalls)."""
     me = _villager(world, name)
@@ -70,6 +76,11 @@ def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None
         return f"{other} is not next to you"
     if them["basket"]:
         return f"{other}'s hands are full"
+    if _given_by(me) == other:  # baskets went back and forth instead of onto the stalls
+        return (
+            f"{other} just gave you this basket; set it out on the festival stalls on the "
+            "square, or give it to someone else"
+        )
     return None
 
 

@@ -44,6 +44,12 @@ def marks(entries: list[Entry], minute: int) -> tuple[int | None, int | None]:
     return current, following
 
 
+def plan_note(name: str, text: str, revised: bool) -> str:
+    """A plan in the day record: what a villager meant to do, never what happened."""
+    did = "changed the plan" if revised else "planned the day"
+    return f"{name} {did} (intentions, not events): {text}"
+
+
 def plan_lines(entries: list[Entry], minute: int) -> list[str]:
     current, following = marks(entries, minute)
     mark = {current: " (now)", following: " (next)"}

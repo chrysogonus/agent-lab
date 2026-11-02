@@ -2,6 +2,7 @@
 (specs/010-village-seasons/research.md §6)."""
 
 import json
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -11,6 +12,19 @@ from agent_lab.village.work import stalls_text
 from agent_lab.village.world import clock
 
 CHRONICLE_KEPT = 28  # one village year
+HAPPENED = (
+    "What happened (what villagers said or planned are their claims and intentions, not events; "
+    "never report one as an event; the weather is the one given above):"
+)
+WEATHER_WORDS = {  # how an entry names each weather
+    "sun": r"\bsun",
+    "clouds": r"\bcloud",
+    "rain": r"\brain",
+    "storm": r"\bstorm|\bthunder|\blightning",
+    "fog": r"\bfog|\bmist",
+    "snow": r"\bsnow",
+}
+GOES_WITH = {"storm": ("rain", "clouds"), "rain": ("clouds",), "snow": ("clouds",)}
 TITLE_TEXT = 60
 ENTRY_TEXT = 800
 
@@ -21,12 +35,29 @@ def chronicle_prompt(world: dict[str, Any], record: dict[str, Any]) -> str:
         f"Day {day} ({date_text(day)}). {WEATHER_TEXT[weather(day)]}.",
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
         *([stalls_text(world["stalls"])] if festival_in(day) == 0 else []),
-        "What happened (what villagers said are their claims, not events; never report a claim "
-        "as an event; the weather is the one given above):",
+        HAPPENED,
         *([f"- {clock(i['tick'])[1]} {i['text']}" for i in record["items"]] or ["- nothing"]),
         "Write the chronicle entry for this day. Answer with one JSON object.",
     ]
     return "\n".join(lines)
+
+
+def weather_slips(text: str, kind: str) -> list[str]:
+    """The weather an entry names that the day did not have (a storm day may rain, …)."""
+    allowed = {kind, *GOES_WITH.get(kind, ())}
+    return [
+        k for k, words in WEATHER_WORDS.items() if k not in allowed and re.search(words, text, re.I)
+    ]
+
+
+def retry_prompt(prompt: str, entry: dict[str, str], slips: list[str], kind: str) -> str:
+    """The prompt again, with the entry that named other weather and the day's real weather."""
+    return (
+        f'{prompt}\nYour entry, titled "{entry["title"]}": "{entry["text"]}"\n'
+        f"It mentions {' and '.join(slips)}, but the day's weather was: {WEATHER_TEXT[kind]}. "
+        "No other weather came or was on its way, whatever the villagers said. Write the entry "
+        "again without it. Answer with one JSON object."
+    )
 
 
 class _Entry(BaseModel):

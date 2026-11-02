@@ -66,8 +66,10 @@ still ends the conversation, just without the words.
   from ripe or harvested fields, flowers from a blooming garden. It goes to the worker who worked
   there longest with empty hands; each villager carries one basket at a time, overnight too.
 - **Give**: a villager hands its basket to someone next to it, or, standing on the square, sets it
-  out on the **festival stalls**. In autumn every villager is told what the stalls hold and still
-  lack; the map shows the stalls and every carried basket.
+  out on the **festival stalls**. A basket never goes straight back to whoever just gave it, and
+  one that arrives while a villager is deciding waits for its next decision. In autumn every
+  villager is told what the stalls hold and still lack; the map shows the stalls and every
+  carried basket.
 
 ## A day in the village
 
@@ -86,7 +88,9 @@ flowchart LR
 - **Reflection**: going to bed after an eventful day, a villager writes up to three learnings
   ("Jonas is at the market around midday") and one sentence about each villager it dealt with.
   Both are part of every decision from then on.
-- **Chronicle**: once everyone sleeps, the chronicler writes a diary entry about the day.
+- **Chronicle**: once everyone sleeps, the chronicler writes a diary entry about the day. If the
+  entry names weather the day did not have (villagers often talk about storms that never come),
+  it is asked once more.
   **Read the chronicle** shows the last 28 entries, newest first, marks the new ones and opens
   the run behind each.
 

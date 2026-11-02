@@ -11,6 +11,7 @@ from agent_lab.village.plan import (
     marks,
     parse_plan,
     plan_lines,
+    plan_note,
     plan_prompt,
     planner_agent,
 )
@@ -171,3 +172,12 @@ def test_in_autumn_the_plan_sees_the_stalls_and_the_basket() -> None:
     jonas(world)["basket"] = None
     prompt = plan_prompt(world, "Jonas")
     assert "festival stalls" not in prompt and "basket" not in prompt
+
+
+def test_the_day_record_notes_a_plan_as_intentions() -> None:
+    assert plan_note("Jonas", "05:00 pier (Catch fish)", False) == (
+        "Jonas planned the day (intentions, not events): 05:00 pier (Catch fish)"
+    )
+    assert plan_note("Jonas", "05:00 pier (Catch fish)", True).startswith(
+        "Jonas changed the plan (intentions, not events): "
+    )

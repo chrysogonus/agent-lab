@@ -25,6 +25,8 @@ from agent_lab.village.chronicle import (
     chronicle_prompt,
     chronicler_agent,
     parse_entry,
+    retry_prompt,
+    weather_slips,
 )
 from agent_lab.village.memory import (
     LEARNINGS_KEPT,
@@ -39,6 +41,7 @@ from agent_lab.village.plan import (
     entry_text,
     marks,
     parse_plan,
+    plan_note,
     plan_prompt,
     planner_agent,
 )
@@ -726,10 +729,10 @@ class Village:
             text = "; ".join(entry_text(e) for e in entries)
             if revise is None:
                 self._event(v, "planned", "You planned your day.")
-                self._note(f"{name}'s plan for the day: {text}")
+                self._note(plan_note(name, text, revised=False))
             else:
                 self._event(v, "planned", "You changed your plan.")
-                self._note(f"{name} changed the plan for the day: {text}")
+                self._note(plan_note(name, text, revised=True))
         action: dict[str, Any] = {"action": "plan", "revision": revision}
         action |= {"entries": [entry_text(e) for e in entries]} if entries else {"reason": reason}
         if run_id:
@@ -742,13 +745,26 @@ class Village:
             await asyncio.gather(previous, return_exceptions=True)
         tick, day = self.world["tick"], record["day"]
         prompt = chronicle_prompt(self.world, record)
-        run_id, answer, failed = await self._run(
-            self.world["chronicler_agent_id"], None, prompt, tick
-        )
+        run_id, entry, reason = await self._write_entry(prompt, tick)
         if self.resetting:
             return
-        entry, reason = (None, failed) if failed else parse_entry(answer)
-        entry, reason = redact(entry, self.secrets), redact(reason, self.secrets)
+        # Villagers talk about storms they expect; the chronicler takes them for the weather.
+        slips = weather_slips(f"{entry['title']} {entry['text']}", weather(day)) if entry else []
+        if entry and slips:  # asked again once, with what it wrote and the real weather
+            if run_id:
+                why = f"it named weather other than the day's ({', '.join(slips)}); asked again"
+                self.store.set_village_action(
+                    run_id, {"action": "chronicle", "day": day, "reason": why}
+                )
+            again = retry_prompt(prompt, entry, slips, weather(day))
+            again_id, again_entry, again_reason = await self._write_entry(again, tick)
+            if self.resetting:
+                return
+            if again_entry:
+                run_id, entry, reason = again_id, again_entry, None
+            elif again_id:  # the first entry stays
+                action = {"action": "chronicle", "day": day, "reason": again_reason}
+                self.store.set_village_action(again_id, action)
         if entry:
             year, season, day_of_season = date(day)
             kept = {"day": day, "year": year, "season": season, "day_of_season": day_of_season}
@@ -759,10 +775,22 @@ class Village:
             self.store.set_village_action(run_id, action | (entry or {"reason": reason}))
         self._publish()
 
+    async def _write_entry(
+        self, prompt: str, tick: int
+    ) -> tuple[str | None, dict[str, str] | None, str | None]:
+        """(run id, entry, why there is none) for one chronicler run."""
+        run_id, answer, failed = await self._run(
+            self.world["chronicler_agent_id"], None, prompt, tick
+        )
+        entry, reason = (None, failed) if failed else parse_entry(answer)
+        # Decoding JSON can undo redaction of the raw answer: redact again.
+        return run_id, redact(entry, self.secrets), redact(reason, self.secrets)
+
     async def _decide(self, name: str) -> None:
         v = self._villager(name)
         tick = self.world["tick"]
         prompt = observation(self.world, name)
+        carried = v["basket"]
         v |= {"triggers": [], "inbox": [], "last_decided": tick}  # all of it is in the prompt
         try:
             run_id, action, reason = await self._turn(v, prompt, tick)
@@ -774,6 +802,9 @@ class Village:
         v = self._villager(name)
         if v["asleep"] or v["bedtime"]:
             action, reason = {"action": "wait"}, reason or "it was already your bedtime"
+        elif action["action"] == "give" and v["basket"] != carried:  # given while deciding
+            action = {"action": "wait"}
+            reason = "the basket came to you after you decided; decide again what to do with it"
         self._apply(v, action, reason)
         if run_id:
             self.store.set_village_action(

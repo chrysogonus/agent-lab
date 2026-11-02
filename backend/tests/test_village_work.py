@@ -193,3 +193,27 @@ def test_sleepers_do_not_work() -> None:
 )
 def test_stalls_text(stalls: dict[str, int], text: str) -> None:
     assert stalls_text(stalls) == text
+
+
+def test_a_basket_is_not_given_straight_back() -> None:
+    sx, sy = SQUARE
+    received = {
+        "tick": 29,
+        "kind": "received",
+        "text": "Greta gave you a basket of flowers.",
+        "from": "Greta",
+    }
+    world = world_with(
+        Hilde=at((sx, sy), basket="flowers", events=[received]),
+        Greta=at((sx + 1, sy)),
+        Jonas=at((sx, sy + 1)),
+    )
+    assert give_refusal(world, "Hilde", "Greta") == (
+        "Greta just gave you this basket; set it out on the festival stalls on the square, or "
+        "give it to someone else"
+    )
+    assert give_refusal(world, "Hilde", "Jonas") is None
+    assert give_refusal(world, "Hilde", None) is None
+    filled = {"tick": 30, "kind": "basket", "text": "You filled a basket of flowers."}
+    villager(world, "Hilde")["events"] = [received, filled]  # a basket of its own since
+    assert give_refusal(world, "Hilde", "Greta") is None
