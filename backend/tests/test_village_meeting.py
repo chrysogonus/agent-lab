@@ -267,6 +267,7 @@ def test_the_work_plan_prompt() -> None:
     assert "- Jonas: works at the pier, up 05:00 to 21:00, carries a basket of fish" in prompt
     assert "- Greta: works at the fields, up 05:30 to 21:30, carries nothing" in prompt
     assert "The work you handed out before:" not in prompt
+    assert "Nothing can be built until the goods are bought: hand out a buy task" in prompt
     assert prompt.endswith(
         'Answer with one JSON object: {"tasks": [{"task": "buy", "goods": "wood", "villagers": '
         '["Jonas"]}, {"task": "build", "villagers": ["Greta"]}]}'

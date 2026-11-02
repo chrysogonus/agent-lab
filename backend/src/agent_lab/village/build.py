@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from typing import Any
 
+from agent_lab.village.trade import BASKET_GOODS
 from agent_lab.village.world import HOMES, Cell, door, letter_cells, listed, place_cells
 
 
@@ -185,6 +186,14 @@ def _site_hints(world: dict[str, Any], name: str) -> list[str]:
             'set it down there: {"action": "move", "place": "building site"}, then '
             '{"action": "give"}.'
         ]
+    if goods in BASKET_GOODS and not any(project["site"].values()):
+        wanted = next(iter(needs_left(world)), None)
+        if wanted:  # the work plan often forgot the buying (real model)
+            action = f'{{"action": "buy", "goods": "{wanted}"}}'
+            return [
+                f"Nothing can be built until someone buys {wanted}: trade your basket for a load "
+                f"at the market while the trader is there ({action})."
+            ]
     working = me["working"] and me["working"]["place"] == "site"
     if here and not working and any(project["site"].values()):
         held = _loads(project["site"])

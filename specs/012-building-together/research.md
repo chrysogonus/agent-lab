@@ -227,7 +227,10 @@
     and the meeting waits for Hilde until 18:30 (`HILDE_WAITED`) before it is called off. A
     third run showed her walking from 16:30 and held in talks with villagers she met on the
     way until 18:40: walking to today's open meeting now goes on while talking, as the walk
-    home at bedtime does, and the talk ends when they walk apart.
+    home at bedtime does, and the talk ends when they walk apart. A fourth run had all four at
+    the meeting, a vote and a decision, but Hilde handed out only "build": nobody bought the
+    saplings. Her work-plan prompt now says nothing can be built until the goods are bought,
+    and while the site holds nothing, a villager carrying a basket is told what to buy.
   - **Asking again**: an unusable proposal or work-plan answer (a run that failed, often JSON
     missing its last brace on the real model, or nothing usable in it) is asked for once more;
     the first run records the reason with "; asked again". A missed proposal would cost the

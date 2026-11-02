@@ -318,8 +318,9 @@ def work_plan_prompt(world: dict[str, Any]) -> str:
             *(["The work you handed out before:", *before] if before else []),
             *known[2:],
             "Hand out the work: who buys which goods from the trader (paying with a basket from "
-            "their work), who brings them to the building site and who builds there. Not "
-            "everyone has to help. Answer with one JSON object: "
+            "their work), who brings them to the building site and who builds there. Nothing "
+            "can be built until the goods are bought: hand out a buy task for each of the goods "
+            "still needed. Not everyone has to help. Answer with one JSON object: "
             '{"tasks": [{"task": "buy", "goods": "wood", "villagers": ["Jonas"]}, '
             '{"task": "build", "villagers": ["Greta"]}]}',
         ]

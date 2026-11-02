@@ -244,3 +244,19 @@ def test_loads_at_the_site_ask_whoever_stands_there_to_build() -> None:
     )
     greta["working"] = {"place": "site", "steps": 0}
     assert not any("build here" in line for line in project_text(world, "Greta"))
+
+
+def test_with_nothing_to_build_with_a_basket_is_pointed_to_the_trader() -> None:
+    world = site_world("trees_square")  # needs 3 saplings, the site holds nothing
+    greta = next(v for v in world["villagers"] if v["name"] == "Greta")
+    greta["basket"] = "flowers"
+    hint = (
+        "Nothing can be built until someone buys saplings: trade your basket for a load at the "
+        'market while the trader is there ({"action": "buy", "goods": "saplings"}).'
+    )
+    assert hint in project_text(world, "Greta")
+    greta["basket"] = None
+    assert hint not in project_text(world, "Greta")
+    greta["basket"] = "flowers"
+    world["project"]["site"]["saplings"] = 1  # something to build with
+    assert hint not in project_text(world, "Greta")
