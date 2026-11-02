@@ -55,7 +55,7 @@ from agent_lab.village.seasons import (
     snow_cover,
     weather,
 )
-from agent_lab.village.trade import carried_text
+from agent_lab.village.trade import TRADER_LEAVES, carried_text, trader_due, trader_stock
 from agent_lab.village.turn import (
     OLD_RULES,
     RULES,
@@ -71,7 +71,7 @@ from agent_lab.village.turn import (
     partners,
     villager_agent,
 )
-from agent_lab.village.work import listed, work_step
+from agent_lab.village.work import work_step
 from agent_lab.village.world import (
     FESTIVAL_EVENING,
     HEIGHT,
@@ -88,6 +88,7 @@ from agent_lab.village.world import (
     hhmm,
     label,
     label_cell,
+    listed,
     minute_of_day,
     new_world,
     place_at,
@@ -299,6 +300,8 @@ class Village:
                 "flower_garden": {"stage": growth["flower_garden"]["stage"]},
             },
             "chronicle": world["chronicle"][::-1],
+            "trader": world["trader"]
+            and {"stock": world["trader"]["stock"], "leaves": hhmm(TRADER_LEAVES)},
             "ticking": self.ticking,
             "log": [{**line, "time": clock(line["tick"])[1]} for line in world["log"]],
             "map": {
@@ -806,6 +809,9 @@ class Village:
         elif action["action"] == "give" and v["basket"] != carried:  # given while deciding
             action = {"action": "wait"}
             reason = "the basket came to you after you decided; decide again what to do with it"
+        elif action["action"] == "buy" and v["basket"] != carried:
+            action = {"action": "wait"}
+            reason = "what you carry changed while you decided; decide again"
         self._apply(v, action, reason)
         if run_id:
             self.store.set_village_action(
@@ -830,6 +836,8 @@ class Village:
             self._work(v, action["place"])
         elif kind == "give":
             self._give(v, action["to"], action["goods"])
+        elif kind == "buy":
+            self._buy(v, action["goods"], action["paid"])
         else:  # goodbye, then perhaps on its way
             if action["text"] and awake_neighbours(self.world, name):
                 self._say(v, action["text"], None)
@@ -865,6 +873,28 @@ class Village:
         self._event(other, "received", f"{name} gave you a {carried}.", **{"from": name})
         self._trigger(other, "given")
         self._note(f"{name} gave a {carried} to {to}.")
+
+    def _buy(self, v: Villager, goods: str, paid: str) -> None:
+        self.world["trader"]["stock"][goods] -= 1
+        v["basket"] = goods  # the basket leaves with the trader
+        bought = f"{carried_text(paid)} for a {carried_text(goods)}"
+        self._event(v, "traded", f"You traded your {bought}.")
+        self._note(f"{v['name']} traded a {bought}.")
+
+    def _trader(self) -> None:
+        """The day's trader comes to the market at 09:00 and leaves at 14:00."""
+        due = trader_due(self.world)
+        if due == "arrive":
+            day = clock(self.world["tick"])[0]
+            stock = trader_stock(day)
+            self.world["trader"] = {"day": day, "stock": stock}
+            goods = listed([f"{g} ({n})" for g, n in stock.items() if n])
+            self._note(f"A trader came to the market with {goods}.")
+        elif due == "leave":
+            trader = self.world["trader"]
+            sold = sum(trader_stock(trader["day"]).values()) - sum(trader["stock"].values())
+            self.world["trader"] = None
+            self._note(f"The trader left the market (sold {sold} loads).")
 
     def _set_off(self, v: Villager, place: str) -> None:
         v["working"] = None  # walking off ends work
@@ -975,6 +1005,7 @@ class Village:
         minute = minute_of_day(world["tick"])
         for v in world["villagers"]:
             self._schedule(v, minute)
+        self._trader()
         # Every villager owns fixed slots in the step (round by round, in villager order), so a
         # walker moves every interval / CELLS_PER_STEP seconds whoever else walks, and the view
         # can glide it there without pausing, also across steps.

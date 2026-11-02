@@ -2,7 +2,7 @@
  * All decoration: nothing here is clickable. */
 
 import type { CSSProperties } from "react";
-import type { FieldStage, GardenStage, Goods, Season, Stalls as StallCounts, Weather } from "../../lib/api"; // relative, as in pixels.tsx
+import type { BasketGoods as Goods, FieldStage, GardenStage, Season, Stalls as StallCounts, Weather } from "../../lib/api"; // relative, as in pixels.tsx
 import { GOODS, type Area } from "../../lib/village";
 import { INK, TILE, type Palette } from "./pixels";
 

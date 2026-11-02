@@ -12,7 +12,7 @@
     runner's new `_trader()` (called in `_advance`) creates it at the first step of a day whose
     minute is in `[09:00, 14:00)` and the trader is not yet that day's (also after a load in the
     middle of the window), and clears it at the first step at or after 14:00. Notes: "A trader came
-    to the market with wood ×4, paint ×2 and saplings ×1." and "The trader left the market (sold 3
+    to the market with wood (4), paint (2) and saplings (1)." and "The trader left the market (sold 3
     loads)."
   - **Buy**: `{"action": "buy", "goods": "wood"}`. `buy_refusal(world, name, goods)` → reason or
     `None`, in this order:
@@ -28,8 +28,8 @@
     of wood.", note "Lina traded a basket of fish for a load of wood."
   - `trader_text(world)` in the observation and plan prompt (in the facts part):
     - before 09:00: "A trader comes to the market today from 09:00 to 14:00.";
-    - while there: "A trader is at the market until 14:00, selling wood ×4, paint ×2 and saplings
-      ×1; it takes one basket of fish, vegetables or flowers for each load.";
+    - while there: "A trader is at the market until 14:00, selling wood (4), paint (2) and saplings
+      (1); it takes one basket of fish, vegetables or flowers for each load.";
     - after it left: "The trader has left; the next one comes tomorrow at 09:00.".
 - **Why**: the owner chose barter (Q1: A). One basket for one load keeps M11's work useful all
   year without money, prices or purses. A deterministic stock keeps tests simple and makes "the
@@ -77,7 +77,7 @@
 | `paint_greta` | Paint Greta's house | paint | paint 2 | Greta's door (9, 16) | her house |
 | `paint_lina` | Paint Lina's house | paint | paint 2 | Lina's door (26, 3) | her house |
 | `trees_square` | Plant trees by the square | trees | saplings 3 | (18, 10), (20, 10), (22, 10) | the same cells |
-| `market_stand` | A market stand | stand | wood 3, paint 1 | the market's cells | the market's top-right corner |
+| `market_stand` | A market stand | stand | wood 3, paint 1 | the market's cells | beside the market (26, 8) |
 | `boat` | A rowing boat | boat | wood 4, paint 1 | the shore (16–18, 16) | the water by the pier (20, 17) |
 | `bakehouse` | A bakehouse on the meadow | building | wood 14, paint 3 | (14–16, 12) | plot `b` (14–17, 13–14) |
 | `barn` | A barn by the fields | building | wood 16, paint 3 | (10–12, 16) | plot `r` (9–12, 17–18) |

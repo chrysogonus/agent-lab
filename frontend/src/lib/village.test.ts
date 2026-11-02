@@ -24,6 +24,8 @@ import {
   newEntries,
   planEntryText,
   stallsText,
+  carriedText,
+  traderText,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -77,6 +79,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   growth: { fields: { stage: "resting", neglected: false }, flower_garden: { stage: "budding" } },
   chronicle: [],
   stalls: { fish: 0, vegetables: 0, flowers: 0 },
+  trader: null,
   ...fields,
 });
 
@@ -272,5 +275,33 @@ describe("work and the festival stalls", () => {
     );
     expect(stallsText({ fish: 2, vegetables: 0, flowers: 1 })).toBe("The festival stalls on the square hold fish and flowers; they still lack vegetables.");
     expect(stallsText({ fish: 1, vegetables: 1, flowers: 1 })).toBe("The festival stalls on the square hold fish, vegetables and flowers.");
+  });
+});
+
+describe("the daily trader", () => {
+  it("names what a villager carries", () => {
+    expect(carriedText("fish")).toBe("basket of fish");
+    expect(carriedText("wood")).toBe("load of wood");
+    expect(carriedText("saplings")).toBe("load of saplings");
+  });
+
+  it("says whether the trader is coming, here or gone", () => {
+    expect(traderText(state({ time: "07:20" }))).toBe("A trader comes to the market at 09:00.");
+    const stock = { wood: 4, paint: 0, saplings: 1 };
+    expect(traderText(state({ time: "10:00", trader: { stock, leaves: "14:00" } }))).toBe(
+      "A trader is at the market until 14:00: wood (4) and saplings (1).",
+    );
+    const sold = { wood: 0, paint: 0, saplings: 0 };
+    expect(traderText(state({ time: "10:00", trader: { stock: sold, leaves: "14:00" } }))).toBe(
+      "A trader is at the market until 14:00 and has sold everything.",
+    );
+    expect(traderText(state({ time: "15:00" }))).toBe("The trader has left; the next comes tomorrow at 09:00.");
+  });
+
+  it("labels buy turns and gives loads", () => {
+    const run = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(run({ action: "buy", goods: "wood", paid: "fish" }))).toBe("05:00 trades a basket of fish for a load of wood");
+    expect(turnLabel(run({ action: "give", to: "Hilde", goods: "paint" }))).toBe("05:00 gives a load of paint to Hilde");
+    expect(turnLabel(run({ action: "wait", reason: "the trader has no paint left" }))).toBe("05:00 waited: the trader has no paint left");
   });
 });

@@ -503,3 +503,59 @@ def test_in_autumn_a_carried_basket_is_meant_for_the_stalls() -> None:
     )
     summer = observation(world_with(tick=_at(8, 9), Greta={"basket": "vegetables"}), "Greta")
     assert "You carry a basket of vegetables." in summer and "festival stalls" not in summer
+
+
+TRADER = {"day": 1, "stock": {"wood": 3, "paint": 0, "saplings": 1}}
+
+
+def test_buy_a_load_for_the_basket_carried() -> None:
+    world = world_with(Lina={**at(*MARKET), "basket": "flowers"})
+    world["trader"] = TRADER
+    assert parse_action('{"action": "buy", "goods": "Wood"}', world, "Lina") == (
+        {"action": "buy", "goods": "wood", "paid": "flowers"},
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("goods", "changes", "reason"),
+    [
+        ("stone", {}, "the trader sells wood, paint and saplings"),
+        ("paint", {}, "the trader has no paint left"),
+        ("wood", {"basket": None}, "you have nothing to trade: bring a basket"),
+        ("wood", {"basket": "saplings"}, "you already carry a load of saplings"),
+        ("wood", {"x": 0, "y": 1}, "the trader is at the market"),
+    ],
+)
+def test_buy_refused(goods: str, changes: dict[str, Any], reason: str) -> None:
+    world = world_with(Lina={**at(*MARKET), "basket": "flowers", **changes})
+    world["trader"] = TRADER
+    answer = json.dumps({"action": "buy", "goods": goods})
+    assert parse_action(answer, world, "Lina") == ({"action": "wait"}, reason)
+
+
+def test_buy_without_a_trader_is_refused() -> None:
+    world = world_with(tick=_at(1, 15), Lina={**at(*MARKET), "basket": "flowers"})
+    assert parse_action('{"action": "buy", "goods": "wood"}', world, "Lina") == (
+        {"action": "wait"},
+        "no trader is at the market now; one comes every day from 09:00 to 14:00",
+    )
+
+
+def test_the_facts_name_the_trader_and_a_carried_load() -> None:
+    early = observation(world_with(tick=_at(1, 7), Lina={"basket": "wood"}), "Lina")
+    facts = early.split("What others told you")[0]
+    assert "A trader comes to the market today from 09:00 to 14:00." in facts
+    assert "You carry a load of wood." in facts
+    world = world_with()
+    world["trader"] = TRADER
+    assert "A trader is at the market until 14:00, selling wood (3) and saplings (1);" in (
+        observation(world, "Lina")
+    )
+    late = observation(world_with(tick=_at(1, 15)), "Lina")
+    assert "The trader has left; the next one comes tomorrow at 09:00." in late
+
+
+def test_the_rules_describe_buy() -> None:
+    rules = villager_agent("Jonas")["config"]["blocks"][0]["system"]
+    assert '{"action": "buy", "goods": "wood"} at the market while the trader is there' in rules

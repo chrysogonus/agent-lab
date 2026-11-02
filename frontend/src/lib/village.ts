@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { ChronicleEntry, Goods, PlanEntry, Run, Stalls, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, BuildingGoods, ChronicleEntry, Goods, PlanEntry, Run, Stalls, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
@@ -204,8 +204,9 @@ export function turnLabel(turn: Run): string {
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
   if (action.action === "work") return `${time}works at the ${placeLabel(action.place)}`;
   if (action.action === "give") {
-    return action.to ? `${time}gives a basket of ${action.goods} to ${action.to}` : `${time}sets out ${action.goods} on the festival stalls`;
+    return action.to ? `${time}gives a ${carriedText(action.goods)} to ${action.to}` : `${time}sets out ${action.goods} on the festival stalls`;
   }
+  if (action.action === "buy") return `${time}trades a ${carriedText(action.paid)} for a ${carriedText(action.goods)}`;
   return `${time}waits`;
 }
 
@@ -214,7 +215,27 @@ export function planEntryText(entry: PlanEntry): string {
   return `${entry.time} ${entry.villager ? `see ${entry.villager}` : entry.place}: ${entry.purpose}`;
 }
 
-export const GOODS: Goods[] = ["fish", "vegetables", "flowers"];
+export const GOODS: BasketGoods[] = ["fish", "vegetables", "flowers"];
+export const BUILDING_GOODS: BuildingGoods[] = ["wood", "paint", "saplings"];
+
+export function isBasket(goods: Goods): goods is BasketGoods {
+  return (GOODS as Goods[]).includes(goods);
+}
+
+/** "basket of fish" or "load of wood": a villager carries one of either at a time. */
+export function carriedText(goods: Goods): string {
+  return `${isBasket(goods) ? "basket" : "load"} of ${goods}`;
+}
+
+/** Whether the day's trader is coming, at the market (with what it has left) or gone. */
+export function traderText(state: Pick<VillageState, "trader" | "time">): string {
+  const { trader } = state;
+  if (trader) {
+    const stock = BUILDING_GOODS.filter((g) => trader.stock[g] > 0).map((g) => `${g} (${trader.stock[g]})`);
+    return stock.length ? `A trader is at the market until ${trader.leaves}: ${listed(stock)}.` : `A trader is at the market until ${trader.leaves} and has sold everything.`;
+  }
+  return state.time < "14:00" ? "A trader comes to the market at 09:00." : "The trader has left; the next comes tomorrow at 09:00.";
+}
 
 function listed(items: string[]): string {
   return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : (items[0] ?? "");

@@ -269,6 +269,11 @@ def place_named(text: str) -> str | None:
     return next((key for key in PLACES if label(key) == wanted), None)
 
 
+def listed(items: list[str]) -> str:
+    """ "fish, vegetables and flowers" """
+    return " and ".join([", ".join(items[:-1]), items[-1]] if len(items) > 1 else items)
+
+
 def villager_named(text: str) -> str | None:
     """A villager by first name or title ("Mayor Hilde", "hilde"): models often use the title."""
     words = set(re.findall(r"[a-z]+", text.lower()))

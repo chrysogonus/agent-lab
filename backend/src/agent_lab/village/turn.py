@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
-from agent_lab.village.trade import carried_text
+from agent_lab.village.trade import buy_refusal, carried_text, goods_named, trader_text
 from agent_lab.village.work import delivery_text, give_refusal, stalls_text, work_refusal
 from agent_lab.village.world import (
     PLACES,
@@ -66,11 +66,16 @@ class Give(BaseModel):
     to: str | None = None  # without a name: onto the festival stalls
 
 
+class Buy(BaseModel):
+    action: Literal["buy"]
+    goods: str  # wood, paint or saplings, for the basket carried (M12)
+
+
 class Wait(BaseModel):
     action: Literal["wait"]
 
 
-type Action = Move | Find | Say | Goodbye | Work | Give | Wait
+type Action = Move | Find | Say | Goodbye | Work | Give | Buy | Wait
 ACTION = TypeAdapter[Action](Annotated[Action, Field(discriminator="action")])
 
 Villager = dict[str, Any]
@@ -249,6 +254,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         *festival_lines(world["tick"]),
         where_text(world, me) + (" You are working here." if me["working"] else ""),
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
+        trader_text(world),
         *(
             [stalls_text(world["stalls"]), *filter(None, [delivery_text(world, name)])]
             if date(day)[1] == "autumn"
@@ -332,6 +338,12 @@ def parse_action(
         return (
             (wait, why) if why else ({"action": "work", "place": place_at(me["x"], me["y"])}, None)
         )
+    if isinstance(action, Buy):
+        why = buy_refusal(world, name, action.goods)
+        if why:
+            return wait, why
+        paid = villager_of(world, name)["basket"]
+        return {"action": "buy", "goods": goods_named(action.goods), "paid": paid}, None
     if isinstance(action, Give):
         to = action.to or None
         why = give_refusal(world, name, to)
@@ -481,7 +493,7 @@ _M11_PLAN_RULES = (
 )
 
 
-RULES = (
+_M11_RULES = (
     "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
     "and everyone's own home. Time passes in steps of 10 minutes. You are asked what to do when "
@@ -511,7 +523,13 @@ RULES = (
 )
 
 
-OLD_RULES = (_M7_RULES, _M9_RULES, _M11_PLAN_RULES)
+RULES = _M11_RULES.replace(
+    '{"action": "wait"} to go on',
+    '{"action": "buy", "goods": "wood"} at the market while the trader is there: trade the '
+    "basket you carry for a load of wood, paint or saplings for building,\n"
+    '{"action": "wait"} to go on',
+)
+OLD_RULES = (_M7_RULES, _M9_RULES, _M11_PLAN_RULES, _M11_RULES)
 
 
 def villager_agent(name: str) -> dict[str, Any]:

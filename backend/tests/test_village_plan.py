@@ -43,6 +43,7 @@ def test_the_prompt_holds_the_day_ahead() -> None:
     assert "Your usual day: 05:00 pier, 11:00 market, 14:00 pier." in prompt
     assert "Day 1 (day 1 of spring, year 1)" in prompt
     assert "The fields are resting." in prompt
+    assert "A trader comes to the market today from 09:00 to 14:00." in prompt
     assert "- Hilde wants fish for the festival." in prompt
     assert "- Greta: Hard-working." in prompt
     assert "Talked with Lina: the nets are torn." in prompt

@@ -3,7 +3,7 @@
 from typing import Any
 
 from agent_lab.village.trade import BASKET_GOODS, carried_text
-from agent_lab.village.world import adjacent, place_at, villager_named
+from agent_lab.village.world import adjacent, listed, place_at, villager_named
 
 GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers"}
 BASKET_STEPS = 6  # one village hour of work, added up over everyone working a place
@@ -129,10 +129,6 @@ def delivery_text(world: dict[str, Any], name: str) -> str | None:
             'with {"action": "give"}.'
         )
     return f"{lack}Take your basket to the square and set it out on the festival stalls."
-
-
-def listed(items: list[str]) -> str:
-    return " and ".join([", ".join(items[:-1]), items[-1]] if len(items) > 1 else items)
 
 
 def stalls_text(stalls: dict[str, int]) -> str:

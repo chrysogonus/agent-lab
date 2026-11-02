@@ -86,7 +86,7 @@ contracts/http-api.md, quickstart.md)
 
 ## Phase 2: User Story 1 — The daily trader (P1) 🎯 MVP
 
-- [ ] T004 [P] [US1] backend/src/agent_lab/village/trade.py (research §1):
+- [X] T004 [P] [US1] backend/src/agent_lab/village/trade.py (research §1):
   - `TRADER_ARRIVES = 9 * 60`, `TRADER_LEAVES = 14 * 60`.
   - `trader_stock(day)`: `random.Random(f"trader {day}")`, wood 2–6, paint 1–3, saplings 0–3, the same every time the day comes.
   - `trader_due(world) -> "arrive" | "leave" | None`:
@@ -101,14 +101,14 @@ contracts/http-api.md, quickstart.md)
     6. "you already carry a load of wood".
 
     Buying while talking is allowed.
-  - `trader_text(world)` ("A trader comes to the market today from 09:00 to 14:00." / "A trader is at the market until 14:00, selling wood ×4, paint ×2 and saplings ×1; it takes one basket of fish, vegetables or flowers for each load." / "The trader has left; the next one comes tomorrow at 09:00.").
+  - `trader_text(world)` ("A trader comes to the market today from 09:00 to 14:00." / "A trader is at the market until 14:00, selling wood (4), paint (2) and saplings (1); it takes one basket of fish, vegetables or flowers for each load." / "The trader has left; the next one comes tomorrow at 09:00.").
   - Tests in test_village_trade.py:
     - the same stock for the same day and within the ranges;
     - `trader_due` at 08:50, 09:00, mid-window after a load, 13:50 and 14:00;
     - every refusal in order;
     - the three texts.
   - Requirements: FR-001, FR-002, FR-003.
-- [ ] T005 [US1] backend/src/agent_lab/village/turn.py:
+- [X] T005 [US1] backend/src/agent_lab/village/turn.py:
   - a `Buy` action `{"action": "buy", "goods"}`; `parse_action` refuses with `buy_refusal`, otherwise returns `{"action": "buy", "goods", "paid": <the basket goods>}`.
   - The facts part adds `trader_text`.
   - `RULES` adds buy ('{"action": "buy", "goods": "wood"} at the market while the trader is there: your basket for a load'), and the M11 text moves into `OLD_RULES` as `_M11_RULES`.
@@ -119,9 +119,9 @@ contracts/http-api.md, quickstart.md)
     - the trader line before, during and after.
   - Tests in test_village_runner.py: an agent holding the M11 rules gets the new ones; an edited prompt is left alone.
   - Requirements: FR-002, FR-003, FR-016.
-- [ ] T006 [US1] backend/src/agent_lab/village/runner.py:
+- [X] T006 [US1] backend/src/agent_lab/village/runner.py:
   - `_trader()` in `_advance` before the moves:
-    - arrival sets `world["trader"] = {day, stock}` with the note "A trader came to the market with wood ×4, paint ×2 and saplings ×1.";
+    - arrival sets `world["trader"] = {day, stock}` with the note "A trader came to the market with wood (4), paint (2) and saplings (1).";
     - leaving clears it with "The trader left the market (sold 3 loads).".
   - `_apply` buy: stock − 1, `v["basket"] = goods`, the event "You traded your basket of fish for a load of wood." (kind `traded`), the note "Lina traded a basket of fish for a load of wood.", and `village_action` `{"action": "buy", "goods", "paid"}`.
   - `_decide` turns a buy whose basket changed while deciding into a wait, as give already does.
@@ -134,7 +134,7 @@ contracts/http-api.md, quickstart.md)
     - the load kept overnight;
     - the notes in the day record.
   - Requirements: FR-001, FR-002, FR-015.
-- [ ] T007 [US1] Frontend:
+- [X] T007 [US1] Frontend:
   - frontend/src/lib/api.ts: `Goods` widened with `wood`, `paint` and `saplings`; `VillageState.trader`; the `VillageAction` buy; event kind `traded`.
   - frontend/src/lib/village.ts: `carriedText(goods)`, `traderText(state)`, and `turnLabel` for buy ("trades fish for a load of wood" or "waited: …").
   - New frontend/src/components/village/building.tsx:
@@ -142,7 +142,7 @@ contracts/http-api.md, quickstart.md)
     - `Load`: a carried load (planks, a paint pot, a sapling) drawn beside the figure like `Basket`.
   - VillageView.tsx draws them and adds the trader line under the weather.
   - Tests in frontend/src/lib/village.test.ts: `carriedText`, `traderText` with and without a trader, and `turnLabel` buy.
-  - Screenshots of the trader at the market and a carried load.
+  - Screenshots of the trader at the market and a carried load (taken with T021: `make dev` serves the owner's live village, so scratch screenshots wait for the manual checks).
   - Requirement: FR-003.
 
 ## Phase 3: User Story 2 — The town hall meeting and vote (P1)

@@ -1060,43 +1060,53 @@ async def test_goodbye_to_find_someone_and_an_ignored_destination(tmp_path: Path
     ]
 
 
+def set_rules(v: Village, name: str, text: str) -> None:
+    """The villager's stored agent with `text` in place of the current rules."""
+    from agent_lab.village.turn import RULES
+
+    agent = v.store.get_agent(villager(v, name)["agent_id"])
+    assert agent is not None
+    blocks = agent.config["blocks"]
+    system = blocks[0]["system"].replace(RULES, text)
+    v.store.update_agent(
+        agent.agent_id,
+        name=agent.name,
+        description=agent.description,
+        sample_prompt=agent.sample_prompt,
+        config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
+    )
+
+
+def system_of(v: Village, name: str) -> str:
+    agent = v.store.get_agent(villager(v, name)["agent_id"])
+    assert agent is not None
+    return agent.config["blocks"][0]["system"]
+
+
 @pytest.mark.anyio
-async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path) -> None:
+@pytest.mark.parametrize("old", range(4))
+async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old: int) -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
-    m7, m9, m11_plans = OLD_RULES
     v, _ = village_for(tmp_path)
-    ids = {x["name"]: x["agent_id"] for x in v.world["villagers"]}
-    for name, old in (
-        ("Hilde", m7),
-        ("Greta", m9),
-        ("Lina", m11_plans),
-        ("Jonas", "MY OWN RULES"),
-    ):
-        agent = v.store.get_agent(ids[name])
-        assert agent is not None
-        blocks = agent.config["blocks"]
-        system = blocks[0]["system"].replace(RULES, old)
-        v.store.update_agent(
-            agent.agent_id,
-            name=agent.name,
-            description=agent.description,
-            sample_prompt=agent.sample_prompt,
-            config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
-        )
+    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11
+    set_rules(v, "Jonas", "MY OWN RULES")
     Village(store=v.store, models=v.models, bus=Bus())  # loading refreshes the rules
-    systems: dict[str, str] = {}
-    for name in ("Hilde", "Greta", "Jonas", "Lina"):
-        agent = v.store.get_agent(ids[name])
-        assert agent is not None
-        systems[name] = agent.config["blocks"][0]["system"]
-    for name in ("Hilde", "Greta", "Lina"):
-        assert systems[name].endswith(RULES) and systems[name].count(RULES) == 1
-        assert all(old not in systems[name] for old in OLD_RULES)
-    assert systems["Jonas"].endswith("MY OWN RULES")  # the owner's edit stays
-    assert "Trust what you see over what you hear" in RULES
+    hilde = system_of(v, "Hilde")
+    assert hilde.endswith(RULES) and hilde.count(RULES) == 1
+    assert all(text not in hilde for text in OLD_RULES)
+    assert system_of(v, "Jonas").endswith("MY OWN RULES")  # the owner's edit stays
+
+
+def test_the_rules_history() -> None:
+    from agent_lab.village.turn import OLD_RULES, RULES
+
+    _m7, _m9, m11_plans, m11 = OLD_RULES
+    assert "Trust what you see over what you hear" in RULES and "Trust what you see" in m11_plans
     assert "Follow your plan for the day" in RULES
-    assert '{"action": "work"}' in RULES and "Trust what you see" in m11_plans
+    assert '{"action": "work"}' in RULES and '{"action": "work"}' in m11
+    assert '{"action": "buy", "goods": "wood"}' in RULES and "buy" not in m11
+    assert len(set(OLD_RULES)) == 4 and RULES not in OLD_RULES
 
 
 @pytest.mark.anyio
@@ -1882,3 +1892,98 @@ async def test_a_basket_that_came_while_deciding_is_not_given_on(tmp_path: Path)
         "reason": "the basket came to you after you decided; decide again what to do with it",
     }
     assert villager(v, "Greta")["triggers"] == ["given"]  # so she decides again
+
+
+# --- M12 US1: the daily trader ---
+
+MARKET_CELLS = place_cells("market")
+
+
+def buy(goods: str) -> str:
+    return json.dumps({"action": "buy", "goods": goods})
+
+
+def tick_at(hour: int, minute: int = 0, day: int = 1) -> int:
+    return ((day - 1) * 1440 + hour * 60 + minute - 270) // 10
+
+
+@pytest.mark.anyio
+async def test_the_trader_is_at_the_market_from_nine_to_two(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_at(8, 30))
+    v.world["day_record"] = {"day": 1, "items": []}
+    present: list[str] = []
+    for _ in range(36):  # 08:40 to 14:30
+        await v.step()
+        if v.world["trader"]:
+            present.append(v.state()["time"])
+            assert v.state()["trader"]["leaves"] == "14:00"
+        else:
+            assert v.state()["trader"] is None
+    assert present[0] == "09:00" and present[-1] == "13:50" and len(present) == 30
+    [came] = [n for n in notes(v) if n.startswith("A trader came")]
+    assert came.startswith("A trader came to the market with wood (")
+    assert "The trader left the market (sold 0 loads)." in notes(v)
+
+
+@pytest.mark.anyio
+async def test_a_basket_buys_a_load(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina": [buy("wood")]})
+    morning(v, tick_at(10))
+    v.world["day_record"] = {"day": 1, "items": []}
+    trader: dict[str, Any] = {"day": 1, "stock": {"wood": 2, "paint": 1, "saplings": 0}}
+    v.world["trader"] = trader
+    put(v, "Lina", *MARKET_CELLS[0], basket="flowers", triggers=["arrived"])
+    await v.step()
+    assert villager(v, "Lina")["basket"] == "wood"
+    assert trader["stock"]["wood"] == 1
+    assert texts(v, "Lina", "traded") == ["You traded your basket of flowers for a load of wood."]
+    assert "Lina traded a basket of flowers for a load of wood." in notes(v)
+    [turn] = v.store.list_turns("Lina")
+    assert turn.village_action == {"action": "buy", "goods": "wood", "paid": "flowers"}
+    assert v.state()["trader"] == {
+        "stock": {"wood": 1, "paint": 1, "saplings": 0},
+        "leaves": "14:00",
+    }
+
+
+@pytest.mark.anyio
+async def test_no_buying_after_the_trader_left(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina": [buy("wood")]})
+    morning(v, tick_at(15))
+    put(v, "Lina", *MARKET_CELLS[0], basket="flowers", triggers=["arrived"])
+    await v.step()
+    assert villager(v, "Lina")["basket"] == "flowers"
+    assert villager(v, "Lina")["last_action"] == {
+        "action": "wait",
+        "reason": "no trader is at the market now; one comes every day from 09:00 to 14:00",
+    }
+
+
+@pytest.mark.anyio
+async def test_two_villagers_after_the_last_paint(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina": [buy("paint")], "Greta": [buy("paint")]})
+    morning(v, tick_at(10))
+    v.world["trader"] = {"day": 1, "stock": {"wood": 0, "paint": 1, "saplings": 0}}
+    put(v, "Lina", *MARKET_CELLS[0], basket="flowers", triggers=["arrived"])
+    put(v, "Greta", *MARKET_CELLS[1], basket="vegetables", triggers=["arrived"])
+    await v.step()
+    carried = sorted([villager(v, "Lina")["basket"], villager(v, "Greta")["basket"]])
+    assert carried in (["paint", "vegetables"], ["flowers", "paint"])
+    reasons = [villager(v, n)["last_action"].get("reason") for n in ("Lina", "Greta")]
+    assert sorted(reasons, key=str) == sorted([None, "the trader has no paint left"], key=str)
+
+
+@pytest.mark.anyio
+async def test_a_basket_given_while_deciding_does_not_pay_the_trader(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina": [buy("wood")]}, delay=0.01)
+    morning(v, tick_at(10))
+    trader: dict[str, Any] = {"day": 1, "stock": {"wood": 2, "paint": 0, "saplings": 0}}
+    v.world["trader"] = trader
+    lina = put(v, "Lina", *MARKET_CELLS[0], basket="flowers", triggers=["arrived"])
+    v._start_decisions(force=True)  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0)  # Lina's prompt is written
+    lina["basket"] = "fish"  # handed over while Lina decides
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert lina["basket"] == "fish" and trader["stock"]["wood"] == 2
+    assert lina["last_action"]["action"] == "wait"

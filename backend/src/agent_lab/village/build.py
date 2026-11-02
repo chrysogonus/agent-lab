@@ -58,7 +58,7 @@ CATALOGUE = (
         kind="stand",
         needs={"wood": 3, "paint": 1},
         site=place_cells("market"),
-        at=[(25, 7)],
+        at=[(26, 8)],  # beside the market's own stalls
         done_text="The market has a new stand.",
     ),
     Project(
