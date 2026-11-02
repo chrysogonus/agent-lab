@@ -125,8 +125,6 @@ def test_project_text() -> None:
         "The village is building: Paint Lina's house (the building site is in front of Lina's "
         "house). It still needs 1 paint; the site holds 1 paint; 0 of 2 loads worked in.",
         "Hilde asked you to: buy paint from the trader; build at the building site.",
-        "The building site (in front of Lina's house) holds 1 paint waiting to be built with: go "
-        'and build ({"action": "move", "place": "building site"}, then {"action": "work"}).',
         "Built so far: A rowing boat lies at the pier.",
     ]
     assert project_text(world, "Jonas")[1] == "Nothing is asked of you; you may still help."
@@ -219,60 +217,10 @@ def test_sleepers_and_others_do_not_build() -> None:
     assert world["project"]["used"]["wood"] == 0
 
 
-def test_a_carried_load_is_meant_for_the_building_site() -> None:
-    world = site_world()  # the market stand, its site the market
-    jonas = next(v for v in world["villagers"] if v["name"] == "Jonas")
-    jonas["basket"] = "wood"
-    lines = project_text(world, "Jonas")
-    assert (
-        "Take your load of wood to the building site (at the market) and set it down there: "
-        '{"action": "move", "place": "building site"}, then {"action": "give"}.'
-    ) in lines
-    jonas |= {"x": entry("market_stand").site[0][0], "y": entry("market_stand").site[0][1]}
-    assert (
-        'You are at the building site: set down your load of wood now with {"action": "give"}.'
-        in project_text(world, "Jonas")
-    )
-    jonas["basket"] = "saplings"  # not needed: no hint
-    assert not any("saplings" in line for line in project_text(world, "Jonas"))
-
-
-def test_loads_at_the_site_ask_whoever_stands_there_to_build() -> None:
-    world = site_world(wood=2)
-    greta = next(v for v in world["villagers"] if v["name"] == "Greta")
-    greta |= {"x": entry("market_stand").site[0][0], "y": entry("market_stand").site[0][1]}
-    assert 'The building site holds 2 wood: build here with {"action": "work"}.' in project_text(
-        world, "Greta"
-    )
-    greta["working"] = {"place": "site", "steps": 0}
-    assert not any("build here" in line for line in project_text(world, "Greta"))
-
-
-def test_with_nothing_to_build_with_a_basket_is_pointed_to_the_trader() -> None:
-    world = site_world("trees_square")  # needs 3 saplings, the site holds nothing
-    greta = next(v for v in world["villagers"] if v["name"] == "Greta")
-    greta["basket"] = "flowers"
-    hint = (
-        "Nothing can be built until someone buys saplings: trade your basket for a load at the "
-        'market while the trader is there ({"action": "buy", "goods": "saplings"}).'
-    )
-    assert hint in project_text(world, "Greta")
-    greta["basket"] = None
-    assert hint not in project_text(world, "Greta")
-    greta["basket"] = "flowers"
-    world["project"]["site"]["saplings"] = 1  # something to build with
-    assert hint not in project_text(world, "Greta")
-
-
-def test_loads_waiting_at_the_site_call_the_others_to_build() -> None:
+def test_the_project_text_gives_no_hints_any_more() -> None:
+    """M14: "What you can do here" says what to do with loads (test_village_affordances.py)."""
     world = site_world("trees_square", saplings=2)
-    hint = (
-        "The building site (by the square, east of it) holds 2 saplings waiting to be built "
-        'with: go and build ({"action": "move", "place": "building site"}, then '
-        '{"action": "work"}).'
-    )
-    assert hint in project_text(world, "Jonas")  # at his door, far from the site
     jonas = next(v for v in world["villagers"] if v["name"] == "Jonas")
-    jonas |= {"x": 18, "y": 10}  # at the site: told to build here instead
-    assert hint not in project_text(world, "Jonas")
-    assert any("build here" in line for line in project_text(world, "Jonas"))
+    jonas |= {"x": 18, "y": 10, "basket": "saplings"}
+    lines = project_text(world, "Jonas")
+    assert len(lines) == 2 and not any('{"action"' in line for line in lines)

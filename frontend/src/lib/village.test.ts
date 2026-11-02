@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChronicleEntry, Meeting, Project, Run, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Intention, Meeting, Project, Run, VillageState, Villager } from "./api";
 import {
   activity,
   cellKind,
@@ -30,6 +30,7 @@ import {
   projectLines,
   boxOf,
   builtLines,
+  intentionText,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -60,6 +61,7 @@ const villager = (fields: Partial<Villager>): Villager => ({
   plan: null,
   basket: null,
   working: null,
+  intention: null,
   ...fields,
 });
 
@@ -441,5 +443,44 @@ describe("building and what stands", () => {
   it("lists what has been built", () => {
     expect(builtLines([])).toEqual([]);
     expect(builtLines([{ key: "boat", name: "A rowing boat", kind: "boat", day: 9 }])).toEqual(["Day 9: A rowing boat"]);
+  });
+});
+
+describe("intentions (M14)", () => {
+  const intention = (fields: Partial<Intention>): Intention => ({
+    kind: "go",
+    place: "market",
+    villager: null,
+    until: null,
+    purpose: null,
+    since: "09:30",
+    ...fields,
+  });
+
+  it("says what a villager is set on", () => {
+    expect(intentionText(intention({}))).toBe("Going to the market");
+    expect(intentionText(intention({ place: "home" }))).toBe("Going home");
+    expect(intentionText(intention({ kind: "work", place: "fields", until: "12:00" }))).toBe("Working at the fields until 12:00");
+    expect(intentionText(intention({ kind: "build", place: "site", until: "15:00" }))).toBe("Building at the site until 15:00");
+    expect(intentionText(intention({ kind: "bring", place: "site" }))).toBe("Taking a load to the building site");
+    expect(intentionText(intention({ kind: "see", place: null, villager: "Greta" }))).toBe("Going to see Greta");
+  });
+
+  it("shows the intention as the villager's state while it walks or works", () => {
+    const building = intention({ kind: "build", place: "site", until: "15:00" });
+    expect(stateText(villager({ state: "walking", goal: "walking to the building site", intention: building }))).toBe("Building at the site until 15:00");
+    expect(stateText(villager({ state: "working", working: "site", intention: building }))).toBe("Building at the site until 15:00");
+    expect(stateText(villager({ state: "talking", talking_with: ["Lina"], intention: building }))).toBe("Talking with Lina");
+  });
+
+  it("labels turns that set out on something", () => {
+    const turn = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    const until = intention({ kind: "work", place: "fields", until: "12:00" });
+    expect(turnLabel(turn({ action: "work", place: "fields", intention: until }))).toBe("05:00 works at the fields until 12:00");
+    expect(turnLabel(turn({ action: "build", intention: intention({ kind: "build", place: "site", until: "15:00" }) }))).toBe("05:00 sets out to build at the site until 15:00");
+    expect(turnLabel(turn({ action: "build" }))).toBe("05:00 sets out to build at the site");
+    expect(turnLabel(turn({ action: "bring" }))).toBe("05:00 takes a load to the building site");
+    expect(turnLabel(turn({ action: "find", villager: "Lina", say: "Flowers?" }))).toBe("05:00 goes looking for Lina to say: Flowers?");
+    expect(turnLabel(turn({ action: "build", reason: "nothing is being built" }))).toBe("05:00 waited: nothing is being built");
   });
 });

@@ -60,18 +60,17 @@ def test_bring_a_needed_load_and_set_it_down_at_the_site() -> None:
     ]
 
 
-def test_buy_what_the_trader_has() -> None:
+def test_buy_what_the_trader_has_and_the_project_needs() -> None:
     world = world_of(
+        project={"key": "market_stand"},  # needs wood and paint
         trader={"wood": 2, "paint": 0, "saplings": 1},
         villagers={"Greta": {"at": "market", "carrying": "vegetables"}},
     )
     assert can_do(world, "Greta") == [
         ({"action": "buy", "goods": "wood"}, "trade your basket for a load; the trader has 2 left"),
-        (
-            {"action": "buy", "goods": "saplings"},
-            "trade your basket for a load; the trader has 1 left",
-        ),
     ]
+    world["project"] = None  # nothing to build: no reason to buy
+    assert can_do(world, "Greta") == []
 
 
 def test_give_onto_the_stalls_on_the_square() -> None:
@@ -94,8 +93,9 @@ def test_say_to_each_awake_villager_next_to_you() -> None:
     assert actions(world, "Lina") == [{"action": "say", "to": "Jonas", "text": "…"}]
 
 
-def test_at_most_six_entries_in_order() -> None:
+def test_six_entries_in_order() -> None:
     world = world_of(
+        project={"key": "market_stand", "site": {"wood": 1}},  # its site is the market
         trader={"wood": 2, "paint": 2, "saplings": 2},
         villagers={
             "Greta": {"at": [23, 8], "carrying": "vegetables"},
@@ -107,9 +107,9 @@ def test_at_most_six_entries_in_order() -> None:
     kinds = [(a["action"], a.get("goods") or a.get("to")) for a in actions(world, "Greta")]
     assert len(kinds) == MOST == 6
     assert kinds == [
+        ("build", None),
         ("buy", "wood"),
         ("buy", "paint"),
-        ("buy", "saplings"),
         ("say", "Hilde"),
         ("say", "Jonas"),
         ("say", "Lina"),
@@ -137,6 +137,7 @@ def test_every_listed_answer_is_accepted() -> None:
         ),
         (
             world_of(
+                project={"key": "boat"},
                 trader=True,
                 villagers={
                     "Greta": {"at": "market", "carrying": "vegetables"},

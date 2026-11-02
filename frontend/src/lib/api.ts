@@ -64,15 +64,17 @@ export type Run = {
 
 // The village (M6, M7). See specs/007-village-life/contracts/http-api.md.
 export type VillageAction =
-  | { action: "move"; place: string; reason?: string }
-  | { action: "find"; villager: string; reason?: string }
+  | { action: "move"; place: string; purpose?: string; intention?: Intention; reason?: string }
+  | { action: "find"; villager: string; say?: string; purpose?: string; intention?: Intention; reason?: string }
   | { action: "say"; text: string; to: string | null; reason?: string }
-  | { action: "goodbye"; text: string | null; place?: string; villager?: string; ignored?: string; reason?: string }
+  | { action: "goodbye"; text: string | null; place?: string; villager?: string; ignored?: string; intention?: Intention; reason?: string }
   | { action: "wait"; reason?: string }
   | { action: "reflect"; learnings?: string[]; views?: Record<string, string>; reason?: string }
   | { action: "chronicle"; day: number; title?: string; text?: string; reason?: string }
   | { action: "plan"; revision: number; entries?: string[]; reason?: string } // M11
-  | { action: "work"; place: string; reason?: string }
+  | { action: "work"; place: string; until?: number; purpose?: string; intention?: Intention; reason?: string }
+  | { action: "build"; until?: number; purpose?: string; intention?: Intention; reason?: string } // M14
+  | { action: "bring"; purpose?: string; intention?: Intention; reason?: string }
   | { action: "give"; to: string | null; goods: Goods; reason?: string }
   | { action: "buy"; goods: BuildingGoods; paid: BasketGoods; reason?: string } // M12
   | { action: "propose"; proposals?: string[]; reason?: string }
@@ -85,7 +87,8 @@ export type VillageEvent = {
   kind:
     | "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival"
     | "planned" | "worked" | "basket" | "gave" | "received" // M11
-    | "traded" | "proposed" | "meeting" | "task" | "built"; // M12
+    | "traded" | "proposed" | "meeting" | "task" | "built" // M12
+    | "intended" | "intention_ended"; // M14
   text: string;
   from?: string;
   to?: string | null;
@@ -119,6 +122,17 @@ export type Villager = {
   plan: Plan | null; // today's plan (M11)
   basket: Goods | null; // one thing at a time, kept overnight: a basket (M11) or a load (M12)
   working: "fields" | "flower_garden" | "pier" | "site" | null; // where it works until it walks off (site: M12)
+  intention: Intention | null; // what it set out to do (M14)
+};
+
+// M14: better villagers. See specs/014-better-villagers/contracts/villager-answers.md.
+export type Intention = {
+  kind: "go" | "work" | "build" | "bring" | "see";
+  place: string | null; // a place key, "site" or "home"; null for see
+  villager: string | null; // whom it goes to see
+  until: string | null; // "12:00"
+  purpose: string | null;
+  since: string;
 };
 
 // M11: plans and purpose. See specs/011-plans-and-purpose/contracts/http-api.md.

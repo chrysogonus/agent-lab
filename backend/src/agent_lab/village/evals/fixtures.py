@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from agent_lab.village.build import CATALOGUE, entry, new_project
+from agent_lab.village.intention import start
 from agent_lab.village.memory import remember
 from agent_lab.village.seasons import date, new_growth
 from agent_lab.village.trade import BASKET_GOODS, BUILDING_GOODS, trader_stock
@@ -26,7 +27,7 @@ KEYS = {
 }
 VILLAGER_KEYS = {
     *("at", "asleep", "carrying", "working", "goal", "memories", "learnings", "inbox"),
-    *("said", "events", "plan", "triggers"),
+    *("said", "events", "plan", "triggers", "intention"),
 }
 FIRST_MINUTE = 270  # 04:30 of day 1, tick 0
 
@@ -116,6 +117,15 @@ def _villager(world: dict[str, Any], name: str, spec: dict[str, Any], day: int) 
     v["said"] = list(spec.get("said", []))
     v["triggers"] = list(spec.get("triggers", []))  # a reason to decide on the first step
     v["events"] = [{"tick": tick - 1, "kind": "event", "text": t} for t in spec.get("events", [])]
+    if "intention" in spec:  # as an answer starts it: {"action": "build", "until": "15:00"}
+        action = dict(spec["intention"])
+        if action.get("action") not in ("move", "work", "build", "bring", "find"):
+            raise FixtureError(f"unknown intention {action.get('action')!r}")
+        if "place" in action:
+            action["place"] = _place(action["place"])
+        if "until" in action:
+            action["until"] = _minute(action["until"])
+        v["intention"] = start(world, name, action)
     if "plan" in spec:
         entries = [
             {

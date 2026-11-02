@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { villagerTurns, type Run, type Villager } from "@/lib/api";
-import { eventLines, planEntryText, sleepText, stateText, turnLabel } from "@/lib/village";
+import { eventLines, intentionText, planEntryText, sleepText, stateText, turnLabel } from "@/lib/village";
 import { VillagerSprite } from "./pixels";
 
 const MEMORIES_SHOWN = 10;
@@ -65,6 +65,14 @@ export function VillagerPanel({
             })}
           </ol>
         )}
+      </div>
+      <div>
+        <h3 className="mb-1.5 text-lg">Set on</h3>
+        <p className={`font-sans text-sm ${villager.intention ? "text-dusk" : "text-dusk-muted"}`}>
+          {villager.intention
+            ? `${intentionText(villager.intention)}${villager.intention.purpose ? ` (${villager.intention.purpose})` : ""}, since ${villager.intention.since}`
+            : "Nothing at the moment."}
+        </p>
       </div>
       {villager.agent_id && (
         <button type="button" onClick={() => onEditAgent(villager.agent_id!)} className="village-button self-start">

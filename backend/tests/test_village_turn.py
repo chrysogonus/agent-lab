@@ -7,6 +7,7 @@ import pytest
 
 from agent_lab.blocks.model import BlocksConfig, layout_errors
 from agent_lab.village.build import new_project
+from agent_lab.village.intention import start
 from agent_lab.village.seasons import WEATHER_TEXT, date, weather
 from agent_lab.village.turn import (
     SPEECH_SHOWN,
@@ -207,7 +208,7 @@ def test_villager_agents_are_valid_block_agents(name: str) -> None:
     decide, check = config.blocks
     assert decide.kind == "model" and decide.system.startswith(VILLAGERS[name].persona)
     assert VILLAGERS[name].home in decide.system and "go to bed at" in decide.system
-    for example in ('{"action": "wait"}', '{"action": "find", "villager": "Lina"}'):
+    for example in ('{"action": "wait"}', '{"action": "bring"}'):
         assert example in decide.system and json.loads(example)
     assert "right next to you" in decide.system
     assert check.kind == "check" and check.rule == "valid_json"
@@ -479,7 +480,7 @@ def test_the_facts_name_work_the_basket_and_in_autumn_the_stalls() -> None:
 
 def test_the_rules_describe_work_and_give() -> None:
     rules = villager_agent("Jonas")["config"]["blocks"][0]["system"]
-    assert '{"action": "work"}' in rules
+    assert '{"action": "work", "place": "fields", "until": "12:00"}' in rules
     assert '{"action": "give", "to": "Hilde"}' in rules
     assert '{"action": "give"} on the square' in rules
 
@@ -488,19 +489,12 @@ def test_in_autumn_a_carried_basket_is_meant_for_the_stalls() -> None:
     fields = place_cells("fields")[0]
     world = world_with(tick=_at(15, 9), Greta={**at(*fields), "basket": "vegetables"})
     facts = observation(world, "Greta").split("What others told you")[0]
-    assert (
-        "The stalls still lack vegetables. Take your basket to the square and set it out on the "
-        "festival stalls." in facts
-    )
-    world["stalls"]["vegetables"] = 1
-    facts = observation(world, "Greta").split("What others told you")[0]
-    assert "still lack vegetables" not in facts
-    assert "Take your basket to the square and set it out on the festival stalls." in facts
+    assert "they still lack fish, vegetables and flowers." in facts
+    assert "Take your basket" not in facts  # M14: the hint left; what you can do says it
     sx, sy = label_cell("square")
     villager_at_square = world_with(tick=_at(15, 9), Greta={**at(sx, sy), "basket": "vegetables"})
-    assert (
-        "You are on the square: set out your vegetables on the festival stalls now with "
-        '{"action": "give"}.' in observation(villager_at_square, "Greta")
+    assert '- {"action": "give"}: set out your vegetables on the festival stalls' in observation(
+        villager_at_square, "Greta"
     )
     summer = observation(world_with(tick=_at(8, 9), Greta={"basket": "vegetables"}), "Greta")
     assert "You carry a basket of vegetables." in summer and "festival stalls" not in summer
@@ -702,3 +696,45 @@ def test_find_with_a_line_to_say() -> None:
     assert action["say"] == ("Any flowers? " + "x" * 300)[:SPEECH_SHOWN]
     blank = parsed({"action": "find", "villager": "Lina", "say": " "}, world_with(), "Hilde")
     assert blank == ({"action": "find", "villager": "Lina"}, None)
+
+
+# --- M14: the observation (FR-004) ---
+
+
+def test_the_observation_shows_the_intention_and_what_you_can_do_here() -> None:
+    fields = place_cells("fields")[0]
+    world = world_with(Greta=at(*fields))
+    world["growth"]["fields"]["stage"] = "growing"
+    text = observation(world, "Greta")
+    assert "\nYou are not set on anything.\n" in text
+    assert (
+        "What you can do here:\n"
+        '- {"action": "work"}: you can work the fields here; an hour of work tends them\n'
+    ) in text
+    assert text.index("Places: ") < text.index("What you can do here:")
+    assert text.index("What you can do here:") < text.index("What you said lately:")
+    greta = world["villagers"][2]
+    greta["intention"] = start(world, "Greta", {"action": "work", "until": 720})
+    assert "You are set on: work at the fields until 12:00. Next: start working." in observation(
+        world, "Greta"
+    )
+
+
+def test_the_building_hints_left_the_observation() -> None:
+    world = with_project("trees_square", saplings=2)
+    world["villagers"][1] |= {"basket": "saplings"}
+    facts = observation(world, "Jonas")
+    for hint in ("go and build", "set it down there", "set down your load of", "build here"):
+        assert hint not in facts
+    assert '- {"action": "build"}: the building site holds 2 saplings' in facts
+    assert '- {"action": "bring"}: the building site still needs the saplings you carry' in facts
+
+
+def test_build_at_the_site_is_work_there() -> None:
+    """The same answer as M12's work at the site, so the M13 check build-with-loads holds."""
+    world = with_project("trees_square", saplings=2)
+    world["villagers"][2] |= at(18, 10)
+    assert parsed({"action": "build", "until": "15:00"}, world, "Greta") == (
+        {"action": "work", "place": "site", "until": 900},
+        None,
+    )

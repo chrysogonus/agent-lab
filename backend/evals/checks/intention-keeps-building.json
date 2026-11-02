@@ -1,0 +1,51 @@
+{
+  "name": "intention-keeps-building",
+  "agent": "villager",
+  "as": "Greta",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "13:00",
+      "project": {
+        "key": "trees_square",
+        "site": {
+          "saplings": 2
+        }
+      },
+      "villagers": {
+        "Greta": {
+          "at": "site",
+          "working": "site",
+          "intention": {
+            "action": "build",
+            "until": "15:00",
+            "purpose": "to plant the trees"
+          },
+          "triggers": [
+            "met"
+          ],
+          "events": [
+            "Lina is next to you."
+          ]
+        },
+        "Lina": {
+          "at": [
+            19,
+            10
+          ]
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "not": [
+      {
+        "action": "move"
+      },
+      {
+        "action": "find"
+      }
+    ]
+  }
+}

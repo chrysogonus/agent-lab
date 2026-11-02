@@ -159,6 +159,31 @@ def test_bad_fixtures_say_what_is_wrong(fixture: dict[str, Any], error: str) -> 
         build_world(fixture)
 
 
+def test_a_fixture_villager_may_be_set_on_something() -> None:
+    world = build_world(
+        {
+            "day": 67,
+            "time": "13:00",
+            "project": {"key": "trees_square", "site": {"saplings": 2}},
+            "villagers": {
+                "Greta": {
+                    "at": "site",
+                    "intention": {"action": "build", "until": "15:00", "purpose": "trees"},
+                },
+                "Lina": {"intention": {"action": "find", "villager": "Greta", "say": "Hi"}},
+            },
+        }
+    )
+    greta, lina = world["villagers"][2], world["villagers"][3]
+    assert (greta["intention"]["kind"], greta["intention"]["until"]) == ("build", 900)
+    assert greta["intention"]["purpose"] == "trees"
+    assert (lina["intention"]["kind"], lina["intention"]["say"]) == ("see", "Hi")
+    with pytest.raises(FixtureError, match="unknown intention 'dance'"):
+        build_world(
+            {"day": 3, "time": "10:00", "villagers": {"Lina": {"intention": {"action": "dance"}}}}
+        )
+
+
 def test_a_cell_fixture_and_a_place_fixture_agree() -> None:
     cell = place_cells("pier")[0]
     world = build_world({"day": 2, "time": "06:00", "villagers": {"Jonas": {"at": list(cell)}}})
@@ -263,7 +288,7 @@ def a_check(expect: dict[str, Any], **changes: Any) -> dict[str, Any]:
 def test_a_fixture_check_builds_its_prompt_with_todays_code() -> None:
     prompt, world = prompt_of(a_check({"action": {"action": "give"}}))
     assert world is not None and prompt == observation(world, "Lina")
-    assert "You are at the building site: set down your load of saplings now" in prompt
+    assert '{"action": "give"}: set down your load of saplings at the building site' in prompt
     frozen = a_check(
         {"valid": True},
         agent="meeting",
@@ -486,6 +511,7 @@ def test_results_and_compare_on_the_command_line(
 
 SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
 IDEAL = {  # an answer each shipped check must accept: the checks can be passed
+    "intention-keeps-building": '{"action": "say", "to": "Lina", "text": "Help me plant!"}',
     "load-at-site": '{"action": "give"}',
     "load-away": '{"action": "move", "place": "building site"}',
     "meeting-call-talking": '{"action": "goodbye", "place": "town hall"}',
@@ -512,9 +538,13 @@ def test_the_shipped_checks_load_and_can_be_passed() -> None:
         assert judge(check, IDEAL[check["name"]], world) == (True, None), check["name"]
         assert prompt
     by_name = {c["name"]: prompt_of(c)[0] for c in checks}
-    assert "set down your load of saplings now" in by_name["load-at-site"]
-    assert "Take your load of saplings to the building site" in by_name["load-away"]
+    assert "set down your load of saplings at the building site" in by_name["load-at-site"]
+    assert '{"action": "bring"}: the building site still needs' in by_name["load-away"]
     assert "The town hall meeting starts at 17:00" in by_name["meeting-call-talking"]
+    assert (
+        "You are set on: build at the building site until 15:00 (to plant the trees)."
+        in by_name["intention-keeps-building"]
+    )
     assert "A trader is at the market until 14:00" in by_name["buy-saplings"]
     assert "Hand out the work" in by_name["work-plan-buys"]
     frozen = next(c for c in checks if c["name"] == "proposals-valid")

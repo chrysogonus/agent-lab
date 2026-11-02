@@ -1125,12 +1125,12 @@ def system_of(v: Village, name: str) -> str:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("old", range(6))
+@pytest.mark.parametrize("old", range(7))
 async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old: int) -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
     v, _ = village_for(tmp_path)
-    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11, M12 buy and meeting
+    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11, M12 buy, meeting, site
     set_rules(v, "Jonas", "MY OWN RULES")
     Village(store=v.store, models=v.models, bus=Bus())  # loading refreshes the rules
     hilde = system_of(v, "Hilde")
@@ -1142,17 +1142,21 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old
 def test_the_rules_history() -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
-    _m7, _m9, m11_plans, m11, m12_buy, m12_meeting = OLD_RULES
+    _m7, _m9, m11_plans, m11, m12_buy, m12_meeting, m12_site = OLD_RULES
     assert "Trust what you see over what you hear" in RULES and "Trust what you see" in m11_plans
     assert "Follow your plan for the day" in RULES
-    assert '{"action": "work"}' in RULES and '{"action": "work"}' in m11
+    assert '{"action": "work", "place": "fields", "until": "12:00"}' in RULES
+    assert '{"action": "work"}' in m11
     assert '{"action": "buy", "goods": "wood"}' in RULES and "buy" not in m11
     assert '{"action": "buy", "goods": "wood"}' in m12_buy and "town hall meeting" not in m12_buy
     assert "Hilde holds a town hall meeting every third day at 17:00" in RULES
     assert "Hilde holds a town hall meeting" in m12_meeting and "building site" not in m12_meeting
-    assert '{"action": "move", "place": "building site"}' in RULES
-    assert '{"action": "give"} at the building site' in RULES
-    assert len(set(OLD_RULES)) == 6 and RULES not in OLD_RULES
+    assert '{"action": "move", "place": "building site"}' in m12_site
+    assert '{"action": "build", "until": "15:00"}' in RULES and '{"action": "bring"}' in RULES
+    assert '"say": "Any flowers?"' in RULES and '{"action": "build"' not in m12_site
+    assert "you keep doing it until it is done" in RULES
+    assert "Each turn lists what you can do where you are" in RULES
+    assert len(set(OLD_RULES)) == 7 and RULES not in OLD_RULES
 
 
 @pytest.mark.anyio

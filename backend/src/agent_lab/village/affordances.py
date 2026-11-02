@@ -48,7 +48,7 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
         found.append(({"action": "bring"}, f"the building site still needs the {goods} you carry"))
     trader = world["trader"]
     for wanted in BUILDING_GOODS if trader else ():
-        if buy_refusal(world, name, wanted) is None:
+        if needs_left(world).get(wanted) and buy_refusal(world, name, wanted) is None:
             left = trader["stock"][wanted]
             why = f"trade your basket for a load; the trader has {left} left"
             found.append(({"action": "buy", "goods": wanted}, why))

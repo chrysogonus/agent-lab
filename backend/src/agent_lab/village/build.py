@@ -4,7 +4,6 @@
 from dataclasses import dataclass
 from typing import Any
 
-from agent_lab.village.trade import BASKET_GOODS
 from agent_lab.village.world import HOMES, Cell, door, letter_cells, listed, place_cells
 
 
@@ -169,44 +168,6 @@ def task_text(task: dict[str, Any]) -> str:
     return "build at the building site"
 
 
-def _site_hints(world: dict[str, Any], name: str) -> list[str]:
-    """Where a carried load belongs, and building when loads lie where the villager stands:
-    on the real model loads were bought and kept, or handed around, instead of set down."""
-    me = next(v for v in world["villagers"] if v["name"] == name)
-    project, here = world["project"], site_at(world, (me["x"], me["y"]))
-    goods = me["basket"]
-    if goods and needs_left(world).get(goods):
-        if here:
-            return [
-                f"You are at the building site: set down your load of {goods} now with "
-                '{"action": "give"}.'
-            ]
-        return [
-            f"Take your load of {goods} to the building site ({entry(project['key']).where}) and "
-            'set it down there: {"action": "move", "place": "building site"}, then '
-            '{"action": "give"}.'
-        ]
-    if goods in BASKET_GOODS and not any(project["site"].values()):
-        wanted = next(iter(needs_left(world)), None)
-        if wanted:  # the work plan often forgot the buying (real model)
-            action = f'{{"action": "buy", "goods": "{wanted}"}}'
-            return [
-                f"Nothing can be built until someone buys {wanted}: trade your basket for a load "
-                f"at the market while the trader is there ({action})."
-            ]
-    working = me["working"] and me["working"]["place"] == "site"
-    held = _loads(project["site"])
-    if not held or working:
-        return []
-    if here:
-        return [f'The building site holds {held}: build here with {{"action": "work"}}.']
-    return [  # builders left after half an hour on the real model and never came back
-        f"The building site ({entry(project['key']).where}) holds {held} waiting to be built "
-        'with: go and build ({"action": "move", "place": "building site"}, then '
-        '{"action": "work"}).'
-    ]
-
-
 def project_text(world: dict[str, Any], name: str) -> list[str]:
     """What a villager knows about the building: the project, its own share and what stands."""
     lines: list[str] = []
@@ -232,7 +193,6 @@ def project_text(world: dict[str, Any], name: str) -> list[str]:
                 if mine
                 else "Nothing is asked of you; you may still help."
             )
-        lines += _site_hints(world, name)
     built = built_text(world)
     return lines + ([built] if built else [])
 

@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Intention, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place" | "plot";
 
@@ -106,8 +106,10 @@ export function stateText(villager: Villager): string {
     case "talking":
       return `Talking with ${villager.talking_with.join(" and ")}`;
     case "working":
+      if (villager.intention) return intentionText(villager.intention);
       return villager.working === "site" ? "Building at the site" : `Working at the ${placeLabel(villager.working)}`;
     case "walking":
+      if (villager.intention) return intentionText(villager.intention);
       return villager.goal ? villager.goal[0].toUpperCase() + villager.goal.slice(1) : "Walking";
     default:
       return whereText(villager);
@@ -197,6 +199,23 @@ function meetingLabel(time: string, action: MeetingAction): string {
   return `${time}decides on ${action.project}${action.by === "vote" ? " (the vote decided)" : action.against ? ", against the vote" : ""}`;
 }
 
+/** What a villager is set on: "Building at the site until 15:00", "Going to see Greta". */
+export function intentionText(intention: Intention): string {
+  const until = intention.until ? ` until ${intention.until}` : "";
+  switch (intention.kind) {
+    case "go":
+      return intention.place === "home" ? "Going home" : `Going to the ${placeLabel(intention.place)}`;
+    case "work":
+      return `Working at the ${placeLabel(intention.place)}${until}`;
+    case "build":
+      return `Building at the site${until}`;
+    case "bring":
+      return "Taking a load to the building site";
+    default:
+      return `Going to see ${intention.villager}`;
+  }
+}
+
 /** One line for a turn: its time and what it did (or why it waited). */
 export function turnLabel(turn: Run): string {
   const time = turn.village_tick == null ? "" : `${tickTime(turn.village_tick)} `;
@@ -216,16 +235,22 @@ export function turnLabel(turn: Run): string {
   if (action.action === "propose" || action.action === "vote" || action.action === "decide" || action.action === "assign") return meetingLabel(time, action);
   if (action.reason) return `${time}waited: ${action.reason}`;
   if (action.action === "move") return `${time}walks ${action.place === "home" ? "home" : `to the ${placeLabel(action.place)}`}`;
-  if (action.action === "find") return `${time}goes looking for ${action.villager}`;
+  if (action.action === "find") return `${time}goes looking for ${action.villager}${action.say ? ` to say: ${action.say}` : ""}`;
   if (action.action === "goodbye") return `${time}says goodbye${action.text ? `: ${action.text}` : ""}`;
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
-  if (action.action === "work") return `${time}works at the ${placeLabel(action.place)}`;
+  if (action.action === "work") return `${time}works at the ${placeLabel(action.place)}${untilOf(action.intention)}`;
+  if (action.action === "build") return `${time}sets out to build at the site${untilOf(action.intention)}`;
+  if (action.action === "bring") return `${time}takes a load to the building site`;
   if (action.action === "give") {
     if (action.to) return `${time}gives a ${carriedText(action.goods)} to ${action.to}`;
     return isBasket(action.goods) ? `${time}sets out ${action.goods} on the festival stalls` : `${time}sets down a ${carriedText(action.goods)} at the building site`;
   }
   if (action.action === "buy") return `${time}trades a ${carriedText(action.paid)} for a ${carriedText(action.goods)}`;
   return `${time}waits`;
+}
+
+function untilOf(intention: Intention | undefined): string {
+  return intention?.until ? ` until ${intention.until}` : "";
 }
 
 /** "07:30 town hall: Go through the list", "11:00 see Jonas: Ask for fish" */

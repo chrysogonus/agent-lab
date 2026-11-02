@@ -6,13 +6,15 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
+from agent_lab.village.affordances import can_do_lines
 from agent_lab.village.build import needs_left, project_text, site_at, site_cells
+from agent_lab.village.intention import intention_text
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
 from agent_lab.village.trade import buy_refusal, carried_text, goods_named, trader_text
-from agent_lab.village.work import delivery_text, give_refusal, stalls_text, work_refusal
+from agent_lab.village.work import give_refusal, stalls_text, work_refusal
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -278,11 +280,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         trader_text(world),
         meeting_text(world, name),
         *project_text(world, name),
-        *(
-            [stalls_text(world["stalls"]), *filter(None, [delivery_text(world, name)])]
-            if date(day)[1] == "autumn"
-            else []
-        ),
+        *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
         *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
         + _usually(name, world["tick"]),
@@ -292,6 +290,7 @@ def observation(world: dict[str, Any], name: str) -> str:
             else []
         ),
         *([f"You are {goal}."] if goal else []),
+        intention_text(world, me),
         f"Next to you: {', '.join(VILLAGERS[n].title for n in next_to) or 'nobody'}.",
         f"In sight: {', '.join(in_sight) or 'nobody else'}.",
         f"{conversation}."
@@ -301,6 +300,7 @@ def observation(world: dict[str, Any], name: str) -> str:
             else ""
         ),
         f"Places: {', '.join(places)}.",
+        *can_do_lines(world, name),
         "What you said lately:",
         *([f'- "{line}"' for line in me["said"]] or ["- nothing yet"]),
         "Where the others are, as far as you know:",
@@ -374,7 +374,14 @@ def parse_action(
             return (wait, why) if why else ({"action": "work", "place": place, **extra}, None)
     if isinstance(action, Build):
         why = _build_refusal(world, name)
-        return (wait, why) if why else ({"action": "build", **extra}, None)
+        if why:
+            return wait, why
+        at_site = site_at(world, cell(villager_of(world, name)))
+        return (
+            {"action": "work", "place": "site", **extra}
+            if at_site
+            else {"action": "build", **extra}
+        ), None
     if isinstance(action, Bring):
         why = _bring_refusal(world, name)
         return (wait, why) if why else ({"action": "bring", **extra}, None)
@@ -636,12 +643,51 @@ _M12_MEETING_RULES = _M12_BUY_RULES.replace(
     "something more important comes up. Hilde holds a town hall meeting every third day at "
     "17:00 where the village chooses what to build.",
 )
-RULES = _M12_MEETING_RULES.replace(
+_M12_SITE_RULES = _M12_MEETING_RULES.replace(
     '{"action": "wait"} to go on',
     '{"action": "move", "place": "building site"} to walk to what the village is building, '
     '{"action": "give"} at the building site to set down a load it needs, and '
     '{"action": "work"} there to build with the loads lying there,\n'
     '{"action": "wait"} to go on',
+)
+RULES = (  # M14: intentions, and what you can do where you are
+    "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
+    "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
+    "and everyone's own home. Time passes in steps of 10 minutes. Reply with only one JSON "
+    "object and nothing else.\n"
+    "These set you on something, and you keep doing it until it is done: the village walks you "
+    "there, starts your work and sets down your load, and asks you again when it is done or "
+    'something happens (you woke up, met someone, someone spoke to you). Add "purpose" to '
+    "say why.\n"
+    '{"action": "move", "place": "market"} to walk to a place, "home" or the "building site",\n'
+    '{"action": "work", "place": "fields", "until": "12:00"} to work at a place (here, without '
+    '"place") until a time (or until you stop): anyone may tend the fields or the flower garden, '
+    "and fish at the pier with Jonas while he fishes there; an hour of work fills a basket with "
+    "fish, ripe vegetables or blooming flowers,\n"
+    '{"action": "build", "until": "15:00"} to go to the building site and build with the loads '
+    "lying there,\n"
+    '{"action": "bring"} to take the load you carry to the building site and set it down,\n'
+    '{"action": "find", "villager": "Lina", "say": "Any flowers?"} to go to someone and say '
+    'something when you reach them ("say" is optional).\n'
+    "These happen at once:\n"
+    '{"action": "say", "text": "Good morning!", "to": "Jonas"} to talk to someone standing right '
+    'next to you ("to" is optional),\n'
+    '{"action": "goodbye", "text": "See you later!", "place": "market"} to end a conversation '
+    'and leave: "text" is optional, and "place" (or "villager": "Lina" to go looking for '
+    "someone) says where you go next; leave both out to stay,\n"
+    '{"action": "give", "to": "Hilde"} to hand your basket to someone next to you, or '
+    '{"action": "give"} on the square to set it out on the festival stalls, or at the building '
+    "site to set down a load,\n"
+    '{"action": "buy", "goods": "wood"} at the market while the trader is there: trade the '
+    "basket you carry for a load of wood, paint or saplings for building,\n"
+    '{"action": "wait"} to go on with what you are doing.\n'
+    "Each turn lists what you can do where you are. While you talk with someone, you both stay "
+    "where you are: say goodbye before you walk off. You go home to sleep at your bedtime by "
+    "yourself. Trust what you see over what you hear; the weather you are told is the real "
+    "weather. Follow your plan for the day unless something more important comes up. Hilde "
+    "holds a town hall meeting every third day at 17:00 where the village chooses what to "
+    "build. Say short things, stay in character, answer people who talk to you, and say goodbye "
+    "when you have said what you wanted."
 )
 OLD_RULES = (
     _M7_RULES,
@@ -650,6 +696,7 @@ OLD_RULES = (
     _M11_RULES,
     _M12_BUY_RULES,
     _M12_MEETING_RULES,
+    _M12_SITE_RULES,
 )
 
 

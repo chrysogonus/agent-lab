@@ -147,7 +147,7 @@ first. Runner tests pass `move_gap=0`.
   - fewer decision calls over a scripted hour than without the intention.
 
   Requirements: FR-001–FR-003.
-- [ ] T007 [US1] The observation and the rules (turn.py, plan.py):
+- [X] T007 [US1] The observation and the rules (turn.py, plan.py):
   - the observation gets the intention line, "You are not set on anything.", and "What you can
     do here:" from `can_do` (JSON and why);
   - remove from the observation the hints `delivery_text`, the site hints in
@@ -164,7 +164,7 @@ first. Runner tests pass `move_gap=0`.
   - test_village_runner.py: the rules refresh from the M12 text.
 
   Requirements: FR-004, FR-015.
-- [ ] T008 [US1] Frontend:
+- [X] T008 [US1] Frontend:
   - frontend/src/lib/api.ts: `Villager.intention`; the `VillageAction` work (place, until),
     build, bring and find (say), with `intention`; event kinds `intended` and `intention_ended`.
   - lib/village.ts:
@@ -174,7 +174,7 @@ first. Runner tests pass `move_gap=0`.
   - VillagerPanel.tsx: a "Set on" line under Today's plan.
 
   Tests in village.test.ts. Requirement: FR-004.
-- [ ] T009 [P] [US1] backend/evals/checks/intention-keeps-building.json: Greta building at the
+- [X] T009 [P] [US1] backend/evals/checks/intention-keeps-building.json: Greta building at the
   site with 2 saplings, the intention "build until 15:00", a "met" trigger with Lina next to her.
   The expectation is `{"not": [{"action": "move"}, {"action": "find"}]}`. Plus its ideal answer
   in the shipped-check test. Requirement: FR-014.
