@@ -313,7 +313,7 @@ contracts/http-api.md, quickstart.md)
   - docs/village.md: the trader, the meeting, tasks and the building site; the controls unchanged; "What's next" with boat trips under M13.
   - docs/api.md: the new state fields and village actions.
   - AGENTS.md: `trade.py`, `build.py` and `meeting.py` in the layout, the meeting agent in the village contracts, and the current feature.
-- [ ] T021 `make check`; the quickstart's manual steps on the real model on a scratch backend with a copy of the database, following specs/012-building-together/quickstart.md, results recorded in a new "Manual check results" section at the end of specs/012-building-together/tasks.md (SC-004, SC-005).
+- [X] T021 `make check`; the quickstart's manual steps on the real model on a scratch backend with a copy of the database, following specs/012-building-together/quickstart.md, results recorded in a new "Manual check results" section at the end of specs/012-building-together/tasks.md (SC-004, SC-005).
 
 ## Dependencies
 
@@ -392,3 +392,49 @@ Stories in order:
 | SC-003 | test_village_runner.py (one vote each, decision visible and noted) |
 | SC-004 | quickstart steps 2–4 (real model) |
 | SC-005 | quickstart step 4 (real model) |
+
+## Manual check results (2026-11-02)
+
+Screenshots (a scratch world at summer day 67, 10:00, checked in a headless browser, not
+committed): the trader's cart and goods at the market and its line under the weather; Lina
+carrying paint and Jonas wood; the bakehouse plot fenced with scaffolding and loads at its site;
+the finished town hall and Lina's house (fresh trim), trees by the square, the market stand, the
+rowing boat by the pier and the barn on its plot; "Building at the site" in the list; the
+**Village projects** panel with progress bar, needs, tasks, the meeting's proposals, votes and
+decision (T007, T011, T014, T019).
+
+Real model (vLLM `qwen3.5-9b`), each run on a fresh scratch copy of the owner's database at
+summer day 66 (a meeting day) 04:30, everyone asleep with a basket, nothing built, six village
+days at Fast (about 22 minutes, about 1,050 runs each):
+
+| Run | Meetings | Trades / loads set down | Built | Fixed after it |
+|---|---|---|---|---|
+| E | day 66 called off: Hilde's proposals failed the JSON check (last brace missing) | – | – | unusable proposals and work plans are asked for once more |
+| F | day 66: Hilde, Greta; market stand chosen; day 69 review, Hilde alone | 3 / 1 | – (1 of 4 loads) | a needed load is pointed to the site ("Take your load …", "set down … now"); everyone away is called to the meeting |
+| G | both called off: Hilde held in a talk at 17:00, then too far to arrive by 17:30 | 0 / 0 | – | the call moved to 16:30 with the move to make; the meeting waits for Hilde until 18:30 |
+| H | day 66: Jonas, Greta, Lina voted; Hilde walking from 16:30 but held in talks until 18:40 | 1 / 0 | – | walking to an open meeting goes on while talking (as the walk home to bed) |
+| I | day 66: all four, 3 votes, trees decided; Hilde handed out only "build" | 0 / 0 | – | the work-plan prompt asks for buy tasks; a basket is pointed to the trader while the site holds nothing |
+| J | day 66: three present, trees; "buy saplings" handed out | 4 / 3 | – (1 of 3 loads: builders left after half an hour) | loads waiting at the site call everyone not building to come and build |
+| K | day 66: all four, 3 votes, trees chosen by the vote; day 69: Hilde and Greta, Hilde chose painting the town hall **against the vote** (Greta: the market stand) | 5 trades by all four / 5 | **trees by the square on day 68**; town hall 1 of 2 | – |
+
+Run K against the success criteria:
+- SC-004: the day-66 meeting had all four villagers (at least three), and a project (the trees)
+  was finished on day 68, within six days. Pass.
+- SC-005: all four traded a basket for a load (Greta, Lina, Jonas once, Hilde twice); three
+  worked at the site (Lina 6 turns, Hilde 4, Greta 1). Pass.
+- Everyone remembered "Young trees now grow by the square." and the meetings ("Hilde chose …
+  I voted for …"); no run failed.
+
+Also found and fixed during the checks: a review meeting whose project finished that morning
+crashed the work plan, and answers from an earlier meeting day still counted (both with
+regression tests); a vote could start while Hilde was already deciding (voting now closes when
+she starts).
+
+Observed, not fixed:
+- Chronicle entries still borrow weather from the villagers' talk ("The Rush Before the Snow" on
+  a cloudy summer day), the open M11 issue.
+- Villagers often try to hand loads and baskets to Hilde (17–30 refusals a run with "Hilde's hands
+  are full").
+- `runner._decide` builds the prompt before its `try`: if that ever raised, the villager would stay
+  "deciding" and Step and Reset would wait for ever (seen with a malformed test project; M11 code).
+
