@@ -2553,3 +2553,17 @@ def test_meeting_answers_count_only_on_their_day(tmp_path: Path) -> None:
     assert v._still(meeting)  # pyright: ignore[reportPrivateUsage]
     v.world["tick"] = tick_at(5, day=4)  # a slow answer, the next morning
     assert not v._still(meeting)  # pyright: ignore[reportPrivateUsage]
+
+
+@pytest.mark.anyio
+async def test_at_five_everyone_away_is_called_to_the_meeting_once(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_at(16, 50, day=3))
+    proposed_meeting(v)
+    put(v, "Hilde", *TOWN_HALL[0])
+    put(v, "Lina", *TOWN_HALL[1])  # already there
+    await steps(v, 2)  # 17:00 and 17:10
+    called = "The town hall meeting is starting at the town hall: come and vote."
+    assert texts(v, "Jonas", "meeting") == [called] and texts(v, "Greta", "meeting") == [called]
+    assert texts(v, "Hilde", "meeting") == []
+    assert texts(v, "Lina", "meeting") == ["You voted for Paint the town hall."]  # no call

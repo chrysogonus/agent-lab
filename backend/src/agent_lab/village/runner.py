@@ -1135,6 +1135,8 @@ class Village:
             return
         if meeting["outcome"]:
             return
+        if minute >= MEETING_OPENS and not meeting.get("called"):
+            self._call_to_meeting(meeting)
         if MEETING_OPENS <= minute <= MEETING_CLOSES:
             for v in self.world["villagers"]:
                 name = v["name"]
@@ -1164,6 +1166,23 @@ class Village:
             self._end_meeting(meeting, "reviewed")
         else:
             self._start_meeting_run("tasks", self._assign(meeting))
+
+    def _call_to_meeting(self, meeting: dict[str, Any]) -> None:
+        """At 17:00 everyone up and away hears the meeting begin (only Hilde and Greta came on
+        the real model without it), as for the festival."""
+        meeting["called"] = True
+        why = (
+            "come and vote" if meeting["kind"] == "vote" else "come and hear how the building goes"
+        )
+        for v in self.world["villagers"]:
+            if v["asleep"] or v["bedtime"] or place_at(v["x"], v["y"]) == "town_hall":
+                continue
+            if v["name"] == "Hilde":
+                text = "Your town hall meeting is starting at the town hall: go and chair it."
+            else:
+                text = f"The town hall meeting is starting at the town hall: {why}."
+            self._event(v, "meeting", text)
+            self._trigger(v, "meeting")
 
     def _open_meeting(self, day: int) -> None:
         meeting: dict[str, Any] = {
