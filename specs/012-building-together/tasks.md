@@ -313,7 +313,7 @@ contracts/http-api.md, quickstart.md)
   - docs/village.md: the trader, the meeting, tasks and the building site; the controls unchanged; "What's next" with boat trips under M13.
   - docs/api.md: the new state fields and village actions.
   - AGENTS.md: `trade.py`, `build.py` and `meeting.py` in the layout, the meeting agent in the village contracts, and the current feature.
-- [ ] T021 `make check`; the quickstart's manual steps on the real model on a scratch backend with a copy of the database, results recorded below (SC-004, SC-005).
+- [ ] T021 `make check`; the quickstart's manual steps on the real model on a scratch backend with a copy of the database, following specs/012-building-together/quickstart.md, results recorded in a new "Manual check results" section at the end of specs/012-building-together/tasks.md (SC-004, SC-005).
 
 ## Dependencies
 
