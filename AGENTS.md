@@ -2,8 +2,8 @@
 
 Glasshouse: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
 builder, per-agent models) with a live trace view, plus a village of four villager agents
-(M6–M11). Rules for every change: `.specify/memory/constitution.md`. Current feature:
-`specs/011-plans-and-purpose/`; earlier milestones in `specs/001-…` to `specs/010-…`. Human
+(M6–M12). Rules for every change: `.specify/memory/constitution.md`. Current feature:
+`specs/012-building-together/`; earlier milestones in `specs/001-…` to `specs/011-…`. Human
 documentation: `README.md` and `docs/` (keep both in step with user-visible changes).
 
 ## Commands
@@ -31,10 +31,13 @@ report; keep every gate at its current strictness.
   `model.py` types and layout rules, `graph.py`, `run.py`, `convert.py` templates as blocks),
   `village/` (`world.py` map, homes, clock, villagers with sleeping hours and routines;
   `turn.py` observations (facts before claims), actions and beliefs text; `plan.py` daily plans
-  and the planner agent; `work.py` work, baskets, giving and the festival stalls; `memory.py`
+  and the planner agent; `work.py` work, baskets, giving and the festival stalls; `trade.py`
+  the daily trader and what villagers carry; `build.py` the catalogue, the building site and
+  building work; `meeting.py` the town hall meeting and the meeting agent; `memory.py`
   lasting memories, recall and reflection; `seasons.py` calendar, light, weather and growth;
   `chronicle.py` the nightly chronicle; `runner.py` the step loop, background decisions,
-  plans, reflections and the chronicle; specs/007-village-life/ to specs/011-plans-and-purpose/),
+  plans, meetings, reflections and the chronicle; specs/007-village-life/ to
+  specs/012-building-together/),
   `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
@@ -79,7 +82,10 @@ report; keep every gate at its current strictness.
    decisions, and their answer is validated into learnings and views. Plans are runs of the
    shared planner agent, tagged the same way, when a villager wakes and after a conversation of
    at least 4 lines (two revisions a day at most); they never count as decisions, and their
-   answer is validated into today's plan. The chronicle is a run of
+   answer is validated into today's plan. Meeting runs (Hilde's proposals, decision and work
+   plan, each villager's vote) are runs of the shared meeting agent, tagged the same way, every
+   third day; they never count as decisions, and each answer is validated against the
+   catalogue, the proposals and known names. The chronicle is a run of
    the shared chronicler agent, tagged with `village_tick` and no villager, once a night for the
    day its record began; it never counts as a decision. Calendar, light and weather are derived
    from the day, never stored.

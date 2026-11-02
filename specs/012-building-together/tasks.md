@@ -308,7 +308,7 @@ contracts/http-api.md, quickstart.md)
 
 ## Phase 6: Polish
 
-- [ ] T020 Docs:
+- [X] T020 Docs:
   - README.md: the trader, meetings and building; the M12 row in Milestones marked done; the roadmap with boat trips under M13.
   - docs/village.md: the trader, the meeting, tasks and the building site; the controls unchanged; "What's next" with boat trips under M13.
   - docs/api.md: the new state fields and village actions.

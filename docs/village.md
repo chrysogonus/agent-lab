@@ -34,9 +34,10 @@ sequenceDiagram
     W->>W: validate → apply (or wait, with the reason)
 ```
 
-A villager can **move** to a place, **find** someone where it thinks they are, **say**
-something to someone right next to it, say **goodbye** (and where it goes next), **work** where
-it stands, **give** its basket to someone or **wait**. Anything invalid becomes a wait, and the
+A villager can **move** to a place (or the building site), **find** someone where it thinks
+they are, **say** something to someone right next to it, say **goodbye** (and where it goes
+next), **work** where it stands, **give** what it carries to someone (or onto the festival stalls,
+or down at the building site), **buy** building goods from the trader or **wait**. Anything invalid becomes a wait, and the
 reason is recorded. Every decision is an ordinary
 traced run: click a villager, then a turn, to see the exact prompt and answer.
 
@@ -70,6 +71,35 @@ still ends the conversation, just without the words.
   one that arrives while a villager is deciding waits for its next decision. In autumn every
   villager is told what the stalls hold and still lack, and one carrying a basket is told to take
   it to the square and set it out; the map shows the stalls and every carried basket.
+
+## Building together
+
+- **The trader**: every day from 09:00 to 14:00 a trader stands at the market with wood, paint
+  and saplings (a different stock each day). A villager at the market trades the basket it
+  carries (fish, vegetables or flowers) for one load: there is no money, one basket buys one
+  load. A villager carries one thing at a time, a basket or a load.
+- **The town hall meeting**: every third day at 17:00 (the day after, when it falls on the
+  festival). In the morning Hilde proposes two or three projects from the village catalogue;
+  everyone else who comes to the town hall by 17:30 votes for one, with a reason; then Hilde
+  decides.
+  She usually follows the vote, but she may choose another proposal if she gives a reason, and
+  everyone hears when she went against the vote. A meeting Hilde misses is called off; an
+  unusable decision lets the vote decide.
+- **The work**: Hilde then hands out the work: who buys which goods, who brings them to the
+  building site, who builds. Not everyone has to help. The tasks show in the villagers' plans
+  and in what they are told until the project is done; while a project is under way, the
+  meeting only reviews it and may hand out the work again.
+- **The building site**: villagers walk there (`"building site"`), set down their loads and
+  work there. Every village hour of work, added up over everyone at the site, works in one load.
+  The site shows scaffolding and the loads lying there.
+- **What stays**: the catalogue holds ten projects: painting the town hall or one of the four
+  houses (2 paint each), young trees by the square (3 saplings), a market stand (3 wood, 1
+  paint), a rowing boat by the pier (4 wood, 1 paint), and a bakehouse (14 wood, 3 paint) and a
+  barn (16 wood, 3 paint) on their fenced plots, which take more than a day. A finished project
+  stays on the map for good; everyone remembers it and the chronicle tells of it.
+- **Village projects** (next to **Read the chronicle**) shows the project with its progress and
+  tasks, the latest meeting with every proposal, vote and the decision (each opens its run), and
+  what has been built.
 
 ## A day in the village
 
@@ -125,12 +155,11 @@ in which every decision failed (for example, the model server is down).
 
 Each villager is a block agent under **My agents**, created on the first Start. **Edit its
 agent** (in the villager panel) opens it in the builder; an edit applies from its next decision.
-Plans, reflections and the chronicle run on the shared **Village planner**, **Village
-reflection** and **Village chronicler** agents, editable the same way.
+Plans, reflections, the chronicle and the town hall meeting run on the shared **Village
+planner**, **Village reflection**, **Village chronicler** and **Village meeting** agents,
+editable the same way.
 
 ## What's next
 
-- **M12 Building together**: painting houses, planting trees, market stands, new buildings that
-  take several days, boat trips.
-- **M13 Daily happenings**: something different every day: the postman, a visiting friend, a
-  travelling merchant …
+- **M13 Daily happenings**: something different every day: the postman, a visiting friend, boat
+  trips on the lake in the boat the village built, and whispers to villagers.
