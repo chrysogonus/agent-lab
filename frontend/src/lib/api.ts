@@ -324,6 +324,33 @@ export const setVillageInterval = (seconds: number): Promise<VillageState> =>
 export const villagerTurns = (name: string): Promise<Run[]> =>
   send("GET", `/village/villagers/${encodeURIComponent(name)}/turns`);
 
+// M13: village health per day. See specs/013-measuring-the-village/data-model.md.
+export type DayHealth = {
+  day: number;
+  final: boolean; // false for the day in progress
+  trail: boolean; // positions were recorded (from M13 on)
+  decisions: number;
+  waits: number;
+  failed_calls: number;
+  calls: { decision: number; plan: number; reflect: number; chronicle: number; meeting: number };
+  refusals: { reason: string; count: number }[]; // reasons with names and goods taken out, most first
+  conversations: { count: number; lines: number[]; median_lines: number | null };
+  repeated_lines: number;
+  plan_adherence: { kept: number; entries: number } | null; // null: no trail
+  meeting: { present: string[]; votes: number; outcome: string } | null;
+  trades: number;
+  loads_set_down: number;
+  loads_worked_in: number | null;
+  load_minutes: number | null;
+  given_back: number;
+  weather_slips: string[] | null; // null: the chronicle is not written yet
+  stuck_hours: number | null;
+};
+
+export const villageHealth = (days = 14): Promise<{ days: DayHealth[] }> => send("GET", `/village/health?days=${days}`);
+export const healthTurns = (day: number, reason: string): Promise<Run[]> =>
+  send("GET", `/village/health/${day}/turns?reason=${encodeURIComponent(reason)}`);
+
 export const getRun = (runId: string): Promise<Run> =>
   send<{ run: Run }>("GET", `/runs/${runId}`).then((detail) => detail.run);
 

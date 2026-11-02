@@ -3,7 +3,7 @@
 import asyncio
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -27,8 +27,10 @@ from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import Span
+from agent_lab.village.health import reason_template
+from agent_lab.village.health_view import days_health
 from agent_lab.village.runner import CHANNEL, StepConflict, Village
-from agent_lab.village.world import VILLAGERS
+from agent_lab.village.world import VILLAGERS, clock
 
 ALLOWED_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"]
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
@@ -121,6 +123,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
     )
     bus = Bus()
     village = Village(store=store, models=models, bus=bus, secrets=secrets)
+    app.state.village = village  # for tests that set up a scene
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
     def checked_config(template_id: str, raw: dict[str, Any]) -> BaseModel:
@@ -439,6 +442,28 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         if name not in VILLAGERS:
             raise HTTPException(status_code=404, detail="unknown villager")
         return store.list_turns(name)
+
+    @app.get("/village/health")
+    async def village_health(days: int = Query(14, ge=1, le=28)) -> dict[str, Any]:
+        """Village health of the recent days, newest first (specs/013-measuring-the-village/)."""
+        return {"days": days_health(store, village.world, days)}
+
+    @app.get("/village/health/{day}/turns")
+    async def village_health_turns(day: int, reason: str) -> list[Run]:
+        """The decisions of a day that waited for one kind of reason, newest first."""
+        if not 1 <= day <= clock(village.world["tick"])[0]:
+            raise field_error(("path", "day"), "no such village day")
+        first = (day - 1) * 144
+        born = float(village.world.get("born", 0.0))
+        found: list[str] = []
+        for r in store.village_runs(first, first + 143, born):
+            action: dict[str, Any] = r["village_action"] or {}
+            if (
+                action.get("action") == "wait"
+                and reason_template(action.get("reason") or "") == reason
+            ):
+                found.append(r["run_id"])
+        return [run for run in map(store.get_run, reversed(found)) if run is not None]
 
     @app.websocket("/village/stream")
     async def village_stream(ws: WebSocket) -> None:

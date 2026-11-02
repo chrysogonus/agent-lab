@@ -13,6 +13,7 @@ from test_village_runner import WAIT, responder
 from agent_lab.api import create_app
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
+from agent_lab.village.runner import Village
 
 
 @pytest.fixture
@@ -212,3 +213,26 @@ def test_changing_the_pace_keeps_every_villagers_model(store: Store) -> None:
             assert client.put("/village/interval", json={"seconds": seconds}).status_code == 200
         after = {a["id"]: a["config"] for a in client.get("/agents").json()}
     assert after == before  # FR-002
+
+
+def test_village_health_and_the_turns_behind_a_reason(store: Store) -> None:
+    script: list[ScriptItem] = [responder({"Lina": ['{"action": "find", "villager": "Tom"}']})]
+    app = create_app(store=store, models=fake_models(FakeLLM(script * 200)))
+    client = TestClient(app, base_url=BASE)
+    client.post("/village/step")  # creates the agents; day 1, 04:40, everyone asleep
+    village: Village = app.state.village
+    village.world["tick"] = 30  # 09:30: everyone is up
+    for v in village.world["villagers"]:
+        v |= {"asleep": False, "last_decided": 30}
+    next(v for v in village.world["villagers"] if v["name"] == "Lina")["triggers"] = ["woke"]
+    steps(client, 1)
+    days = client.get("/village/health").json()["days"]
+    assert [d["day"] for d in days] == [1] and days[0]["final"] is False
+    [refusal] = days[0]["refusals"]
+    assert refusal == {"reason": "unknown villager 'Tom'", "count": 1}
+    turns = client.get("/village/health/1/turns", params={"reason": refusal["reason"]}).json()
+    assert [t["villager"] for t in turns] == ["Lina"]
+    assert turns[0]["village_action"]["reason"] == "unknown villager 'Tom'"
+    assert client.get("/village/health/1/turns", params={"reason": "nothing"}).json() == []
+    assert client.get("/village/health/9/turns", params={"reason": "x"}).status_code == 422
+    assert client.get("/village/health", params={"days": 99}).status_code == 422

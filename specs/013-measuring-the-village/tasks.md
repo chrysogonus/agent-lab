@@ -108,7 +108,7 @@ test first; runner tests pass `move_gap=0`.
 
 ## Phase 2: User Story 1 — Village health per day (P1) 🎯 MVP
 
-- [ ] T004 [US1] backend/src/agent_lab/village/health.py (research §3, data-model.md "Day
+- [X] T004 [US1] backend/src/agent_lab/village/health.py (research §3, data-model.md "Day
   health"):
   - `reason_template(text)`: villager names become `<villager>` (also inside quotes, as in
     "unknown villager 'Hilde'"), and building and basket goods become `<goods>`.
@@ -146,7 +146,7 @@ test first; runner tests pass `move_gap=0`.
   - a day without runs.
 
   Requirements: FR-002, SC-001.
-- [ ] T005 [US1] Health on request:
+- [X] T005 [US1] Health on request:
   - New backend/src/agent_lab/village/health_view.py: `days_health(store, world, days=14)`.
     - It takes up to 28 days back from today, using runs since `world.get("born", 0)`.
     - Notes for a finished day come from `chronicle_prompt_of(day)`, as the lines under the
@@ -165,7 +165,7 @@ test first; runner tests pass `move_gap=0`.
   - a timing check that 28 days over 8,000 runs take under 2 s (SC-002).
 
   Requirements: FR-001–FR-003, SC-002.
-- [ ] T006 [US1] Frontend:
+- [X] T006 [US1] Frontend:
   - frontend/src/lib/api.ts: the `DayHealth` type (data-model.md), `villageHealth(days)` and
     `healthTurns(day, reason)`.
   - frontend/src/lib/health.ts (new, pure):
@@ -186,7 +186,7 @@ test first; runner tests pass `move_gap=0`.
   - `healthTitle`;
   - `refusalLines`.
 
-  Screenshot of the panel on the owner's village. Requirement: FR-003.
+  Screenshot of the panel on the owner's village (taken with T014). Requirement: FR-003.
 
 ## Phase 3: User Story 2 — Turn checks (P1)
 

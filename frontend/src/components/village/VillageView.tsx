@@ -17,6 +17,7 @@ import { GOODS, PACES, PERIOD_SKY, activity, boxOf, calendarText, clockText, gli
 import { RunViewer } from "../RunViewer";
 import { Building, Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
+import { HealthPanel } from "./HealthPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Basket, Festival, Puddles, Stalls, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
 import { Built, Load, Plot, Site, Trader } from "./building";
@@ -307,6 +308,7 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
   const [error, setError] = useState<string | null>(null);
   const [chronicleOpen, setChronicleOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
   // The newest chronicle entry the owner saw; read on the client only (the map renders after load).
   const [seen, setSeen] = useState<string | null>(readSeen);
   const [seenAtOpen, setSeenAtOpen] = useState<string | null>(null);
@@ -339,7 +341,14 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
   const openProjects = () => {
     setSelected(null);
     setChronicleOpen(false);
+    setHealthOpen(false);
     setProjectsOpen(true);
+  };
+  const openHealth = () => {
+    setSelected(null);
+    setChronicleOpen(false);
+    setProjectsOpen(false);
+    setHealthOpen(true);
   };
   const fresh = newEntries(state.chronicle, seen);
 
@@ -438,6 +447,8 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
             }}
             onOpenTurn={setTurn}
           />
+        ) : healthOpen ? (
+          <HealthPanel onClose={() => setHealthOpen(false)} onOpenTurn={setTurn} />
         ) : projectsOpen ? (
           <ProjectsPanel state={state} onClose={() => setProjectsOpen(false)} onOpenTurn={setTurn} />
         ) : villager ? (
@@ -471,6 +482,9 @@ export function VillageView({ onEditAgent }: { onEditAgent: (agentId: string) =>
               </button>
               <button type="button" onClick={openProjects} className="village-button">
                 Village projects
+              </button>
+              <button type="button" onClick={openHealth} className="village-button">
+                Village health
               </button>
             </div>
           </>
