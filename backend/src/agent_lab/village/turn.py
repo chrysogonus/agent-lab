@@ -395,6 +395,8 @@ def parse_action(
         return {"action": "buy", "goods": goods_named(action.goods), "paid": paid}, None
     if isinstance(action, Give):
         to = action.to or None
+        if to and re.search(r"\bstalls?\b|\bsite\b", to.lower()):
+            to = None  # "festival stalls", "building site": the place, not a villager
         why = give_refusal(world, name, to)
         if why:
             return wait, why

@@ -806,3 +806,17 @@ def test_on_the_building_site_the_observation_says_so() -> None:
     world = with_project("trees_square")
     world["villagers"][3] |= at(18, 10)
     assert "\nYou are at the building site.\n" in observation(world, "Lina")
+
+
+@pytest.mark.parametrize("to", ["festival stalls", "the stalls", "Festival stall"])
+def test_giving_to_the_stalls_or_the_site_by_name_is_giving_there(to: str) -> None:
+    sx, sy = label_cell("square")
+    world = world_with(Jonas={**at(sx, sy), "basket": "fish"})
+    expected = {"action": "give", "to": None, "goods": "fish"}
+    assert parsed({"action": "give", "to": to}, world, "Jonas") == (expected, None)
+    site = with_project("trees_square")
+    site["villagers"][1] |= {**at(18, 10), "basket": "saplings"}
+    assert parsed({"action": "give", "to": "the building site"}, site, "Jonas") == (
+        {"action": "give", "to": None, "goods": "saplings"},
+        None,
+    )
