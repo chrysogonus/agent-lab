@@ -2595,3 +2595,21 @@ async def test_the_meeting_waits_for_hilde_until_half_past_six(tmp_path: Path) -
     await steps(v, 2)
     meeting = meeting_now(v)
     assert meeting["outcome"] == "decided" and sorted(meeting["votes"]) == ["Greta", "Lina"]
+
+
+@pytest.mark.anyio
+async def test_no_vote_starts_once_hilde_decides(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, delay=0.05)
+    v.world["running"] = True  # decisions run in the background, as in the real loop
+    morning(v, tick_at(17, 40, day=3))
+    meeting = proposed_meeting(v)
+    meeting["present"] = ["Hilde"]
+    put(v, "Hilde", *TOWN_HALL[0])
+    v._meeting()  # pyright: ignore[reportPrivateUsage]
+    assert "decide" in v.meetings
+    put(v, "Lina", *TOWN_HALL[1])  # arrives while Hilde decides
+    v._meeting()  # pyright: ignore[reportPrivateUsage]
+    assert "vote:Lina" not in v.meetings and "Lina" in meeting["present"]
+    v.world["running"] = False
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert voters(llm) == [] and meeting["outcome"] == "decided"

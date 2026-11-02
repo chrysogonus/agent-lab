@@ -1150,6 +1150,7 @@ class Village:
                 key = f"vote:{name}"
                 if (
                     name != "Hilde"
+                    and not meeting.get("deciding")  # the votes Hilde sees are the ones counted
                     and meeting["kind"] == "vote"
                     and meeting["proposals"]
                     and name not in meeting["votes"]
@@ -1164,6 +1165,7 @@ class Village:
         elif meeting["kind"] == "vote":
             if meeting["present"] == ["Hilde"]:
                 self._note("Nobody but Hilde came to the town hall meeting.")
+            meeting["deciding"] = True
             self._start_meeting_run("decide", self._decide_meeting(meeting))
         elif self.world["project"] is None:  # finished since the morning: nothing to review
             self._end_meeting(meeting, "reviewed")
