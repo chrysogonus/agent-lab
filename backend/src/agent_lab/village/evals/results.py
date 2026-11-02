@@ -57,6 +57,10 @@ def compare(before: Result, after: Result) -> tuple[list[dict[str, Any]], list[s
         notes.append(f"the models differ: {before['model']} and {after['model']}")
     if before["repeats"] != after["repeats"]:
         notes.append(f"the repeats differ: {before['repeats']} and {after['repeats']}")
+    ran_a = before["settings"].get("models", {})
+    ran_b = after["settings"].get("models", {})
+    for name in [n for n in ran_a if n in ran_b and ran_a[n] != ran_b[n]]:
+        notes.append(f"{name} ran on {ran_a[name]}, then on {ran_b[name]}")
     return lines, notes
 
 

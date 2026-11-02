@@ -12,6 +12,13 @@ TICKS_PER_DAY = 144
 DAYS_KEPT = 28  # as the chronicle and the day trail
 NOTE = re.compile(r"^- \d{2}:\d{2} (.*)$")
 
+
+def day_ticks(day: int) -> tuple[int, int]:
+    """The first and last step of a village day, midnight to midnight (tick 0 is day 1, 04:30)."""
+    first = max(0, ((day - 1) * 1440 - 270) // 10)
+    return first, (day * 1440 - 270) // 10 - 1
+
+
 _cache: dict[tuple[int, float, int], dict[str, Any]] = {}  # finished days, by store, born, day
 
 
@@ -26,8 +33,7 @@ def _notes(store: Store, world: dict[str, Any], day: int, born: float) -> list[s
 
 def _runs(store: Store, day: int, born: float) -> list[dict[str, Any]]:
     """The day's runs, with its chronicle, which is written after midnight."""
-    first = (day - 1) * TICKS_PER_DAY
-    last = day * TICKS_PER_DAY - 1
+    first, last = day_ticks(day)
     found: list[dict[str, Any]] = []
     for run in store.village_runs(first, last + TICKS_PER_DAY, born):
         action: dict[str, Any] = run["village_action"] or {}
@@ -51,12 +57,12 @@ def days_health(store: Store, world: dict[str, Any], days: int = 14) -> list[dic
             found.append(_cache[key])
             continue
         chronicle = next((e for e in world["chronicle"] if e["day"] == day), None)
-        first = (day - 1) * TICKS_PER_DAY
+        first, last = day_ticks(day)
         health = day_health(
             day,
             _runs(store, day, born),
             _notes(store, world, day, born),
-            store.trail(first, first + TICKS_PER_DAY - 1),
+            store.trail(first, last),
             chronicle,
             final=day < today,
         )

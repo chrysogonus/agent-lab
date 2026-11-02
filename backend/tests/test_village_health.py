@@ -11,7 +11,7 @@ import pytest
 from agent_lab.agents.react import build_graph
 from agent_lab.store import Run, Store
 from agent_lab.village.health import day_health, reason_template
-from agent_lab.village.health_view import days_health
+from agent_lab.village.health_view import day_ticks, days_health
 from agent_lab.village.world import door, new_world, place_cells
 
 DAY = 3
@@ -305,3 +305,14 @@ def test_days_health_is_quick_on_many_runs(tmp_path: Path) -> None:
     started = time.monotonic()
     found = days_health(store, world, days=28)
     assert time.monotonic() - started < 2.0 and len(found) == 27
+
+
+def test_a_day_runs_from_midnight_to_midnight(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    stored(store, "Lina", tick(23, 50, day=1), wait("x"))  # day 1, 23:50
+    stored(store, "Lina", tick(0, 30, day=2), wait("y"))  # day 2, 00:30: before the clock's 04:30
+    store.add_trail(tick(0, 30, day=2), row(("Lina", 1, 1, None, "idle", None)))
+    assert day_ticks(1) == (0, 116) and day_ticks(2) == (117, 260)
+    today, yesterday = days_health(store, a_world(2), days=2)
+    assert [r["reason"] for r in today["refusals"]] == ["y"] and today["trail"] is True
+    assert [r["reason"] for r in yesterday["refusals"]] == ["x"] and yesterday["trail"] is False

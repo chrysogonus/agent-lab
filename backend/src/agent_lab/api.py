@@ -28,7 +28,7 @@ from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import Span
 from agent_lab.village.health import reason_template
-from agent_lab.village.health_view import days_health
+from agent_lab.village.health_view import day_ticks, days_health
 from agent_lab.village.runner import CHANNEL, StepConflict, Village
 from agent_lab.village.world import VILLAGERS, clock
 
@@ -453,10 +453,10 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         """The decisions of a day that waited for one kind of reason, newest first."""
         if not 1 <= day <= clock(village.world["tick"])[0]:
             raise field_error(("path", "day"), "no such village day")
-        first = (day - 1) * 144
+        first, last = day_ticks(day)
         born = float(village.world.get("born", 0.0))
         found: list[str] = []
-        for r in store.village_runs(first, first + 143, born):
+        for r in store.village_runs(first, last, born):
             action: dict[str, Any] = r["village_action"] or {}
             if (
                 action.get("action") == "wait"

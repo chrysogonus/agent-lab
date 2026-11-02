@@ -14,7 +14,14 @@ from agent_lab.llm.models import Models
 from agent_lab.store import Run, Store
 from agent_lab.village.build import entry
 from agent_lab.village.evals.__main__ import main, parser
-from agent_lab.village.evals.checks import add_check, judge, load_checks, prompt_of, run_checks
+from agent_lab.village.evals.checks import (
+    add_check,
+    judge,
+    load_checks,
+    prompt_of,
+    read_owner,
+    run_checks,
+)
 from agent_lab.village.evals.fixtures import FixtureError, build_world
 from agent_lab.village.evals.results import Results, checks_table, compare, compare_table, wilson
 from agent_lab.village.evals.scenarios import CONDITIONS, run_scenarios
@@ -676,3 +683,32 @@ def test_the_shipped_scenarios_load_and_start() -> None:
     }
     for s in scenarios:
         assert build_world(s["start"])["day_record"] is not None  # notes kept from the start
+
+
+@pytest.mark.anyio
+async def test_a_scenario_copy_holds_every_village_agent(tmp_path: Path) -> None:
+    owner = owner_db(tmp_path)
+    world, ids = read_owner(owner)
+    shared = ("reflection_agent_id", "chronicler_agent_id", "planner_agent_id", "meeting_agent_id")
+    assert all(world[k] in ids for k in shared)
+    scenario = a_scenario({"kind": "meeting_attendance", "at_least": 1}, horizon={"hours": 1})
+    result = await run_scenarios(
+        [scenario],
+        fake_village_models(),
+        owner,
+        tmp_path / "copies",
+        tmp_path / "evals.db",
+        repeats=1,
+    )
+    copy = Store(result["data"]["scenarios"][0]["runs"][0]["db"])
+    assert {a.agent_id for a in copy.list_agents()} == set(ids)
+    models = result["settings"]["models"]
+    assert set(models) == {a.name for a in copy.list_agents()}
+    assert all(m.startswith("local/") for m in models.values())
+
+
+def test_compare_names_agents_on_other_models() -> None:
+    before = a_result("a", {"x": (5, 10)}) | {"settings": {"models": {"Jonas": "local/qwen"}}}
+    after = a_result("b", {"x": (5, 10)}) | {"settings": {"models": {"Jonas": "openai/gpt"}}}
+    _, notes = compare(before, after)
+    assert notes == ["Jonas ran on local/qwen, then on openai/gpt"]

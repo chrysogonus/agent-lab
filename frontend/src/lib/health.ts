@@ -38,3 +38,25 @@ export function healthTitle(day: DayHealth): string {
 export function refusalLines(day: DayHealth): string[] {
   return day.refusals.map((r) => `${r.count} × ${r.reason.replaceAll("<villager>", "someone").replaceAll("<goods>", "goods")}`);
 }
+
+/** Every number of a day, for its detail: the table's cells and the rest. */
+export function healthDetail(day: DayHealth): HealthCell[] {
+  const { calls, meeting } = day;
+  const total = calls.decision + calls.plan + calls.reflect + calls.chronicle + calls.meeting;
+  const talks = day.conversations;
+  return [
+    ...healthRow(day).filter((c) => c.label !== "Weather slips"),
+    { label: "Conversations", value: talks.count ? `${talks.count} (lines ${talks.lines.join(", ")})` : "0" },
+    { label: "Repeated lines", value: String(day.repeated_lines) },
+    day.load_minutes == null ? { label: "Load time", value: "–", why: "no load bought and set down" } : { label: "Load time", value: `${day.load_minutes} min` },
+    { label: "Given straight back", value: String(day.given_back) },
+    { label: "Meeting", value: meeting ? `${meeting.present.length} came, ${meeting.votes} voted, ${meeting.outcome}` : "none" },
+    {
+      label: "Model calls",
+      value: `${total}: ${calls.decision} decisions, ${calls.plan} plans, ${calls.reflect} reflections, ${calls.chronicle} chronicle, ${calls.meeting} meeting runs (${day.failed_calls} failed)`,
+    },
+    day.weather_slips == null
+      ? { label: "Weather slips", value: "–", why: "the chronicle is not written yet" }
+      : { label: "Weather slips", value: day.weather_slips.join(", ") || "none" },
+  ];
+}

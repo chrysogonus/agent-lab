@@ -12,7 +12,7 @@ from typing import Any
 from agent_lab.bus import Bus
 from agent_lab.llm.models import Models
 from agent_lab.store import Store
-from agent_lab.village.evals.checks import read_owner
+from agent_lab.village.evals.checks import agent_models, read_owner
 from agent_lab.village.evals.fixtures import FixtureError, build_world
 from agent_lab.village.evals.results import Results, wilson
 from agent_lab.village.health import TALK
@@ -185,6 +185,8 @@ async def run_scenarios(
 ) -> dict[str, Any]:
     """Each scenario `repeats` times on fresh copies; the owner's database is only read."""
     Path(copies).mkdir(parents=True, exist_ok=True)
+    _, agent_ids = read_owner(owner_db)
+    Store(Path(copies) / "agents.db").copy_agents_from(owner_db, agent_ids)
     rows: list[dict[str, Any]] = []
     for scenario in scenarios:
         n = scenario.get("repeats", repeats)
@@ -210,7 +212,11 @@ async def run_scenarios(
         "kind": "scenarios",
         "created_at": time.time(),
         "model": f"{default.provider}/{default.model}",
-        "settings": {"owner_db": str(owner_db), "copies": str(copies)},
+        "settings": {
+            "owner_db": str(owner_db),
+            "copies": str(copies),
+            "models": agent_models(Store(Path(copies) / "agents.db"), agent_ids, models),
+        },
         "repeats": repeats,
         "data": {"scenarios": rows},
     }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getRun, healthTurns, villageHealth, type DayHealth, type Run } from "@/lib/api";
-import { healthRow, healthTitle, refusalLines } from "@/lib/health";
+import { healthDetail, healthRow, healthTitle, refusalLines } from "@/lib/health";
 import { turnLabel } from "@/lib/village";
 
 /** Village health (M13): numbers for the recent days, a day's detail, and the turns behind a
@@ -71,28 +71,12 @@ export function HealthPanel({ onClose, onOpenTurn }: { onClose: () => void; onOp
       {open && !turns && (
         <div className="flex flex-col gap-3 font-sans text-sm text-dusk">
           <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-            {healthRow(open).map((c) => (
+            {healthDetail(open).map((c) => (
               <div key={c.label} title={c.why} className="contents">
                 <dt className="text-dusk-muted">{c.label}</dt>
                 <dd>{c.value}</dd>
               </div>
             ))}
-            <dt className="text-dusk-muted">Model calls</dt>
-            <dd>
-              {open.calls.decision + open.calls.plan + open.calls.reflect + open.calls.chronicle + open.calls.meeting} ({open.failed_calls} failed)
-            </dd>
-            <dt className="text-dusk-muted">Given straight back</dt>
-            <dd>{open.given_back}</dd>
-            <dt className="text-dusk-muted">Repeated lines</dt>
-            <dd>{open.repeated_lines}</dd>
-            {open.meeting && (
-              <>
-                <dt className="text-dusk-muted">Meeting</dt>
-                <dd>
-                  {open.meeting.present.length} came, {open.meeting.votes} voted, {open.meeting.outcome}
-                </dd>
-              </>
-            )}
           </dl>
           <h3 className="font-pixel text-lg">Refusals</h3>
           {open.refusals.length === 0 ? (

@@ -9,9 +9,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from agent_lab.agents.registry import model_of
 from agent_lab.bus import Bus
 from agent_lab.llm.models import Models
-from agent_lab.runs import execute_run, new_run
+from agent_lab.runs import execute_run, new_run, resolve
 from agent_lab.store import Store
 from agent_lab.village.evals.fixtures import FixtureError, build_world
 from agent_lab.village.evals.results import Results, wilson
@@ -158,8 +159,23 @@ def read_owner(owner_db: str | Path) -> tuple[World, list[str]]:
         raise ValueError(f"{owner_db} holds no village")
     world: World = json.loads(row[0])
     ids = [v["agent_id"] for v in world["villagers"]]
-    ids += [world.get(k) for k in ("planner_agent_id", "meeting_agent_id")]
+    shared = ("reflection_agent_id", "chronicler_agent_id", "planner_agent_id", "meeting_agent_id")
+    ids += [world.get(k) for k in shared]
     return world, [i for i in ids if i]
+
+
+def agent_models(store: Store, agent_ids: list[str], models: Models) -> dict[str, str]:
+    """The model each agent actually runs on, by name ("local/qwen3.5-9b, thinking off"): an
+    agent can pin its own, so the default alone does not say what was measured."""
+    found: dict[str, str] = {}
+    for agent_id in agent_ids:
+        _, config, name, _ = resolve(agent_id, store, models)
+        ref = model_of(config)
+        thinking = getattr(config, "reasoning", None)
+        found[name] = f"{ref.provider}/{ref.model}" + (
+            "" if thinking is None else f", thinking {'on' if thinking else 'off'}"
+        )
+    return found
 
 
 def agent_of(check: Check, owner: World) -> str:
@@ -235,7 +251,7 @@ async def run_checks(
         "kind": "checks",
         "created_at": time.time(),
         "model": f"{default.provider}/{default.model}",
-        "settings": {"owner_db": str(owner_db)},
+        "settings": {"owner_db": str(owner_db), "models": agent_models(store, agent_ids, models)},
         "repeats": repeats,
         "data": {
             "checks": rows,

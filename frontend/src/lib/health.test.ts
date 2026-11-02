@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DayHealth } from "./api";
-import { healthRow, healthTitle, refusalLines } from "./health";
+import { healthDetail, healthRow, healthTitle, refusalLines } from "./health";
 
 const day = (fields: Partial<DayHealth>): DayHealth => ({
   day: 66,
@@ -57,5 +57,22 @@ describe("village health", () => {
     expect(healthTitle(day({}))).toBe("Day 66");
     expect(healthTitle(day({ final: false }))).toBe("Day 66 (so far)");
     expect(refusalLines(day({}))).toEqual(["30 × someone is not next to you", "7 × you already said that"]);
+  });
+});
+
+describe("a day's detail", () => {
+  it("shows every number, missing ones as a dash", () => {
+    const detail = Object.fromEntries(healthDetail(day({})).map((c) => [c.label, c.value]));
+    expect(detail).toMatchObject({
+      Conversations: "12 (lines 2, 4, 10)",
+      "Repeated lines": "7",
+      "Load time": "40 min",
+      "Given straight back": "0",
+      Meeting: "3 came, 2 voted, decided: A market stand",
+      "Model calls": "217: 201 decisions, 6 plans, 4 reflections, 1 chronicle, 5 meeting runs (1 failed)",
+      "Weather slips": "storm",
+    });
+    const empty = Object.fromEntries(healthDetail(day({ load_minutes: null, meeting: null, weather_slips: null })).map((c) => [c.label, c.value]));
+    expect(empty).toMatchObject({ "Load time": "–", Meeting: "none", "Weather slips": "–" });
   });
 });
