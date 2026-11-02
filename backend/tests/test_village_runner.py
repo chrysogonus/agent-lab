@@ -2188,17 +2188,36 @@ async def test_a_meeting_hilde_does_not_come_to_is_called_off(tmp_path: Path) ->
 
 @pytest.mark.anyio
 async def test_invalid_proposals_call_the_meeting_off(tmp_path: Path) -> None:
-    v, _ = village_for(
-        tmp_path, {"meeting:proposals": ['{"proposals": [{"project": "a castle"}]}']}
-    )
+    castle = '{"proposals": [{"project": "a castle"}]}'
+    v, _ = village_for(tmp_path, {"meeting:proposals": [castle, castle]})
     morning(v, tick_at(9, day=3))
     await v.step()
     assert v.world["meeting"]["outcome"] == "called off: Hilde had no proposals"
-    [turn] = actions(v, "Hilde", "propose")
-    assert turn == {
-        "action": "propose",
-        "reason": "no project Hilde proposed can be built",
-    }
+    reasons = sorted(a["reason"] for a in actions(v, "Hilde", "propose"))
+    assert reasons == [
+        "no project Hilde proposed can be built",
+        "no project Hilde proposed can be built; asked again",
+    ]
+
+
+@pytest.mark.anyio
+async def test_unusable_proposals_or_work_plans_are_asked_for_once_more(tmp_path: Path) -> None:
+    broken = '{"proposals": [{"project": "A market stand", "reason": "x"}]'  # no closing brace
+    v, llm = village_for(
+        tmp_path, {"meeting:proposals": [broken], "meeting:tasks": ['{"tasks": []}']}
+    )
+    morning(v, tick_at(9, day=3))
+    await v.step()
+    assert len(meetings_of(llm, "proposals")) == 2
+    assert [p["key"] for p in meeting_now(v)["proposals"]] == ["paint_town_hall", "market_stand"]
+    assert any(
+        a["reason"].endswith("; asked again")
+        for a in actions(v, "Hilde", "propose")
+        if "reason" in a
+    )
+    await decide_market_stand(v)
+    assert len(meetings_of(llm, "tasks")) == 2
+    assert v.world["project"]["tasks"] == [{"task": "build", "goods": None, "villagers": ["Greta"]}]
 
 
 @pytest.mark.anyio
@@ -2245,7 +2264,8 @@ async def test_no_meeting_on_the_festival_day_but_the_day_after(tmp_path: Path) 
 
 @pytest.mark.anyio
 async def test_a_failing_meeting_run_does_not_pause_the_village(tmp_path: Path) -> None:
-    v, _ = village_for(tmp_path, {"meeting:proposals": [RuntimeError("model down")]})
+    down = RuntimeError("model down")
+    v, _ = village_for(tmp_path, {"meeting:proposals": [down, down]})
     morning(v, tick_at(9, day=3))
     for _ in range(3):
         await v.step()
@@ -2332,11 +2352,13 @@ async def test_the_work_is_handed_out_after_the_decision(tmp_path: Path) -> None
 
 @pytest.mark.anyio
 async def test_an_invalid_work_plan_leaves_the_project_without_tasks(tmp_path: Path) -> None:
-    v, _ = village_for(tmp_path, {"meeting:tasks": ['{"tasks": [{"task": "dance"}]}']})
+    dance = '{"tasks": [{"task": "dance"}]}'
+    v, _ = village_for(tmp_path, {"meeting:tasks": [dance, dance]})
     await decide_market_stand(v)
     assert v.world["project"]["tasks"] == []
-    assert actions(v, "Hilde", "assign") == [
-        {"action": "assign", "reason": "no usable task in the work plan"}
+    assert sorted(a["reason"] for a in actions(v, "Hilde", "assign")) == [
+        "no usable task in the work plan",
+        "no usable task in the work plan; asked again",
     ]
 
 

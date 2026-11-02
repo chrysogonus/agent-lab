@@ -9,6 +9,7 @@ between, so they need none.
 import asyncio
 import copy
 import time
+from collections.abc import Coroutine
 from itertools import chain, count
 from typing import Any
 
@@ -1150,7 +1151,7 @@ class Village:
                     and name not in meeting["votes"]
                     and key not in self.meetings
                 ):
-                    self.meetings[key] = asyncio.create_task(self._vote(name, meeting))
+                    self._start_meeting_run(key, self._vote(name, meeting))
         if minute < MEETING_CLOSES or self.meetings:
             return
         if "Hilde" not in meeting["present"]:
@@ -1158,9 +1159,9 @@ class Village:
         elif meeting["kind"] == "vote":
             if meeting["present"] == ["Hilde"]:
                 self._note("Nobody but Hilde came to the town hall meeting.")
-            self.meetings["decide"] = asyncio.create_task(self._decide_meeting(meeting))
+            self._start_meeting_run("decide", self._decide_meeting(meeting))
         else:
-            self.meetings["tasks"] = asyncio.create_task(self._assign(meeting))
+            self._start_meeting_run("tasks", self._assign(meeting))
 
     def _open_meeting(self, day: int) -> None:
         meeting: dict[str, Any] = {
@@ -1178,7 +1179,7 @@ class Village:
         if not buildable(self.world):
             self._end_meeting(meeting, "nothing left to build")
             return
-        self.meetings["propose"] = asyncio.create_task(self._propose(meeting))
+        self._start_meeting_run("propose", self._propose(meeting))
 
     def _end_meeting(self, meeting: dict[str, Any], outcome: str) -> None:
         meeting["outcome"] = outcome
@@ -1188,28 +1189,44 @@ class Village:
                 self._event(v, "meeting", text)
         self._note(text)
 
+    def _start_meeting_run(self, key: str, run: Coroutine[Any, Any, None]) -> None:
+        """A meeting run in `self.meetings` under what it is for, until it has ended."""
+
+        async def tracked() -> None:
+            try:
+                await run
+            finally:
+                if self.meetings.get(key) is asyncio.current_task():
+                    del self.meetings[key]
+
+        self.meetings[key] = asyncio.create_task(tracked())
+
     async def _meeting_call(
-        self, key: str, name: str, prompt: str
+        self, name: str, prompt: str
     ) -> tuple[str | None, str | None, str | None]:
-        """One run of the meeting agent; it leaves `self.meetings` when it ends."""
-        try:
-            return await self._run(self.world["meeting_agent_id"], name, prompt, self.world["tick"])
-        finally:
-            if self.meetings.get(key) is asyncio.current_task():
-                del self.meetings[key]
+        return await self._run(self.world["meeting_agent_id"], name, prompt, self.world["tick"])
+
+    def _asked_again(self, run_id: str | None, action: str, why: str | None) -> None:
+        """Proposals and work plans matter for days: an unusable one is asked for once more."""
+        if run_id:
+            self.store.set_village_action(
+                run_id, {"action": action, "reason": f"{why}; asked again"}
+            )
 
     def _still(self, meeting: dict[str, Any]) -> bool:
         """A meeting run's result counts only for the meeting it was asked for."""
         return not self.resetting and self.world["meeting"] is meeting
 
-    async def _propose(self, meeting: dict[str, Any]) -> None:
-        run_id, answer, failed = await self._meeting_call(
-            "propose", "Hilde", proposal_prompt(self.world)
-        )
+    async def _propose(self, meeting: dict[str, Any], again: bool = True) -> None:
+        run_id, answer, failed = await self._meeting_call("Hilde", proposal_prompt(self.world))
         if not self._still(meeting):
             return
         found, why = (None, failed) if failed else parse_proposals(answer, self.world)
         found, why = redact(found, self.secrets), redact(why, self.secrets)
+        if not found and again:
+            self._asked_again(run_id, "propose", why)
+            await self._propose(meeting, again=False)
+            return
         action: dict[str, Any] = {"action": "propose"}
         if found:
             meeting["proposals"] = [{**p, "run_id": run_id} for p in found]
@@ -1229,9 +1246,7 @@ class Village:
         self._publish()
 
     async def _vote(self, name: str, meeting: dict[str, Any]) -> None:
-        run_id, answer, failed = await self._meeting_call(
-            f"vote:{name}", name, vote_prompt(self.world, name)
-        )
+        run_id, answer, failed = await self._meeting_call(name, vote_prompt(self.world, name))
         if not self._still(meeting):
             return
         vote, why = (None, failed) if failed else parse_vote(answer, meeting["proposals"])
@@ -1250,9 +1265,7 @@ class Village:
         self._publish()
 
     async def _decide_meeting(self, meeting: dict[str, Any]) -> None:
-        run_id, answer, failed = await self._meeting_call(
-            "decide", "Hilde", decision_prompt(self.world)
-        )
+        run_id, answer, failed = await self._meeting_call("Hilde", decision_prompt(self.world))
         if not self._still(meeting):
             return
         decision, why = parse_decision(
@@ -1291,18 +1304,20 @@ class Village:
             memory += f" I voted for {entry(mine).name}." if mine else ""
             self._remember(self._villager(name), "meeting", memory, others)
         self._note(text)
-        self.meetings["tasks"] = asyncio.create_task(self._assign(meeting))
+        self._start_meeting_run("tasks", self._assign(meeting))
 
-    async def _assign(self, meeting: dict[str, Any]) -> None:
+    async def _assign(self, meeting: dict[str, Any], again: bool = True) -> None:
         """Hilde hands out the work of the project: after a decision, or at a review meeting."""
-        run_id, answer, failed = await self._meeting_call(
-            "tasks", "Hilde", work_plan_prompt(self.world)
-        )
+        run_id, answer, failed = await self._meeting_call("Hilde", work_plan_prompt(self.world))
         project = self.world["project"]
         if not self._still(meeting) or project is None:
             return
         tasks, why = (None, failed) if failed else parse_tasks(answer)
         tasks, why = redact(tasks, self.secrets), redact(why, self.secrets)
+        if not tasks and again:
+            self._asked_again(run_id, "assign", why)
+            await self._assign(meeting, again=False)
+            return
         action: dict[str, Any] = {"action": "assign"}
         if tasks:
             project["tasks"] = tasks
