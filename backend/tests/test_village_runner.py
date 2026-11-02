@@ -2613,3 +2613,28 @@ async def test_no_vote_starts_once_hilde_decides(tmp_path: Path) -> None:
     v.world["running"] = False
     await v._settle()  # pyright: ignore[reportPrivateUsage]
     assert voters(llm) == [] and meeting["outcome"] == "decided"
+
+
+@pytest.mark.anyio
+async def test_talking_does_not_hold_up_the_walk_to_the_meeting(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_at(16, 40, day=3))
+    proposed_meeting(v)
+    sx, sy = place_cells("square")[0]
+    hilde = put(v, "Hilde", sx, sy, goal={"kind": "place", "place": "town_hall"})
+    lina = put(v, "Lina", sx + 1, sy, goal={"kind": "place", "place": "market"})
+    v.world["conversations"] = [
+        {"a": "Hilde", "b": "Lina", "lines": 2, "last_tick": v.world["tick"], "transcript": []}
+    ]
+    before = steps_to(sx, sy, TOWN_HALL)
+    await v.step()
+    assert steps_to(hilde["x"], hilde["y"], TOWN_HALL) < before  # on her way
+    assert (lina["x"], lina["y"]) == (sx + 1, sy)  # Lina, not going to the meeting, stays
+    morning(v, tick_at(16, 40, day=2))  # no meeting today: talking holds her again
+    hilde |= {"x": sx, "y": sy, "goal": {"kind": "place", "place": "town_hall"}}
+    lina |= {"x": sx + 1, "y": sy}
+    v.world["conversations"] = [
+        {"a": "Hilde", "b": "Lina", "lines": 2, "last_tick": v.world["tick"], "transcript": []}
+    ]
+    await v.step()
+    assert (hilde["x"], hilde["y"]) == (sx, sy)

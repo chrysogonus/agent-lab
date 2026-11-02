@@ -224,7 +224,10 @@
     with the move to make (or the goodbye, when talking). Without them only one load was set
     down in six days and two villagers came to the meeting. A second run showed Hilde held in a
     talk at 17:00 and, another day, too far away to arrive by 17:30: the call moved to 16:30,
-    and the meeting waits for Hilde until 18:30 (`HILDE_WAITED`) before it is called off.
+    and the meeting waits for Hilde until 18:30 (`HILDE_WAITED`) before it is called off. A
+    third run showed her walking from 16:30 and held in talks with villagers she met on the
+    way until 18:40: walking to today's open meeting now goes on while talking, as the walk
+    home at bedtime does, and the talk ends when they walk apart.
   - **Asking again**: an unusable proposal or work-plan answer (a run that failed, often JSON
     missing its last brace on the real model, or nothing usable in it) is asked for once more;
     the first run records the reason with "; asked again". A missed proposal would cost the

@@ -80,7 +80,8 @@ still ends the conversation, just without the words.
   load. A villager carries one thing at a time, a basket or a load.
 - **The town hall meeting**: every third day at 17:00 (the day after, when it falls on the
   festival). In the morning Hilde proposes two or three projects from the village catalogue;
-  at 16:30 everyone away is called to the town hall, and everyone else who comes votes for
+  at 16:30 everyone away is called to the town hall (a talk on the way, like the walk home to
+  bed, no longer holds anyone up), and everyone else who comes votes for
   one, with a reason; from 17:30, once Hilde is there, she decides.
   She usually follows the vote, but she may choose another proposal if she gives a reason, and
   everyone hears when she went against the vote. A meeting Hilde has not come to by 18:30 is

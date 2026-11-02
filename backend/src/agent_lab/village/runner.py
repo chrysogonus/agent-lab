@@ -610,9 +610,22 @@ class Village:
     def _walks(self, v: Villager) -> bool:
         if v["asleep"] or not v["goal"]:
             return False
-        if v["bedtime"]:
+        if v["bedtime"] or self._to_meeting(v):
             return True
         return v["name"] not in self.decisions and not partners(self.world, v["name"])
+
+    def _to_meeting(self, v: Villager) -> bool:
+        """Walking to today's town hall meeting: like going to bed, talk does not hold it up
+        (on the real model Hilde was held in talks on her way until the meeting was off)."""
+        meeting, tick = self.world["meeting"], self.world["tick"]
+        return bool(
+            v["goal"]
+            and v["goal"].get("place") == "town_hall"
+            and meeting
+            and meeting["day"] == clock(tick)[0]
+            and not meeting["outcome"]
+            and minute_of_day(tick) >= MEETING_CALL
+        )
 
     def _targets(self, v: Villager) -> list[tuple[int, int]]:
         goal = v["goal"]
