@@ -17,6 +17,7 @@ from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 from agent_lab.village import runner
 from agent_lab.village.build import new_project
+from agent_lab.village.intention import start
 from agent_lab.village.plan import plan_prompt
 from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
 from agent_lab.village.seasons import weather
@@ -317,7 +318,7 @@ async def test_an_m6_world_starts_fresh_with_its_agents_updated(tmp_path: Path) 
         {"tick": 40, "villagers": [{"name": "Hilde", "agent_id": agent.agent_id, "x": 1, "y": 1}]}
     )
     v = Village(store=store, models=fake_models(FakeLLM([])), bus=Bus())
-    assert v.world["version"] == 6 and v.world["tick"] == 0
+    assert v.world["version"] == 7 and v.world["tick"] == 0
     assert v.world["paused_reason"] == FRESH_START
     assert villager(v, "Hilde")["agent_id"] == agent.agent_id
     updated = store.get_agent(agent.agent_id)
@@ -1020,7 +1021,7 @@ async def test_an_m7_world_keeps_going_with_empty_memory(tmp_path: Path) -> None
     world |= {"version": 2, "tick": 40}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 40)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (7, 40)
     assert reloaded.world["paused_reason"] is None
     assert all(x["memories"] == [] for x in reloaded.world["villagers"])
     reloaded.ensure_agents()
@@ -1237,7 +1238,7 @@ async def test_an_m9_world_keeps_going_with_the_seasons(tmp_path: Path) -> None:
     world |= {"version": 3, "tick": 144 * 9 + 30}  # day 10: summer
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 144 * 9 + 30)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (7, 144 * 9 + 30)
     assert reloaded.world["paused_reason"] is None
     assert reloaded.world["growth"]["fields"]["stage"] == "growing"
     assert reloaded.world["growth"]["flower_garden"]["stage"] == "blooming"
@@ -1272,7 +1273,7 @@ async def test_one_chronicle_a_night_for_the_day_it_began(
     first = chronicle[0]
     assert (first["year"], first["season"], first["day_of_season"]) == (1, "spring", 1)
     assert (first["weather"], first["title"]) == (weather(1), "A quiet day")
-    assert "Greta set off for the market." in chronicles_of(llm)[0]
+    assert "Greta set out to go to the market." in chronicles_of(llm)[0]
     run = v.store.get_run(first["run_id"])
     assert run is not None and run.villager is None and run.village_tick is not None
     assert run.village_action == {"action": "chronicle", "day": 1, **json.loads(QUIET_DAY)}
@@ -1471,7 +1472,7 @@ async def test_an_m10_world_keeps_going_with_empty_hands(tmp_path: Path) -> None
     world |= {"version": 4, "tick": 144 * 20 + 30, "chronicle": [{"day": 20, "title": "t"}]}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 144 * 20 + 30)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (7, 144 * 20 + 30)
     assert reloaded.world["paused_reason"] is None
     assert reloaded.world["chronicle"] == [{"day": 20, "title": "t"}]  # M10 history is kept
     assert all(x["basket"] is None and x["plan"] is None for x in reloaded.world["villagers"])
@@ -1506,7 +1507,7 @@ async def test_an_m11_world_keeps_going_with_nothing_built(tmp_path: Path) -> No
     world |= {"version": 5, "tick": 144 * 20 + 30}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 144 * 20 + 30)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (7, 144 * 20 + 30)
     assert reloaded.world["paused_reason"] is None
     assert villager(reloaded, "Jonas")["basket"] == "fish"  # M11 state is kept
     assert reloaded.world["project"] is None and reloaded.world["built"] == []
@@ -1523,6 +1524,59 @@ async def test_reset_clears_what_was_built_and_keeps_the_meeting_agent(tmp_path:
     await v.reset()
     assert v.world["built"] == [] and v.world["meeting_agent_id"] == kept
     assert "meeting_agent_id" not in v.state()
+
+
+@pytest.mark.anyio
+async def test_a_version_6_world_keeps_going_with_intentions(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    world = v.store.load_village()
+    assert world is not None
+    for x in world["villagers"]:
+        del x["intention"], x["requests"]
+    world["built"] = [{"key": "boat", "day": 3}]
+    world |= {"version": 6, "tick": 144 * 20 + 30}
+    v.store.save_village(world)
+    reloaded = Village(store=v.store, models=v.models, bus=Bus())
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (7, 144 * 20 + 30)
+    assert reloaded.world["built"] == [{"key": "boat", "day": 3}]
+    assert all(x["intention"] is None for x in reloaded.world["villagers"])
+    reloaded.world["running"] = False
+    await reloaded.step()  # and it keeps going
+
+
+@pytest.mark.anyio
+async def test_reset_clears_intentions_and_requests(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    greta = villager(v, "Greta")
+    greta["intention"] = {"kind": "go", "place": "market", "villager": None, "until": None}
+    greta["requests"] = [{"from": "Hilde", "goods": "vegetables", "tick": 0}]
+    await v.reset()
+    assert villager(v, "Greta")["intention"] is None and villager(v, "Greta")["requests"] == []
+
+
+def test_the_state_gives_the_intention_with_times_and_leaves_out_requests() -> None:
+    v, _ = village_for(":memory:")
+    v.world["tick"] = MORNING
+    villager(v, "Greta")["intention"] = {
+        "kind": "build",
+        "place": "site",
+        "villager": None,
+        "until": 15 * 60,
+        "purpose": "plant the trees",
+        "since": MORNING,
+        "say": None,
+    }
+    state = {x["name"]: x for x in v.state()["villagers"]}
+    assert state["Greta"]["intention"] == {
+        "kind": "build",
+        "place": "site",
+        "villager": None,
+        "until": "15:00",
+        "purpose": "plant the trees",
+        "since": "09:30",
+    }
+    assert state["Jonas"]["intention"] is None
+    assert all("requests" not in x for x in state.values())
 
 
 def test_the_state_leaves_out_said_harvest_and_the_planner() -> None:
@@ -1775,7 +1829,18 @@ async def test_work_starts_and_goes_on_where_the_villager_stands(tmp_path: Path)
     assert greta["working"] == {"place": "fields", "steps": 0}
     assert texts(v, "Greta", "worked") == ["You started working at the fields."]
     [turn] = v.store.list_turns("Greta")
-    assert turn.village_action == {"action": "work", "place": "fields"}
+    assert turn.village_action == {
+        "action": "work",
+        "place": "fields",
+        "intention": {
+            "kind": "work",
+            "place": "fields",
+            "villager": None,
+            "purpose": None,
+            "until": None,
+            "since": "09:40",
+        },
+    }
     state = next(x for x in v.state()["villagers"] if x["name"] == "Greta")
     assert (state["working"], state["state"], state["basket"]) == ("fields", "working", None)
     assert v.state()["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
@@ -2694,3 +2759,123 @@ async def test_a_prompt_that_cannot_be_built_is_a_failed_turn_not_a_hang(
     assert action["action"] == "wait"
     assert action["reason"] == "turn failed: could not build the prompt: KeyError: 'saplings'"
     await asyncio.wait_for(v.reset(), timeout=5)
+
+
+# --- M14 US1: intentions (FR-001 to FR-003) ---
+
+BUILD = json.dumps({"action": "build"})
+
+
+def building_site(v: Village, **site: int) -> None:
+    v.world["project"] = new_project("trees_square", 1)
+    v.world["project"]["site"] |= site
+
+
+@pytest.mark.anyio
+async def test_one_build_answer_keeps_greta_building_without_more_calls(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, {"Greta": [BUILD]})
+    morning(v)
+    v.world["day_record"] = {"day": 1, "items": []}
+    building_site(v, saplings=2)
+    put(v, "Greta", *place_cells("fields")[0], triggers=["woke"])
+    await v.step()
+    greta = villager(v, "Greta")
+    assert greta["intention"]["kind"] == "build" and greta["goal"] == {
+        "kind": "place",
+        "place": "site",
+    }
+    [turn] = v.store.list_turns("Greta")
+    assert turn.village_action is not None
+    assert turn.village_action["intention"]["kind"] == "build"
+    assert "Greta set out to build at the building site." in notes(v)
+    while not (greta["working"] and greta["working"]["place"] == "site"):
+        await v.step()  # walks there and starts building, asked nothing on arrival
+    assert len(calls_of(llm, "Greta")) == 1
+    while greta["intention"]:
+        await v.step()  # builds both saplings in
+    assert v.world["project"] is None or v.world["project"]["used"]["saplings"] == 2
+    assert texts(v, "Greta", "intention_ended")
+    assert len(calls_of(llm, "Greta")) == 2  # asked again only once it ended
+
+
+@pytest.mark.anyio
+async def test_work_until_a_time_ends_then_and_asks_again(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, {"Greta": [json.dumps({"action": "work", "until": "10:00"})]})
+    morning(v)
+    put(v, "Greta", *place_cells("fields")[0], triggers=["arrived"])
+    await v.step()  # 09:40
+    greta = villager(v, "Greta")
+    assert greta["working"] == {"place": "fields", "steps": 0}
+    assert greta["intention"]["until"] == 600
+    await v.step()  # 09:50: no idle question while set on work
+    assert len(calls_of(llm, "Greta")) == 1
+    await v.step()  # 10:00: done, and asked what next
+    assert greta["intention"] is None and greta["working"] is None
+    assert texts(v, "Greta", "intention_ended") == [
+        "You are done with: work at the fields until 10:00: it is 10:00."
+    ]
+    assert len(calls_of(llm, "Greta")) == 2
+
+
+@pytest.mark.anyio
+async def test_bring_sets_the_load_down_on_arrival(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Jonas": [json.dumps({"action": "bring"})]})
+    morning(v)
+    building_site(v)
+    put(v, "Jonas", *place_cells("market")[0], basket="saplings", triggers=["woke"])
+    for _ in range(6):
+        await v.step()
+    jonas = villager(v, "Jonas")
+    assert jonas["basket"] is None and jonas["intention"] is None
+    assert v.world["project"]["site"]["saplings"] == 1
+    assert texts(v, "Jonas", "intention_ended")[-1].endswith(": you set down the saplings.")
+
+
+@pytest.mark.anyio
+async def test_see_with_a_line_says_it_on_arrival(tmp_path: Path) -> None:
+    seek = json.dumps({"action": "find", "villager": "Lina", "say": "Flowers for the hall?"})
+    v, _ = village_for(tmp_path, {"Hilde": [seek]})
+    morning(v)
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, triggers=["woke"])
+    put(v, "Lina", sx + 5, sy + 2)
+    for _ in range(3):
+        await v.step()
+    assert villager(v, "Hilde")["intention"] is None
+    assert texts(v, "Lina", "heard") == ['Hilde said to you: "Flowers for the hall?"']
+
+
+@pytest.mark.anyio
+async def test_a_new_intention_replaces_the_old_one(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Greta": [WORK, move("market")]})
+    morning(v)
+    put(v, "Greta", *place_cells("fields")[0], triggers=["arrived"])
+    await v.step()
+    greta = villager(v, "Greta")
+    greta["triggers"] = ["spoken to"]
+    await v.step()
+    assert greta["intention"]["kind"] == "go" and greta["working"] is None
+    assert texts(v, "Greta", "intention_ended") == [
+        "You are done with: work at the fields: you chose to go to the market."
+    ]
+
+
+@pytest.mark.anyio
+async def test_finishing_the_project_and_bedtime_end_intentions(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    v.world["project"] = new_project("trees_square", 1)
+    v.world["project"] |= {"site": {"wood": 0, "paint": 0, "saplings": 1}}
+    v.world["project"]["used"]["saplings"] = 2
+    v.world["project"]["work"] = 5
+    put(v, "Greta", 18, 10, working={"place": "site", "steps": 0})
+    villager(v, "Greta")["intention"] = start(v.world, "Greta", {"action": "build"})
+    await v.step()
+    assert v.world["project"] is None and villager(v, "Greta")["intention"] is None
+    assert texts(v, "Greta", "intention_ended")[-1].endswith(": it is finished.")
+    lina = put(v, "Lina", *place_cells("square")[0])
+    lina["intention"] = start(v.world, "Lina", {"action": "move", "place": "market"})
+    v.world["tick"] = bedtime_tick("Lina", minutes_before=0) - 1
+    await v.step()
+    assert lina["bedtime"] and lina["intention"] is None
+    assert texts(v, "Lina", "intention_ended")[-1].endswith(": the day is over.")

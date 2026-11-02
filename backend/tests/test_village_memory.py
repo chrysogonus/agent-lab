@@ -147,6 +147,6 @@ def test_upgrading_an_m7_world_keeps_it_and_adds_empty_memory() -> None:
     del world["reflection_agent_id"]
     world |= {"version": 2, "tick": 40, "conversations": [{"a": "Hilde", "b": "Lina"}]}
     upgraded = upgrade(world)
-    assert (upgraded["version"], upgraded["tick"], upgraded["reflection_agent_id"]) == (6, 40, None)
+    assert (upgraded["version"], upgraded["tick"], upgraded["reflection_agent_id"]) == (7, 40, None)
     assert all(v["memories"] == [] and v["views"] == {} for v in upgraded["villagers"])
     assert upgraded["conversations"][0]["transcript"] == []

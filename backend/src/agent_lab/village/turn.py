@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from agent_lab.village.build import project_text, site_at, site_cells
+from agent_lab.village.build import needs_left, project_text, site_at, site_cells
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
@@ -39,11 +39,14 @@ SAID_KEPT = 3  # a villager's own last lines it may not repeat
 class Move(BaseModel):
     action: Literal["move"]
     place: str
+    purpose: str | None = None  # M14: why, kept with the intention
 
 
 class Find(BaseModel):
     action: Literal["find"]
     villager: str
+    say: str | None = None  # M14: said on reaching them
+    purpose: str | None = None
 
 
 class Say(BaseModel):
@@ -61,6 +64,20 @@ class Goodbye(BaseModel):
 
 class Work(BaseModel):
     action: Literal["work"]
+    place: str | None = None  # M14: walk there first; without it, work here
+    until: str | None = None  # "HH:MM"
+    purpose: str | None = None
+
+
+class Build(BaseModel):
+    action: Literal["build"]  # M14: go to the building site and build
+    until: str | None = None
+    purpose: str | None = None
+
+
+class Bring(BaseModel):
+    action: Literal["bring"]  # M14: take the load carried to the building site, set it down
+    purpose: str | None = None
 
 
 class Give(BaseModel):
@@ -77,7 +94,7 @@ class Wait(BaseModel):
     action: Literal["wait"]
 
 
-type Action = Move | Find | Say | Goodbye | Work | Give | Buy | Wait
+type Action = Move | Find | Say | Goodbye | Work | Build | Bring | Give | Buy | Wait
 ACTION = TypeAdapter[Action](Annotated[Action, Field(discriminator="action")])
 
 Villager = dict[str, Any]
@@ -332,17 +349,35 @@ def parse_action(
     talking = partners(world, name)
     if isinstance(action, Move | Find) and talking:
         return wait, f"you are talking with {' and '.join(talking)}; say goodbye first"
+    extra: dict[str, Any] = {}
+    if isinstance(action, Work | Build) and action.until:
+        until, why = _until(world, action.until)
+        if until is None:
+            return wait, why
+        extra["until"] = until
+    if isinstance(action, Move | Find | Work | Build | Bring):
+        purpose = (action.purpose or "").strip()
+        extra |= {"purpose": purpose} if purpose else {}
     if isinstance(action, Move):
         place, why = _destination(world, name, action.place)
-        return ({"action": "move", "place": place}, None) if place else (wait, why)
+        return ({"action": "move", "place": place, **extra}, None) if place else (wait, why)
     if isinstance(action, Find):
         other, why = _seek(world, name, action.villager)
-        return ({"action": "find", "villager": other}, None) if other else (wait, why)
+        say = (action.say or "").strip()[:SPEECH_SHOWN]
+        extra |= {"say": say} if say else {}
+        return ({"action": "find", "villager": other, **extra}, None) if other else (wait, why)
     if isinstance(action, Work):
-        why = work_refusal(world, name)
-        me = villager_of(world, name)
-        place = "site" if site_at(world, cell(me)) else place_at(me["x"], me["y"])
-        return (wait, why) if why else ({"action": "work", "place": place}, None)
+        place, why = _work_place(world, name, action.place)
+        if place == "elsewhere-site":
+            action = Build(action="build")
+        else:
+            return (wait, why) if why else ({"action": "work", "place": place, **extra}, None)
+    if isinstance(action, Build):
+        why = _build_refusal(world, name)
+        return (wait, why) if why else ({"action": "build", **extra}, None)
+    if isinstance(action, Bring):
+        why = _bring_refusal(world, name)
+        return (wait, why) if why else ({"action": "bring", **extra}, None)
     if isinstance(action, Buy):
         why = buy_refusal(world, name, action.goods)
         if why:
@@ -408,6 +443,62 @@ def _destination(world: dict[str, Any], name: str, text: str) -> tuple[str | Non
     if place != "home" and place_at(me["x"], me["y"]) == place:
         return None, f"already at the {label(place)}"
     return place, None
+
+
+def _until(world: dict[str, Any], text: str) -> tuple[int | None, str | None]:
+    """A minute of the day later than now, from "HH:MM", or why not."""
+    found = re.fullmatch(r"(\d{1,2}):(\d{2})", text.strip())
+    if not found or int(found[1]) > 23 or int(found[2]) > 59:
+        return None, f'"until" must be a time like 12:00, not {text!r}'
+    until, now = int(found[1]) * 60 + int(found[2]), minute_of_day(world["tick"])
+    if until <= now:
+        return None, f'"until" must be later than now ({hhmm(now)})'
+    return until, None
+
+
+def _work_place(
+    world: dict[str, Any], name: str, text: str | None
+) -> tuple[str | None, str | None]:
+    """Where a villager works, here or at a named place it walks to first, or why not.
+    "elsewhere-site": the building site away from here, which is building."""
+    me = villager_of(world, name)
+    here = "site" if site_at(world, cell(me)) else place_at(me["x"], me["y"])
+    place = here if text is None else place_named(text)
+    if text is not None and place is None:
+        return None, f"unknown place {text!r}"
+    if place is None or place == here:
+        return (None, why) if (why := work_refusal(world, name)) else (here, None)
+    if place == "home":
+        return None, "there is no work for you at your home"
+    if place == "site" and here != "site":
+        return "elsewhere-site", None
+    x, y = place_cells(place)[0]  # as if it stood there, not yet working
+    there = {**me, "x": x, "y": y, "working": None}
+    moved = {**world, "villagers": [there if v is me else v for v in world["villagers"]]}
+    why = work_refusal(moved, name)
+    if why:
+        return None, why.replace("for you here", f"for you at the {label(place)}")
+    return place, None
+
+
+def _build_refusal(world: dict[str, Any], name: str) -> str | None:
+    project = world["project"]
+    if project is None:
+        return "nothing is being built"
+    me = villager_of(world, name)
+    working = me["working"] and me["working"]["place"] == "site"
+    if working or any(project["site"].values()) or needs_left(world).get(me["basket"] or ""):
+        return None
+    return "the building site has nothing to work with yet: bring goods first"
+
+
+def _bring_refusal(world: dict[str, Any], name: str) -> str | None:
+    if world["project"] is None:
+        return "nothing is being built"
+    goods = villager_of(world, name)["basket"]
+    if goods is None:
+        return "your hands are empty"
+    return None if needs_left(world).get(goods) else "you carry nothing the building site needs"
 
 
 def _seek(world: dict[str, Any], name: str, text: str) -> tuple[str | None, str | None]:

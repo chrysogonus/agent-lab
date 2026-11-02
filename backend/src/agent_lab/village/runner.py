@@ -36,6 +36,7 @@ from agent_lab.village.chronicle import (
     weather_slips,
 )
 from agent_lab.village.health import trail_row
+from agent_lab.village.intention import described, ended_text, next_step, start, started_text
 from agent_lab.village.meeting import (
     MEETING_CALL,
     meeting_agent,
@@ -115,6 +116,7 @@ from agent_lab.village.world import (
     usual_place,
 )
 
+INTENDING = ("move", "find", "work", "build", "bring")  # answers that start an intention
 CHANNEL = "village"  # bus channel of the village stream
 TRAIL_DAYS = 28  # village days of the day trail kept, as the chronicle
 EVENTS_KEPT = 10
@@ -177,7 +179,7 @@ class Village(MeetingRuns):
         stored = self.store.load_village()
         if stored and stored.get("version") == VERSION:
             return stored
-        if stored and stored.get("version") in (2, 3, 4, 5):  # an M7 to M11 world keeps going
+        if stored and stored.get("version") in (2, 3, 4, 5, 6):  # an M7 to M13 world keeps going
             world = upgrade(stored)
             self.store.save_village(world)
             return world
@@ -281,6 +283,7 @@ class Village(MeetingRuns):
                 "goal": goal_text(goal),
                 "plan": self._plan_state(v["plan"], day, minute_of_day(world["tick"])),
                 "working": v["working"]["place"] if v["working"] else None,
+                "intention": self._intention_state(v["intention"]),
                 "talking_with": partners(self.world, name),
                 "beliefs": [
                     {
@@ -308,7 +311,7 @@ class Village(MeetingRuns):
                     for m in reversed(v["memories"])
                 ],
             }
-            for internal in ("inbox", "triggers", "neighbours", "last_decided", "said"):
+            for internal in ("inbox", "triggers", "neighbours", "last_decided", "said", "requests"):
                 del v[internal]
         internals = ("conversations", "talked_out", "version", "reflection_agent_id")
         internals += ("tended", "day_record", "festival", "chronicler_agent_id")
@@ -395,6 +398,17 @@ class Village(MeetingRuns):
             "current": current,
             "next": following,
             "revisions": plan["revisions"],
+        }
+
+    @staticmethod
+    def _intention_state(intention: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The intention with its times as "HH:MM"; the line it will say stays private."""
+        if intention is None:
+            return None
+        until = intention["until"]
+        return {k: intention[k] for k in ("kind", "place", "villager", "purpose")} | {
+            "until": None if until is None else hhmm(until),
+            "since": clock(intention["since"])[1],
         }
 
     @staticmethod
@@ -531,6 +545,7 @@ class Village(MeetingRuns):
                     self._start_plan(name)
             return
         if not awake and not v["bedtime"]:
+            self._end_intention(v, "the day is over", ask=False)
             v |= {"bedtime": True, "goal": {"kind": "home"}, "triggers": [], "working": None}
             self._remember_festival(v)  # the evening is over for this villager
             self._end_conversations(name, f"{name} went home to bed")
@@ -616,7 +631,8 @@ class Village(MeetingRuns):
         v["goal"] = None
         where = f"the {label(goal['place'])}" if goal["kind"] == "place" else "your home"
         self._event(v, "arrived", f"You arrived at {where}.")
-        self._trigger(v, "arrived")
+        if v["intention"] is None:  # with one, it goes on, or ends and asks then
+            self._trigger(v, "arrived")
 
     def _look(self) -> None:
         """Sightings, new neighbours and searches, after anything moved."""
@@ -653,11 +669,14 @@ class Village(MeetingRuns):
             if not other["asleep"] and adjacent(cell(v), cell(other)):
                 v["goal"] = None
                 self._event(v, "found", f"You found {other['name']}.", to=other["name"])
-                self._trigger(v, "found")
+                if v["intention"] is None:  # with one, it says its line or ends, and asks then
+                    self._trigger(v, "found")
                 self._remember(v, "found", f"You found {other['name']}.", [other["name"]])
                 self._note(f"{v['name']} found {other['name']}.")
             elif not other["asleep"] and sees(cell(v), cell(other)):
                 goal["target"] = [[other["x"], other["y"]]]
+                if v["intention"]:
+                    v["intention"]["seen"] = True  # out of sight from now on: lost sight
             elif cell(v) in self._targets(v):
                 why = (
                     f"{other['name']} is asleep at home"
@@ -671,6 +690,7 @@ class Village(MeetingRuns):
                     v, "missed", f"You did not find {other['name']}: {why}.", [other["name"]]
                 )
                 self._note(f"{v['name']} looked for {other['name']} in vain: {why}.")
+                self._end_intention(v, why, ask=False)  # "missed" asks
 
     def _upkeep(self) -> None:
         """Ends conversations whose villagers are apart or silent; forgets talked-out pairs."""
@@ -692,7 +712,11 @@ class Village(MeetingRuns):
     def _due(self, v: Villager) -> bool:
         if v["asleep"] or v["bedtime"] or v["name"] in self.decisions:
             return False
-        idle = v["goal"] is None and self.world["tick"] - v["last_decided"] >= IDLE_STEPS
+        idle = (
+            v["goal"] is None
+            and v["intention"] is None
+            and self.world["tick"] - v["last_decided"] >= IDLE_STEPS
+        )
         return bool(v["triggers"]) or idle
 
     def _start_decisions(self, *, force: bool = False) -> None:
@@ -916,23 +940,23 @@ class Village(MeetingRuns):
 
     def _apply(self, v: Villager, action: dict[str, Any], reason: str | None) -> None:
         name = v["name"]
-        v["last_action"] = {**action, **({"reason": reason} if reason else {})}
         kind = action["action"]
+        sets_out = kind in INTENDING or (
+            kind == "goodbye" and (action.get("place") or action.get("villager"))
+        )
+        intention = start(self.world, name, action) if sets_out else None
+        if intention:  # the turn shows what it set out to do
+            action["intention"] = self._intention_state(intention)
+        v["last_action"] = {**action, **({"reason": reason} if reason else {})}
         if kind == "wait":
             self._event(v, "waited", f"You waited: {reason}." if reason else "You waited.")
-        elif kind == "move":
-            self._set_off(v, action["place"])
-        elif kind == "find":
-            self._seek(v, action["villager"])
         elif kind == "say":
             self._say(v, action["text"], action["to"])
-        elif kind == "work":
-            self._work(v, action["place"])
         elif kind == "give":
             self._give(v, action["to"], action["goods"])
         elif kind == "buy":
             self._buy(v, action["goods"], action["paid"])
-        else:  # goodbye, then perhaps on its way
+        elif kind == "goodbye":  # then perhaps on its way
             if action["text"] and awake_neighbours(self.world, name):
                 self._say(v, action["text"], None)
             self._end_conversations(name, f"{name} said goodbye")
@@ -940,10 +964,76 @@ class Village(MeetingRuns):
                 self._event(v, "said", "You said goodbye.")
             if action.get("ignored"):
                 self._event(v, "waited", f"You said goodbye but stayed: {action['ignored']}.")
-            elif action.get("place"):
-                self._set_off(v, action["place"])
-            elif action.get("villager"):
-                self._seek(v, action["villager"])
+        if intention:
+            self._intend(v, intention)
+
+    def _intend(self, v: Villager, intention: dict[str, Any]) -> None:
+        """A new intention replaces the old one and takes its first step at once."""
+        old = v["intention"]
+        if old:
+            self._end_intention(v, f"you chose to {described(intention)}", ask=False)
+        v["intention"] = intention
+        self._event(v, "intended", f"You set out to {described(intention, v['basket'])}.")
+        self._note(started_text(v["name"], intention, v["basket"]))
+        self._pursue(v)
+
+    def _end_intention(self, v: Villager, why: str, *, ask: bool = True) -> None:
+        """Done, given up or replaced: recorded, and (unless a decision follows anyway) asked."""
+        intention = v["intention"]
+        if intention is None:
+            return
+        v["intention"] = None
+        text = described(intention, v["basket"])
+        self._event(v, "intention_ended", f"You are done with: {text}: {why}.")
+        self._note(ended_text(v["name"], intention, why, v["basket"]))
+        if ask:  # otherwise what follows (the next intention, bedtime) sets work and walking
+            v |= {"goal": None, "working": None}
+            self._trigger(v, "intention ended")
+
+    def _pursue(self, v: Villager) -> None:
+        """The certain steps of a villager's intention, without a model call: walking, starting
+        work on arrival, setting a needed load down and saying the stored line."""
+        for _ in range(3):  # set down, then start building; or say, then done
+            intention = v["intention"]
+            if intention is None or v["asleep"] or v["bedtime"]:
+                return
+            step = next_step(self.world, v)
+            kind = step["kind"]
+            if kind == "walk":
+                intention["seen"] = intention.get("seen") or step.get("seen", False)
+                self._aim(v, step["goal"])
+                return
+            if kind == "start_work":
+                self._work(v, step["place"])
+                return
+            if kind in ("done", "given_up"):
+                self._end_intention(v, step["why"])
+                return
+            if kind == "set_down":
+                self._give(v, None, step["goods"])
+            elif kind == "say":
+                self._say(v, step["text"], step["to"])
+            else:
+                return  # none: keeps at it
+            if "done" in step:
+                self._end_intention(v, step["done"])
+                return
+
+    def _aim(self, v: Villager, goal: dict[str, Any]) -> None:
+        """Walks towards the intention's goal; a goal already walked to is kept."""
+        current = v["goal"]
+        if current and all(current.get(k) == goal[k] for k in goal):
+            return
+        v["working"] = None  # walking off ends work
+        if goal["kind"] == "find":
+            other = goal["villager"]
+            v["goal"] = {**goal, "target": self._find_target(v, other)}
+            self._event(v, "set_off", f"You set off to find {other}.", to=other)
+            self._look()  # already in sight: aim at them now
+            return
+        v["goal"] = goal
+        where = "home" if goal["kind"] == "home" else f"for the {label(goal['place'])}"
+        self._event(v, "set_off", f"You set off {where}.")
 
     def _work(self, v: Villager, place: str) -> None:
         if v["working"] and v["working"]["place"] == place:
@@ -994,22 +1084,6 @@ class Village(MeetingRuns):
             sold = sum(trader_stock(trader["day"]).values()) - sum(trader["stock"].values())
             self.world["trader"] = None
             self._note(f"The trader left the market (sold {sold} loads).")
-
-    def _set_off(self, v: Villager, place: str) -> None:
-        v["working"] = None  # walking off ends work
-        if place == "home":
-            v["goal"] = {"kind": "home"}
-            self._event(v, "set_off", "You set off for home.")
-        else:
-            v["goal"] = {"kind": "place", "place": place}
-            self._event(v, "set_off", f"You set off for the {label(place)}.")
-            self._note(f"{v['name']} set off for the {label(place)}.")
-
-    def _seek(self, v: Villager, other: str) -> None:
-        v["working"] = None
-        v["goal"] = {"kind": "find", "villager": other, "target": self._find_target(v, other)}
-        self._event(v, "set_off", f"You set off to find {other}.", to=other)
-        self._look()  # already in sight: aim at them now
 
     def _find_target(self, v: Villager, other: str) -> list[list[int]]:
         belief = v["beliefs"].get(other)
@@ -1094,6 +1168,8 @@ class Village(MeetingRuns):
         self.world["built"].append({"key": key, "day": clock(self.world["tick"])[0]})
         self.world["project"] = None
         for v in self.world["villagers"]:
+            if v["intention"] and v["intention"]["place"] == "site":
+                self._end_intention(v, "it is finished", ask=False)  # "built" asks
             if v["working"] and v["working"]["place"] == "site":
                 v["working"] = None
             if v["goal"] and v["goal"].get("place") == "site":
@@ -1145,6 +1221,8 @@ class Village(MeetingRuns):
                 self._publish()
         self._look()
         self._upkeep()
+        for v in world["villagers"]:
+            self._pursue(v)
         for name, goods in work_step(world):
             v = self._villager(name)
             self._event(v, "basket", f"You filled a basket of {goods}.")

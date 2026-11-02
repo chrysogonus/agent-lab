@@ -609,3 +609,96 @@ def test_walking_to_the_building_site() -> None:
         {"action": "wait"},
         "already at the building site",
     )
+
+
+# --- M14: answers that start intentions (FR-001) ---
+
+
+def parsed(answer: dict[str, Any], world: dict[str, Any], name: str) -> tuple[Any, str | None]:
+    return parse_action(json.dumps(answer), world, name)
+
+
+def test_work_somewhere_else_until_a_time() -> None:
+    world = world_with()  # Greta at her door, 09:30
+    assert parsed(
+        {"action": "work", "place": "the fields", "until": "12:00", "purpose": "weed"},
+        world,
+        "Greta",
+    ) == ({"action": "work", "place": "fields", "until": 720, "purpose": "weed"}, None)
+    assert parsed({"action": "work", "place": "pier"}, world, "Greta") == (
+        {"action": "wait"},
+        "only Jonas fishes here; work with him while he fishes",
+    )
+    assert parsed({"action": "work", "place": "market"}, world, "Greta") == (
+        {"action": "wait"},
+        "there is no work for you at the market",
+    )
+    assert parsed({"action": "work", "place": "harbour"}, world, "Greta") == (
+        {"action": "wait"},
+        "unknown place 'harbour'",
+    )
+
+
+@pytest.mark.parametrize(
+    ("until", "why"),
+    [
+        ("noon", "\"until\" must be a time like 12:00, not 'noon'"),
+        ("25:00", "\"until\" must be a time like 12:00, not '25:00'"),
+        ("09:30", '"until" must be later than now (09:30)'),
+        ("08:00", '"until" must be later than now (09:30)'),
+    ],
+)
+def test_until_must_be_a_later_time(until: str, why: str) -> None:
+    fields = place_cells("fields")[0]
+    world = world_with(Greta=at(*fields))
+    assert parsed({"action": "work", "until": until}, world, "Greta") == ({"action": "wait"}, why)
+
+
+def test_build_needs_a_project_and_something_to_build_with() -> None:
+    assert parsed({"action": "build"}, world_with(), "Greta") == (
+        {"action": "wait"},
+        "nothing is being built",
+    )
+    empty = with_project("trees_square")
+    assert parsed({"action": "build"}, empty, "Greta") == (
+        {"action": "wait"},
+        "the building site has nothing to work with yet: bring goods first",
+    )
+    empty["villagers"][2]["basket"] = "saplings"
+    assert parsed({"action": "build", "until": "15:00"}, empty, "Greta") == (
+        {"action": "build", "until": 900},
+        None,
+    )
+    held = with_project("trees_square", saplings=2)
+    assert parsed({"action": "build"}, held, "Lina") == ({"action": "build"}, None)
+
+
+def test_bring_needs_a_load_the_site_still_needs() -> None:
+    world = with_project("trees_square")
+    assert parsed({"action": "bring"}, world_with(), "Jonas") == (
+        {"action": "wait"},
+        "nothing is being built",
+    )
+    assert parsed({"action": "bring"}, world, "Jonas") == (
+        {"action": "wait"},
+        "your hands are empty",
+    )
+    world["villagers"][1]["basket"] = "wood"
+    assert parsed({"action": "bring"}, world, "Jonas") == (
+        {"action": "wait"},
+        "you carry nothing the building site needs",
+    )
+    world["villagers"][1]["basket"] = "saplings"
+    assert parsed({"action": "bring", "purpose": "trees"}, world, "Jonas") == (
+        {"action": "bring", "purpose": "trees"},
+        None,
+    )
+
+
+def test_find_with_a_line_to_say() -> None:
+    answer = {"action": "find", "villager": "Lina", "say": " Any flowers? " + "x" * 300}
+    action, why = parsed(answer, world_with(), "Hilde")
+    assert why is None and action["villager"] == "Lina"
+    assert action["say"] == ("Any flowers? " + "x" * 300)[:SPEECH_SHOWN]
+    blank = parsed({"action": "find", "villager": "Lina", "say": " "}, world_with(), "Hilde")
+    assert blank == ({"action": "find", "villager": "Lina"}, None)

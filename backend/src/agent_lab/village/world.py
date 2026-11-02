@@ -284,7 +284,7 @@ def villager_named(text: str) -> str | None:
     return named[0] if len(named) == 1 else None
 
 
-VERSION = 6  # the world's shape: 2 to 5 are upgraded in place, anything else starts fresh
+VERSION = 7  # the world's shape: 2 to 6 are upgraded in place, anything else starts fresh
 
 
 def new_world() -> dict[str, Any]:
@@ -316,6 +316,8 @@ def new_world() -> dict[str, Any]:
                 "basket": None,  # what it carries: a basket of fish, … or a load of wood, … (M12)
                 "working": None,
                 "said": [],
+                "intention": None,  # what it set out to do, until done, given up or replaced (M14)
+                "requests": [],  # goods asked of it in the last hour, so it may give them (M14)
             }
         )
     return {
@@ -352,7 +354,8 @@ def upgrade(world: dict[str, Any]) -> dict[str, Any]:
     """An older world brought to the current shape, so the village keeps going: version 2 (M7)
     gets empty memory (M8), version 3 the seasons with places as the season finds them (M10),
     version 4 no plans, empty hands and empty stalls (M11), version 5 no trader, meeting or
-    project and nothing built (M12), with nobody left standing on the new building plots."""
+    project and nothing built (M12), with nobody left standing on the new building plots, and
+    version 6 no intentions and no requests (M14)."""
     if world["version"] == 2:
         for v in world["villagers"]:
             v |= {"memories": [], "learnings": [], "views": {}}
@@ -379,15 +382,19 @@ def upgrade(world: dict[str, Any]) -> dict[str, Any]:
             "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
             "planner_agent_id": None,
         }
+    if world["version"] == 5:
+        for v in world["villagers"]:
+            letter = ROWS[int(v["y"])][int(v["x"])]
+            if letter in PLOT_EXITS:
+                v["x"], v["y"] = PLOT_EXITS[letter]
+        world |= {
+            "version": 6,
+            "trader": None,
+            "meeting": None,
+            "project": None,
+            "built": [],
+            "meeting_agent_id": None,
+        }
     for v in world["villagers"]:
-        letter = ROWS[int(v["y"])][int(v["x"])]
-        if letter in PLOT_EXITS:
-            v["x"], v["y"] = PLOT_EXITS[letter]
-    return world | {
-        "version": VERSION,
-        "trader": None,
-        "meeting": None,
-        "project": None,
-        "built": [],
-        "meeting_agent_id": None,
-    }
+        v |= {"intention": None, "requests": []}
+    return world | {"version": VERSION}

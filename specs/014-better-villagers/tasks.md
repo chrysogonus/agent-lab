@@ -48,7 +48,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 2: Foundational — world version 7 and what you can do here
 
-- [ ] T002 World version 7.
+- [X] T002 World version 7.
   - backend/src/agent_lab/village/world.py:
     - `VERSION = 7`;
     - per villager `intention: None` and `requests: []`;
@@ -65,7 +65,7 @@ first. Runner tests pass `move_gap=0`.
     - Reset clears the fields;
     - the state shape.
   - Requirement: FR-016.
-- [ ] T003 [P] New backend/src/agent_lab/village/affordances.py (research §2): `can_do(world,
+- [X] T003 [P] New backend/src/agent_lab/village/affordances.py (research §2): `can_do(world,
   name) -> list[tuple[dict, str]]`. It returns at most 6 entries, in this order:
   - `work` (when `work_refusal` is None);
   - `build` (at or away from a site holding loads);
@@ -84,7 +84,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 3: User Story 1 — Intentions (P1) 🎯 MVP
 
-- [ ] T004 [P] [US1] New backend/src/agent_lab/village/intention.py (research §1, data-model.md
+- [X] T004 [P] [US1] New backend/src/agent_lab/village/intention.py (research §1, data-model.md
   "Intention steps").
   - `KINDS = ("go", "work", "build", "bring", "see")`.
   - `start(world, name, action) -> intention`, where `until` is a minute of the day and
@@ -105,7 +105,7 @@ first. Runner tests pass `move_gap=0`.
   Tests in new backend/tests/test_village_intention.py: every kind through every step on
   fixture worlds (`build_world`), each end with its reason, and `until` before and after.
   Requirements: FR-001, FR-002, FR-003.
-- [ ] T005 [US1] backend/src/agent_lab/village/turn.py: the answers.
+- [X] T005 [US1] backend/src/agent_lab/village/turn.py: the answers.
   - `Work` gains `place` and `until`; new `Build {until}` and `Bring`; `Find` gains `say`.
   - `parse_action` validates them:
     - places with `place_named`;
@@ -120,7 +120,7 @@ first. Runner tests pass `move_gap=0`.
 
   Tests in test_village_turn.py: every new answer, valid and refused with its reason.
   Requirement: FR-001.
-- [ ] T006 [US1] runner.py:
+- [X] T006 [US1] runner.py:
   - `_apply` starts the intention for move, work, build, bring and find. A previous one ends as
     "replaced", with the event `intention_ended` and a note. The start gets the event
     `intended` and the note "Greta set out to build at the building site until 15:00."

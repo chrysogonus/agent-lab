@@ -131,7 +131,7 @@ def test_sleeping_hours_and_routines() -> None:
 def test_new_world_has_everyone_asleep_at_home() -> None:
     world = new_world()
     assert (world["version"], world["tick"], world["running"]) == (VERSION, 0, False)
-    assert VERSION == 6
+    assert VERSION == 7
     assert world["interval"] == 5
     assert world["conversations"] == world["talked_out"] == world["log"] == []
     names = [v["name"] for v in world["villagers"]]
@@ -141,6 +141,7 @@ def test_new_world_has_everyone_asleep_at_home() -> None:
         assert v["goal"] is None and v["beliefs"] == {} and v["events"] == []
         assert v["memories"] == v["learnings"] == [] and v["views"] == {}
         assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
+        assert v["intention"] is None and v["requests"] == []
     assert world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
     assert world["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
     assert world["planner_agent_id"] is None
@@ -157,7 +158,11 @@ def test_a_version_4_world_gets_plans_baskets_and_stalls() -> None:
         del world[key]
     world |= {"version": 4, "tick": 40, "chronicle": [{"day": 1}]}
     upgraded = upgrade(world)
-    assert (upgraded["version"], upgraded["tick"], upgraded["chronicle"]) == (6, 40, [{"day": 1}])
+    assert (upgraded["version"], upgraded["tick"], upgraded["chronicle"]) == (
+        VERSION,
+        40,
+        [{"day": 1}],
+    )
     for v in upgraded["villagers"]:
         assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
     assert upgraded["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
@@ -177,7 +182,7 @@ def test_a_version_5_world_gets_trader_meeting_and_projects() -> None:
     world["villagers"][1] |= {"basket": "fish", "said": ["Hello"]}
     world["stalls"]["fish"] = 2
     upgraded = upgrade(world)
-    assert upgraded["version"] == 6
+    assert upgraded["version"] == VERSION
     assert upgraded["trader"] is upgraded["meeting"] is upgraded["project"] is None
     assert upgraded["built"] == [] and upgraded["meeting_agent_id"] is None
     jonas = upgraded["villagers"][1]
@@ -192,3 +197,17 @@ def test_upgrading_moves_a_villager_off_a_new_plot() -> None:
     upgraded = upgrade(world)
     assert (upgraded["villagers"][2]["x"], upgraded["villagers"][2]["y"]) == PLOT_EXITS["b"]
     assert (upgraded["villagers"][3]["x"], upgraded["villagers"][3]["y"]) == PLOT_EXITS["r"]
+
+
+def test_a_version_6_world_gets_intentions_and_requests() -> None:
+    world = new_world()
+    for v in world["villagers"]:
+        del v["intention"], v["requests"]
+    world |= {"version": 6, "tick": 144 * 60, "project": {"key": "boat"}}
+    world["villagers"][1] |= {"basket": "wood", "asleep": False}
+    upgraded = upgrade(world)
+    assert upgraded["version"] == VERSION
+    for v in upgraded["villagers"]:
+        assert v["intention"] is None and v["requests"] == []
+    assert upgraded["project"] == {"key": "boat"}  # M12 state is kept
+    assert upgraded["villagers"][1]["basket"] == "wood"
