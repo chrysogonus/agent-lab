@@ -14,7 +14,8 @@ meeting: {day: int, kind: "vote" | "review",
           present: [str],
           decision: {key, name, reason, against: bool, by: "hilde" | "vote", run_id} | null,
           outcome: str | null} | null
-project: {key, name, kind, needs: {goods: int}, site: {goods: int}, done: int, total: int,
+project: {key, name, kind, needs: {goods: int}, site: {goods: int}, used: {goods: int},
+          done: int, total: int,   # done = sum(used), total = sum(needs)
           tasks: [{task: "buy" | "bring" | "build", goods: str | null, villagers: [str]}],
           day: int} | null
 built: [{key, name, kind, day}]

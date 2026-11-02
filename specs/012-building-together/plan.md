@@ -62,7 +62,7 @@ into spec.md:
 - Hilde chairs the meeting and does not vote.
 - A meeting Hilde misses is called off.
 - An invalid decision falls back to the vote.
-- New buildings need 12 or more loads.
+- New buildings need 17 or more loads, more than the longest waking day of 16 hours.
 
 ## Design
 
@@ -130,6 +130,9 @@ into spec.md:
   modules.
 - Runner, turn, work, plan, chronicle, world and API tests extended (one cycle from meeting to
   finished project in `test_village_runner.py`, for SC-002).
+- `test_village_build.py` covers loads delivered in any order (paint before wood and back),
+  `needs_left` per goods across a save and reload, and a fully stocked bakehouse that one worker
+  cannot finish within one waking day.
 - A map test checks that every walkable cell is reachable and that every site cell is walkable.
 
 ### Frontend

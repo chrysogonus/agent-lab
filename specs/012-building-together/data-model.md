@@ -35,13 +35,15 @@ The village stays one JSON row; `VERSION = 6`.
 ```text
 {key,                                   # a catalogue key
  site: {wood, paint, saplings},         # loads lying at the site, not yet worked in
- done: int,                             # loads worked in
+ used: {wood, paint, saplings},         # loads worked in, per goods
  work: int,                             # working steps toward the next load, 0–5
  tasks: [{task: "buy" | "bring" | "build", goods: str | null, villagers: [name]}],
  day: int}                              # the day it was decided
 ```
 
-Total loads = sum of the catalogue entry's `needs`; it is finished when `done` reaches it.
+Still to deliver per goods: `needs[g] - site[g] - used[g]`. Progress (`done`) is `sum(used)` of
+`total` = `sum(needs)`; it is finished when `used` equals `needs`. Per-goods `used` matters
+because loads arrive in any order (paint first or wood first leave different needs).
 
 ## Catalogue (static, `build.py`)
 
@@ -93,9 +95,9 @@ meeting:  meeting day, Hilde wakes, no project --valid proposals--> {kind vote, 
           ≥ 17:30, no vote run in flight: Hilde absent → "called off: Hilde did not come"
                                           vote → decision run → decision (or vote fallback) → "decided"
                                           review → work-plan run → "reviewed"
-project:  null --decision--> {key, site 0s, done 0, work 0, tasks []} --work-plan run--> tasks
-          site holds a load, workers there --6 working steps--> one load used, done + 1
-          done = total --> null; built + {key, day}
+project:  null --decision--> {key, site 0s, used 0s, work 0, tasks []} --work-plan run--> tasks
+          site holds a load, workers there --6 working steps--> site[g] - 1, used[g] + 1
+          used = needs --> null; built + {key, day}
 ```
 
 ## Villager memory

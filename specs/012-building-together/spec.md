@@ -323,7 +323,8 @@ building without loads, or at another place, is refused with the reason.
 - **SC-002**: In a scripted cycle, a meeting leads to a decision; the decision's tasks show in the
   assigned villagers' plans; the goods are bought and brought; the project is completed by work
   and stays on the map after the next day begins.
-- **SC-003**: In scripted meetings, every villager at the town hall has exactly one vote recorded,
+- **SC-003**: In scripted meetings, every villager but Hilde at the town hall has exactly one vote
+  recorded,
   and the decision and its reason are visible to the owner and in the chronicle.
 - **SC-004**: On the real model, starting on a meeting day at Fast pace, the meeting is held with
   at least three villagers present, and at least one project is completed within six village days
@@ -348,5 +349,6 @@ building without loads, or at another place, is refused with the reason.
   new kind of place.
 - **One load is one hour.** A load is one village hour of work: a painted house needs 2 loads of
   paint, a row of trees 3 loads of saplings, a market stand 3 wood and 1 paint, and a new
-  building 12 or more loads, which takes more than a day for one villager.
+  building 17 or more loads, more than the longest waking day (16 hours), so it takes more than
+  a day for one villager.
 - **Every season.** Building goes on in every season and in any weather.

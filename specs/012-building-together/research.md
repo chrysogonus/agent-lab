@@ -36,9 +36,11 @@
   trader had no paint today" part of the story.
 - **Alternatives**: a trader agent that haggles — rejected, it costs model calls for no new
   learning; M13 brings visitors that talk. Coins — rejected by the owner.
-- **Seasons**: in spring only the pier gives baskets (fields not ripe, garden budding), so fish
-  pay for spring's building. This is a property of M11's growth rules, not a bug; the manual
-  check notes it.
+- **Seasons**: spring starts with only the pier giving baskets (fields not ripe, garden
+  budding), so fish pay for early spring's building; the garden blooms after two watered days
+  (worked an hour or rained on) and gives flowers from then on, and vegetables come once the
+  fields ripen in summer. This follows from M11's growth rules; the manual check notes which
+  baskets paid.
 
 ## 2. One carried thing: basket or load (`work.py`, `trade.py`)
 
@@ -77,8 +79,8 @@
 | `trees_square` | Plant trees by the square | trees | saplings 3 | (18, 10), (20, 10), (22, 10) | the same cells |
 | `market_stand` | A market stand | stand | wood 3, paint 1 | the market's cells | the market's top-right corner |
 | `boat` | A rowing boat | boat | wood 4, paint 1 | the shore (16–18, 16) | the water by the pier (20, 17) |
-| `bakehouse` | A bakehouse on the meadow | building | wood 10, paint 2 | (14–16, 12) | plot `b` (14–17, 13–14) |
-| `barn` | A barn by the fields | building | wood 12, paint 2 | (10–12, 16) | plot `r` (9–12, 17–18) |
+| `bakehouse` | A bakehouse on the meadow | building | wood 14, paint 3 | (14–16, 12) | plot `b` (14–17, 13–14) |
+| `barn` | A barn by the fields | building | wood 16, paint 3 | (10–12, 16) | plot `r` (9–12, 17–18) |
 
   - **Plots**: the map gains two fenced building plots, letters `b` and `r` in `ROWS`. They join
     `BLOCKED`, like the houses, so a finished building never has villagers walking through it,
@@ -91,8 +93,9 @@
     "building site" (or "site"), `steps_to` lists "building site N steps" under Places, and
     `site_at(world, cell)` says whether a cell is on the current site. Without a project, "the
     building site" is refused like an unknown place ("nothing is being built").
-  - `needs_left(world)`: the loads still to deliver, which is the needs minus what lies on the
-    site minus what has been worked in.
+  - `needs_left(world)`: the loads still to deliver, per goods: `needs[g] - site[g] - used[g]`.
+    The project keeps what it used per goods (`used`), not just a count, because loads arrive in
+    any order; how far along it is (`done`) is `sum(used)`.
   - `project_text(world, name)` gives the observation lines:
     - "The village is building: Paint the town hall (the site is at the town hall). It still
       needs 1 paint; the site holds 1 paint; 1 of 2 loads worked in.";
@@ -118,16 +121,18 @@
   - `build_step(world) -> str | None`, called in `_advance` right after `work_step`:
     1. the working steps of everyone at the site add up in `project["work"]`, but only while
        loads lie there;
-    2. at `BASKET_STEPS` (6, one village hour), one load is used (goods in catalogue order) and
-       `project["done"] += 1`;
-    3. when `done` equals the sum of `needs`, the project is finished and its key is returned.
+    2. at `BASKET_STEPS` (6, one village hour), one load lying at the site is used (goods in
+       catalogue order among those lying there): `site[g] -= 1`, `used[g] += 1`;
+    3. when `used` equals `needs`, the project is finished and its key is returned.
   - **Finished**: `world["built"].append({"key", "day"})` and `project = None`. Each worker
     stops working. Every villager gets the event "The town hall has been painted!" (the
     catalogue's `done_text`), and awake villagers remember it (kind `built`). The day record
     notes it, and the chronicle hears it through the note.
 - **Why**: building is work at a new place with the same counting as M11. Working together
-  speeds it up, and the loads tie the trader, the carrying and the work together. A building
-  with 12 or more loads takes more than a day of one villager's work (spec assumption).
+  speeds it up, and the loads tie the trader, the carrying and the work together. The longest
+  waking day is 16 hours (Jonas 05:00–21:00, Greta 05:30–21:30), so a building of 17 or more
+  loads takes more than a day of one villager's work even on a fully stocked site (spec
+  assumption); a scripted test checks it.
 
 ## 5. The meeting (new `village/meeting.py`)
 
@@ -271,7 +276,7 @@
 - **State**:
   - `trader` (`{stock, leaves: "14:00"}` or `null`);
   - `meeting` (the latest: day, kind, proposals with names, votes, present, decision, outcome);
-  - `project` (key, name, needs, site holds, done, total, tasks);
+  - `project` (key, name, needs, site holds, used, done, total, tasks);
   - `built` (keys with names and days);
   - `next_meeting` (the day of the next town hall meeting);
   - `map.catalogue` (`[{key, name, kind, site, at}]`, the static drawing data);
