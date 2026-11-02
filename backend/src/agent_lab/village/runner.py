@@ -55,6 +55,7 @@ from agent_lab.village.seasons import (
     snow_cover,
     weather,
 )
+from agent_lab.village.trade import carried_text
 from agent_lab.village.turn import (
     OLD_RULES,
     RULES,
@@ -156,7 +157,7 @@ class Village:
         stored = self.store.load_village()
         if stored and stored.get("version") == VERSION:
             return stored
-        if stored and stored.get("version") in (2, 3, 4):  # an M7 to M10 world keeps going
+        if stored and stored.get("version") in (2, 3, 4, 5):  # an M7 to M11 world keeps going
             world = upgrade(stored)
             self.store.save_village(world)
             return world
@@ -272,7 +273,7 @@ class Village:
                 del v[internal]
         internals = ("conversations", "talked_out", "version", "reflection_agent_id")
         internals += ("tended", "day_record", "festival", "chronicler_agent_id")
-        internals += ("harvest", "planner_agent_id")
+        internals += ("harvest", "planner_agent_id", "meeting_agent_id")
         for internal in internals:
             del world[internal]
         year, season, day_of_season = date(day)
@@ -859,10 +860,11 @@ class Village:
             return
         other = self._villager(to)
         other["basket"] = goods
-        self._event(v, "gave", f"You gave your basket of {goods} to {to}.", to=to)
-        self._event(other, "received", f"{name} gave you a basket of {goods}.", **{"from": name})
+        carried = carried_text(goods)
+        self._event(v, "gave", f"You gave your {carried} to {to}.", to=to)
+        self._event(other, "received", f"{name} gave you a {carried}.", **{"from": name})
         self._trigger(other, "given")
-        self._note(f"{name} gave a basket of {goods} to {to}.")
+        self._note(f"{name} gave a {carried} to {to}.")
 
     def _set_off(self, v: Villager, place: str) -> None:
         v["working"] = None  # walking off ends work
@@ -1062,6 +1064,7 @@ class Village:
                 self.resetting = False
             agents = {v["name"]: v["agent_id"] for v in self.world["villagers"]}
             shared = ("reflection_agent_id", "chronicler_agent_id", "planner_agent_id")
+            shared += ("meeting_agent_id",)
             agent_ids = {k: self.world[k] for k in shared}
             self.world = new_world() | agent_ids
             self.outcomes = []

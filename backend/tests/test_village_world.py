@@ -1,12 +1,16 @@
 """The village map, homes, paths, nearness, clock and routines (FR-001 to FR-004, FR-014)."""
 
+from typing import Any
+
 import pytest
 
 from agent_lab.village.world import (
     HEIGHT,
     HOMES,
     PLACES,
+    PLOT_EXITS,
     ROWS,
+    VERSION,
     VILLAGERS,
     WIDTH,
     adjacent,
@@ -14,6 +18,7 @@ from agent_lab.village.world import (
     clock,
     door,
     label_cell,
+    letter_cells,
     new_world,
     place_at,
     place_cells,
@@ -29,8 +34,8 @@ from agent_lab.village.world import (
 def test_map_size_and_characters() -> None:
     assert (WIDTH, HEIGHT) == (32, 22)
     assert all(len(row) == WIDTH for row in ROWS)
-    assert set("".join(ROWS)) <= set(".=~TSMPFGBhjglti")
-    for char in "~Bhjglti":
+    assert set("".join(ROWS)) <= set(".=~TSMPFGBhjgltibr")
+    for char in "~Bhjgltibr":
         x, y = next((x, y) for y, r in enumerate(ROWS) for x, c in enumerate(r) if c == char)
         assert not walkable(x, y), char
     assert walkable(0, 1) and not walkable(-1, 0) and not walkable(0, HEIGHT)
@@ -42,6 +47,21 @@ def test_every_place_and_door_is_reachable_from_every_other() -> None:
     for x, y in starts:
         for goal in goals:
             assert steps_to(x, y, goal) >= 0  # KeyError if unreachable
+
+
+def test_every_walkable_cell_reaches_every_other_with_the_plots_blocked() -> None:
+    cells = [(x, y) for y in range(HEIGHT) for x in range(WIDTH) if walkable(x, y)]
+    reached = steps_to(*cells[0], [cells[-1]])  # KeyError if the plots cut the map apart
+    assert reached >= 0
+    assert all(steps_to(x, y, [cells[0]]) >= 0 for x, y in cells)
+
+
+def test_the_building_plots() -> None:
+    plots = {c: letter_cells(c) for c in "br"}
+    assert plots["b"] == [(x, y) for y in (13, 14) for x in range(14, 18)]
+    assert plots["r"] == [(x, y) for y in (17, 18) for x in range(9, 13)]
+    for letter, exit_cell in PLOT_EXITS.items():
+        assert walkable(*exit_cell) and any(adjacent(exit_cell, c) for c in plots[letter])
 
 
 def test_each_home_is_a_house_with_a_walkable_door_near_its_owners_work() -> None:
@@ -110,7 +130,8 @@ def test_sleeping_hours_and_routines() -> None:
 
 def test_new_world_has_everyone_asleep_at_home() -> None:
     world = new_world()
-    assert (world["version"], world["tick"], world["running"]) == (5, 0, False)
+    assert (world["version"], world["tick"], world["running"]) == (VERSION, 0, False)
+    assert VERSION == 6
     assert world["interval"] == 5
     assert world["conversations"] == world["talked_out"] == world["log"] == []
     names = [v["name"] for v in world["villagers"]]
@@ -123,6 +144,8 @@ def test_new_world_has_everyone_asleep_at_home() -> None:
     assert world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
     assert world["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
     assert world["planner_agent_id"] is None
+    assert world["trader"] is world["meeting"] is world["project"] is None
+    assert world["built"] == [] and world["meeting_agent_id"] is None
 
 
 def test_a_version_4_world_gets_plans_baskets_and_stalls() -> None:
@@ -134,9 +157,38 @@ def test_a_version_4_world_gets_plans_baskets_and_stalls() -> None:
         del world[key]
     world |= {"version": 4, "tick": 40, "chronicle": [{"day": 1}]}
     upgraded = upgrade(world)
-    assert (upgraded["version"], upgraded["tick"], upgraded["chronicle"]) == (5, 40, [{"day": 1}])
+    assert (upgraded["version"], upgraded["tick"], upgraded["chronicle"]) == (6, 40, [{"day": 1}])
     for v in upgraded["villagers"]:
         assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
     assert upgraded["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
     assert upgraded["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
     assert upgraded["planner_agent_id"] is None
+
+
+def version_5_world() -> dict[str, Any]:
+    world = new_world()
+    for key in ("trader", "meeting", "project", "built", "meeting_agent_id"):
+        del world[key]
+    return world | {"version": 5}
+
+
+def test_a_version_5_world_gets_trader_meeting_and_projects() -> None:
+    world = version_5_world()
+    world["villagers"][1] |= {"basket": "fish", "said": ["Hello"]}
+    world["stalls"]["fish"] = 2
+    upgraded = upgrade(world)
+    assert upgraded["version"] == 6
+    assert upgraded["trader"] is upgraded["meeting"] is upgraded["project"] is None
+    assert upgraded["built"] == [] and upgraded["meeting_agent_id"] is None
+    jonas = upgraded["villagers"][1]
+    assert jonas["basket"] == "fish" and jonas["said"] == ["Hello"]  # M11 state is kept
+    assert upgraded["stalls"]["fish"] == 2
+
+
+def test_upgrading_moves_a_villager_off_a_new_plot() -> None:
+    world = version_5_world()
+    world["villagers"][2] |= {"x": 15, "y": 13, "asleep": False}  # on the bakehouse plot
+    world["villagers"][3] |= {"x": 10, "y": 18, "asleep": False}  # on the barn plot
+    upgraded = upgrade(world)
+    assert (upgraded["villagers"][2]["x"], upgraded["villagers"][2]["y"]) == PLOT_EXITS["b"]
+    assert (upgraded["villagers"][3]["x"], upgraded["villagers"][3]["y"]) == PLOT_EXITS["r"]

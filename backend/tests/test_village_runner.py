@@ -277,7 +277,7 @@ async def test_an_m6_world_starts_fresh_with_its_agents_updated(tmp_path: Path) 
         {"tick": 40, "villagers": [{"name": "Hilde", "agent_id": agent.agent_id, "x": 1, "y": 1}]}
     )
     v = Village(store=store, models=fake_models(FakeLLM([])), bus=Bus())
-    assert v.world["version"] == 5 and v.world["tick"] == 0
+    assert v.world["version"] == 6 and v.world["tick"] == 0
     assert v.world["paused_reason"] == FRESH_START
     assert villager(v, "Hilde")["agent_id"] == agent.agent_id
     updated = store.get_agent(agent.agent_id)
@@ -980,7 +980,7 @@ async def test_an_m7_world_keeps_going_with_empty_memory(tmp_path: Path) -> None
     world |= {"version": 2, "tick": 40}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (5, 40)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 40)
     assert reloaded.world["paused_reason"] is None
     assert all(x["memories"] == [] for x in reloaded.world["villagers"])
     reloaded.ensure_agents()
@@ -1182,7 +1182,7 @@ async def test_an_m9_world_keeps_going_with_the_seasons(tmp_path: Path) -> None:
     world |= {"version": 3, "tick": 144 * 9 + 30}  # day 10: summer
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (5, 144 * 9 + 30)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 144 * 9 + 30)
     assert reloaded.world["paused_reason"] is None
     assert reloaded.world["growth"]["fields"]["stage"] == "growing"
     assert reloaded.world["growth"]["flower_garden"]["stage"] == "blooming"
@@ -1416,7 +1416,7 @@ async def test_an_m10_world_keeps_going_with_empty_hands(tmp_path: Path) -> None
     world |= {"version": 4, "tick": 144 * 20 + 30, "chronicle": [{"day": 20, "title": "t"}]}
     v.store.save_village(world)
     reloaded = Village(store=v.store, models=v.models, bus=Bus())
-    assert (reloaded.world["version"], reloaded.world["tick"]) == (5, 144 * 20 + 30)
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 144 * 20 + 30)
     assert reloaded.world["paused_reason"] is None
     assert reloaded.world["chronicle"] == [{"day": 20, "title": "t"}]  # M10 history is kept
     assert all(x["basket"] is None and x["plan"] is None for x in reloaded.world["villagers"])
@@ -1438,6 +1438,34 @@ async def test_reset_clears_plans_baskets_and_stalls_and_keeps_the_shared_agents
     assert jonas["basket"] is jonas["working"] is None and jonas["said"] == []
     assert v.world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
     assert {k: v.world[k] for k in ids} == ids
+
+
+@pytest.mark.anyio
+async def test_an_m11_world_keeps_going_with_nothing_built(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    world = v.store.load_village()
+    assert world is not None
+    for key in ("trader", "meeting", "project", "built", "meeting_agent_id"):
+        del world[key]
+    world["villagers"][1]["basket"] = "fish"
+    world |= {"version": 5, "tick": 144 * 20 + 30}
+    v.store.save_village(world)
+    reloaded = Village(store=v.store, models=v.models, bus=Bus())
+    assert (reloaded.world["version"], reloaded.world["tick"]) == (6, 144 * 20 + 30)
+    assert reloaded.world["paused_reason"] is None
+    assert villager(reloaded, "Jonas")["basket"] == "fish"  # M11 state is kept
+    assert reloaded.world["project"] is None and reloaded.world["built"] == []
+    reloaded.world["running"] = False
+    await reloaded.step()  # and it keeps going
+
+
+@pytest.mark.anyio
+async def test_reset_clears_what_was_built_and_keeps_the_meeting_agent(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.world |= {"built": [{"key": "boat", "day": 3}], "meeting_agent_id": "kept"}
+    await v.reset()
+    assert v.world["built"] == [] and v.world["meeting_agent_id"] == "kept"
+    assert "meeting_agent_id" not in v.state()
 
 
 def test_the_state_leaves_out_said_harvest_and_the_planner() -> None:

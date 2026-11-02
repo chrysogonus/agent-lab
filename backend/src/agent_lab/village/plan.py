@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from agent_lab.village.memory import recall, when
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
+from agent_lab.village.trade import BASKET_GOODS, carried_text
 from agent_lab.village.work import stalls_text
 from agent_lab.village.world import (
     VILLAGERS,
@@ -76,10 +77,10 @@ def plan_prompt(world: dict[str, Any], name: str, revise: str | None = None) -> 
         *festival_lines(tick),
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
         *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
-        *([f"You carry a basket of {me['basket']}."] if me["basket"] else []),
+        *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         *(
             ["Plan to take your basket to the square and set it out on the festival stalls."]
-            if me["basket"] and date(day)[1] == "autumn"
+            if me["basket"] in BASKET_GOODS and date(day)[1] == "autumn"
             else []
         ),
         "What you have learned:",

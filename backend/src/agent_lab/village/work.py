@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from agent_lab.village.trade import BASKET_GOODS, carried_text
 from agent_lab.village.world import adjacent, place_at, villager_named
 
 GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers"}
@@ -10,6 +11,7 @@ NO_GIVING = (
     "nobody to give it to: name someone next to you, or stand on the square to set it out for "
     "the festival"
 )
+STALLS_TAKE = "the festival stalls take fish, vegetables and flowers"
 
 Villager = dict[str, Any]
 
@@ -65,7 +67,9 @@ def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None
     if me["basket"] is None:
         return "your hands are empty"
     if to is None:
-        return None if _here(me) == "square" else NO_GIVING
+        if _here(me) != "square":
+            return NO_GIVING
+        return None if me["basket"] in BASKET_GOODS else STALLS_TAKE
     other = villager_named(to)
     if other is None or other == name:
         return f"unknown villager {to!r}"
@@ -77,8 +81,9 @@ def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None
     if them["basket"]:
         return f"{other}'s hands are full"
     if _given_by(me) == other:  # baskets went back and forth instead of onto the stalls
+        thing = carried_text(me["basket"]).split()[0]  # basket or load
         return (
-            f"{other} just gave you this basket; set it out on the festival stalls on the "
+            f"{other} just gave you this {thing}; set it out on the festival stalls on the "
             "square, or give it to someone else"
         )
     return None
@@ -115,7 +120,7 @@ def delivery_text(world: dict[str, Any], name: str) -> str | None:
     them out."""
     me = _villager(world, name)
     goods = me["basket"]
-    if goods is None:
+    if goods not in BASKET_GOODS:  # empty hands, or a load for building
         return None
     lack = "" if world["stalls"][goods] else f"The stalls still lack {goods}. "
     if _here(me) == "square":

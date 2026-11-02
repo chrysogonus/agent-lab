@@ -9,7 +9,8 @@ from typing import Any
 from agent_lab.village.seasons import date, festival_in, new_growth
 
 # 32 x 22 cells. Walkable: . grass, = path, the place letters. Not walkable: ~ water, B the town
-# hall building, h j g l the villagers' houses, t trees, i lamps.
+# hall building, h j g l the villagers' houses, t trees, i lamps, b r the fenced building plots
+# (M12: the bakehouse and the barn go there).
 ROWS = (
     "tt.....t.....t...t......t.....tt",
     "..BBBB..hhh..............lll....",
@@ -24,18 +25,19 @@ ROWS = (
     "....=.......SSSSS.............t.",
     "....========================....",
     "t...=......=.....i...=..=.......",
-    "....=......=.......t.=..=jjj.t..",
-    ".FFFFFF.ggg=.........=..=jjj....",
+    "....=......=..bbbb.t.=..=jjj.t..",
+    ".FFFFFF.ggg=..bbbb...=..=jjj....",
     ".FFFFFF.ggg=.t......i=..===.....",
     ".FFFFFF..===...t...~~P~~~~~~~~~~",
-    ".FFFFFF..........~~~~PP~~~~~~~~~",
-    ".FFFFFF..........~~~~~~~~~~~~~~~",
+    ".FFFFFF..rrrr....~~~~PP~~~~~~~~~",
+    ".FFFFFF..rrrr....~~~~~~~~~~~~~~~",
     "..........t......~~~~~~~~~~~~~~~",
     "..t...t.......~~~~~~~~~~~~~~~~~~",
     "..............~~~~~~~~~~~~~~~~~~",
 )
 WIDTH, HEIGHT = len(ROWS[0]), len(ROWS)
-BLOCKED = frozenset("~Bhjglti")
+BLOCKED = frozenset("~Bhjgltibr")
+PLOT_EXITS = {"b": (14, 12), "r": (10, 16)}  # the cell in front of each plot: its building site
 SIGHT = 6  # cells a villager sees, for knowing where others are
 
 PLACES = {
@@ -63,12 +65,12 @@ def place_at(x: int, y: int) -> str | None:
     return _PLACE_BY_LETTER.get(ROWS[y][x])
 
 
-def _cells(letter: str) -> list[Cell]:
+def letter_cells(letter: str) -> list[Cell]:
     return [(x, y) for y, row in enumerate(ROWS) for x, char in enumerate(row) if char == letter]
 
 
 def place_cells(place: str) -> list[Cell]:
-    return _cells(PLACES[place][0])
+    return letter_cells(PLACES[place][0])
 
 
 def label_cell(place: str) -> Cell:
@@ -222,7 +224,7 @@ HOMES = {"Hilde": "h", "Jonas": "j", "Greta": "g", "Lina": "l"}  # map letter of
 
 def door(name: str) -> Cell:
     """The cell in front of a villager's house: below the middle of its bottom row."""
-    cells = _cells(HOMES[name])
+    cells = letter_cells(HOMES[name])
     bottom = max(y for _, y in cells)
     xs = sorted(x for x, y in cells if y == bottom)
     return xs[len(xs) // 2], bottom + 1
@@ -274,7 +276,7 @@ def villager_named(text: str) -> str | None:
     return named[0] if len(named) == 1 else None
 
 
-VERSION = 5  # the world's shape: 2 to 4 are upgraded in place, anything else starts fresh
+VERSION = 6  # the world's shape: 2 to 5 are upgraded in place, anything else starts fresh
 
 
 def new_world() -> dict[str, Any]:
@@ -303,7 +305,7 @@ def new_world() -> dict[str, Any]:
                 "inbox": [],
                 "events": [],
                 "plan": None,
-                "basket": None,
+                "basket": None,  # what it carries: a basket of fish, … or a load of wood, … (M12)
                 "working": None,
                 "said": [],
             }
@@ -329,13 +331,19 @@ def new_world() -> dict[str, Any]:
         "stalls": {"fish": 0, "vegetables": 0, "flowers": 0},
         "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
         "planner_agent_id": None,
+        "trader": None,
+        "meeting": None,
+        "project": None,
+        "built": [],
+        "meeting_agent_id": None,
     }
 
 
 def upgrade(world: dict[str, Any]) -> dict[str, Any]:
     """An older world brought to the current shape, so the village keeps going: version 2 (M7)
     gets empty memory (M8), version 3 the seasons with places as the season finds them (M10),
-    version 4 no plans, empty hands and empty stalls (M11)."""
+    version 4 no plans, empty hands and empty stalls (M11), version 5 no trader, meeting or
+    project and nothing built (M12), with nobody left standing on the new building plots."""
     if world["version"] == 2:
         for v in world["villagers"]:
             v |= {"memories": [], "learnings": [], "views": {}}
@@ -353,11 +361,24 @@ def upgrade(world: dict[str, Any]) -> dict[str, Any]:
             "chronicle": [],
             "chronicler_agent_id": None,
         }
+    if world["version"] == 4:
+        for v in world["villagers"]:
+            v |= {"plan": None, "basket": None, "working": None, "said": []}
+        world |= {
+            "version": 5,
+            "stalls": {"fish": 0, "vegetables": 0, "flowers": 0},
+            "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
+            "planner_agent_id": None,
+        }
     for v in world["villagers"]:
-        v |= {"plan": None, "basket": None, "working": None, "said": []}
+        letter = ROWS[int(v["y"])][int(v["x"])]
+        if letter in PLOT_EXITS:
+            v["x"], v["y"] = PLOT_EXITS[letter]
     return world | {
         "version": VERSION,
-        "stalls": {"fish": 0, "vegetables": 0, "flowers": 0},
-        "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
-        "planner_agent_id": None,
+        "trader": None,
+        "meeting": None,
+        "project": None,
+        "built": [],
+        "meeting_agent_id": None,
     }

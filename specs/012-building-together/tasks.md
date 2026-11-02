@@ -44,7 +44,7 @@ contracts/http-api.md, quickstart.md)
 
 ## Phase 1: Foundational — world version 6, the map plots and the catalogue
 
-- [ ] T001 backend/src/agent_lab/village/world.py (research §3, §7; data-model.md "Map", "Upgrade from version 5", "Reset"):
+- [X] T001 backend/src/agent_lab/village/world.py (research §3, §7; data-model.md "Map", "Upgrade from version 5", "Reset"):
   - `ROWS` gains plot `b` at 14–17 × 13–14 and plot `r` at 9–12 × 17–18, and `BLOCKED` adds `b` and `r`.
   - `VERSION = 6`; `new_world()` adds `trader: None`, `meeting: None`, `project: None`, `built: []` and `meeting_agent_id: None`.
   - `upgrade()`:
@@ -63,7 +63,7 @@ contracts/http-api.md, quickstart.md)
     - a version-5 and a version-2 world load and keep going;
     - Reset clears `built` and keeps the four agent ids.
   - Requirement: FR-017.
-- [ ] T002 [P] New backend/src/agent_lab/village/build.py, the catalogue part only (research §3, data-model.md "Catalogue"):
+- [X] T002 [P] New backend/src/agent_lab/village/build.py, the catalogue part only (research §3, data-model.md "Catalogue"):
   - `CATALOGUE`: the ten entries `{key, name, kind, needs, site, at, done_text}` from research §3's table, with the bakehouse at "wood 14, paint 3" and the barn at "wood 16, paint 3".
   - `entry(key)`;
   - `project_named(text) -> key | None` (by name or key, case and a leading "the" ignored);
@@ -76,7 +76,7 @@ contracts/http-api.md, quickstart.md)
     - `project_named` with names, keys, "the" and nonsense;
     - `buildable` skips built and current projects.
   - Requirement: FR-013.
-- [ ] T003 [P] New backend/src/agent_lab/village/trade.py, carried things only (research §2), and backend/src/agent_lab/village/work.py:
+- [X] T003 [P] New backend/src/agent_lab/village/trade.py, carried things only (research §2), and backend/src/agent_lab/village/work.py:
   - `BASKET_GOODS = ("fish", "vegetables", "flowers")`, `BUILDING_GOODS = ("wood", "paint", "saplings")`, `carried_text(goods)`.
   - work.py's events, notes, `delivery_text`, the observation's "You carry …" line and the plan prompt use `carried_text`.
   - `give_refusal` without a name on the square refuses loads with "the festival stalls take fish, vegetables and flowers".

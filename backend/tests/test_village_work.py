@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from agent_lab.village.work import (
+    delivery_text,
     give_refusal,
     goods_at,
     stalls_text,
@@ -217,3 +218,18 @@ def test_a_basket_is_not_given_straight_back() -> None:
     filled = {"tick": 30, "kind": "basket", "text": "You filled a basket of flowers."}
     villager(world, "Hilde")["events"] = [received, filled]  # a basket of its own since
     assert give_refusal(world, "Hilde", "Greta") is None
+
+
+def test_a_load_is_not_set_out_on_the_stalls_but_can_be_given() -> None:
+    sx, sy = SQUARE
+    world = world_with(Hilde=at((sx, sy), basket="wood"), Jonas=at((sx + 1, sy)))
+    assert give_refusal(world, "Hilde", None) == (
+        "the festival stalls take fish, vegetables and flowers"
+    )
+    assert give_refusal(world, "Hilde", "Jonas") is None
+
+
+def test_no_festival_delivery_hint_for_a_load() -> None:
+    world = world_with(Hilde=at(SQUARE, basket="paint"))
+    world["tick"] = 144 * 14 + 30  # autumn
+    assert delivery_text(world, "Hilde") is None

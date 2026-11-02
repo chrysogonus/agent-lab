@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
+from agent_lab.village.trade import carried_text
 from agent_lab.village.work import delivery_text, give_refusal, stalls_text, work_refusal
 from agent_lab.village.world import (
     PLACES,
@@ -247,7 +248,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         "this is the real weather.",
         *festival_lines(world["tick"]),
         where_text(world, me) + (" You are working here." if me["working"] else ""),
-        *([f"You carry a basket of {me['basket']}."] if me["basket"] else []),
+        *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         *(
             [stalls_text(world["stalls"]), *filter(None, [delivery_text(world, name)])]
             if date(day)[1] == "autumn"
