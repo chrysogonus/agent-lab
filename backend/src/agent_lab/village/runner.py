@@ -44,6 +44,9 @@ from agent_lab.village.meeting import (
 from agent_lab.village.meeting_runs import MeetingRuns
 from agent_lab.village.memory import (
     LEARNINGS_KEPT,
+    OLD_REFLECT,
+    REFLECT,
+    older_reflections,
     parse_reflection,
     reflection_agent,
     reflection_prompt,
@@ -157,7 +160,8 @@ class Village(MeetingRuns):
         self.world = self._load()
         self.world["running"] = False  # a restarted backend shows the world paused
         self._refresh_rules()
-        self._refresh_planner()
+        self._refresh_shared("planner_agent_id", OLD_PLANS, PLAN)
+        self._refresh_shared("reflection_agent_id", OLD_REFLECT, REFLECT)
         self.lock = asyncio.Lock()
         self.ticking = False
         self.task: asyncio.Task[None] | None = None
@@ -224,17 +228,18 @@ class Village(MeetingRuns):
                 config={**agent.config, "blocks": [first, *blocks[1:]]},
             )
 
-    def _refresh_planner(self) -> None:
-        """The shared planner still holding an earlier plan text verbatim gets the current one."""
-        agent = self.store.get_agent(self.world["planner_agent_id"] or "")
+    def _refresh_shared(self, key: str, olds: tuple[str, ...], new: str) -> None:
+        """A shared agent (the planner, the reflection) still holding an earlier text verbatim
+        gets the current one; the owner's edits are left alone."""
+        agent = self.store.get_agent(self.world[key] or "")
         if agent is None:
             return
         blocks: list[dict[str, Any]] = agent.config.get("blocks") or []
         system: str = blocks[0].get("system", "") if blocks else ""
-        old = next((text for text in OLD_PLANS if text in system), None)
-        if old is None or PLAN in system:
+        old = next((text for text in olds if text in system), None)
+        if old is None or new in system:
             return
-        first = {**blocks[0], "system": system.replace(old, PLAN)}
+        first = {**blocks[0], "system": system.replace(old, new)}
         self.store.update_agent(
             agent.agent_id,
             name=agent.name,
@@ -788,6 +793,11 @@ class Village(MeetingRuns):
         result, reason = redact(result, self.secrets), redact(reason, self.secrets)
         v = self._villager(name)
         if result:
+            old = older_reflections(v["memories"], tick) if result.get("summary") else []
+            if old:  # folded into one memory (M14)
+                v["memories"] = [m for m in v["memories"] if m not in old]
+                text = f"Looking back on earlier days: {result['summary']}"
+                self._remember(v, "summary", text, [])
             for text in result["learnings"]:
                 v["learnings"] = [*v["learnings"], {"tick": tick, "text": text}][-LEARNINGS_KEPT:]
             for other, text in result["views"].items():

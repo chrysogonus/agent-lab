@@ -102,3 +102,19 @@ def test_an_entry_naming_other_weather_is_sent_back() -> None:
     assert '"They hurried before the storm arrived."' in prompt
     assert "It mentions storm, but the day's weather was: Sunny." in prompt
     assert prompt.endswith("Answer with one JSON object.")
+
+
+def test_notes_naming_other_weather_are_marked_as_talk() -> None:
+    """M14 (FR-013): villagers talk about storms they expect; the chronicler took them for real."""
+    world = new_world()
+    day = next(d for d in range(1, 29) if weather(d) == "sun")
+    record = {
+        "day": day,
+        "items": [
+            {"tick": (day - 1) * 144 + 30, "text": "Greta and Jonas talked: Greta: A storm comes!"},
+            {"tick": (day - 1) * 144 + 31, "text": "Lina set out to go to the market."},
+        ],
+    }
+    prompt = chronicle_prompt(world, record)
+    assert "Greta: A storm comes! (talk, not the day's weather)" in prompt
+    assert "Lina set out to go to the market.\n" in prompt

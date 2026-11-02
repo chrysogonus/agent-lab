@@ -1,5 +1,6 @@
 """Fixtures, turn checks, scenarios and their results (FR-004 to FR-014, SC-005)."""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,15 @@ from agent_lab.village.runner import Village
 from agent_lab.village.trade import trader_stock
 from agent_lab.village.turn import observation
 from agent_lab.village.world import clock, door, place_at, place_cells
+
+A_PLAN_ANSWER = json.dumps(
+    {
+        "plan": [
+            {"time": "06:00", "place": "fields", "purpose": "Weed the rows"},
+            {"time": "11:00", "place": "market", "purpose": "Sell vegetables"},
+        ]
+    }
+)
 
 
 def villager(world: dict[str, Any], name: str) -> dict[str, Any]:
@@ -182,6 +192,50 @@ def test_a_fixture_villager_may_be_set_on_something() -> None:
         build_world(
             {"day": 3, "time": "10:00", "villagers": {"Lina": {"intention": {"action": "dance"}}}}
         )
+
+
+def test_a_fixture_memory_may_have_its_own_day_and_kind() -> None:
+    world = build_world(
+        {
+            "day": 66,
+            "time": "05:30",
+            "villagers": {
+                "Greta": {
+                    "memories": [
+                        "Talked with Lina.",
+                        {"day": 49, "kind": "festival", "text": "The harvest festival."},
+                    ]
+                }
+            },
+        }
+    )
+    today, festival = world["villagers"][2]["memories"]
+    assert today["kind"] == "conversation" and today["tick"] == world["tick"] - 1
+    assert (festival["kind"], festival["importance"]) == ("festival", 5)
+    assert festival["tick"] == 48 * 144 + (18 * 60 - 270) // 10  # day 49, 18:00
+    with pytest.raises(FixtureError, match="unknown memory kind 'dream'"):
+        build_world(
+            {
+                "day": 66,
+                "time": "05:30",
+                "villagers": {"Greta": {"memories": [{"day": 1, "kind": "dream", "text": "x"}]}},
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("answer", "passed", "why"),
+    [
+        (A_PLAN_ANSWER, True, None),
+        (A_PLAN_ANSWER.replace("Weed", "Ready for the Festival"), False, "it names: festival"),
+        ('{"plan": "none"}', False, "not valid"),
+    ],
+)
+def test_an_answer_must_not_name_some_words(answer: str, passed: bool, why: str | None) -> None:
+    check = a_check({"excludes": ["festival", "stalls"]}, agent="planner", **{"as": "Greta"})
+    check["situation"]["prompt"] = "plan"
+    ok, reason = judge(check, answer, prompt_of(check)[1])
+    assert ok is passed and (reason is None if why is None else why in (reason or ""))
 
 
 def test_a_cell_fixture_and_a_place_fixture_agree() -> None:
@@ -511,6 +565,7 @@ def test_results_and_compare_on_the_command_line(
 
 SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
 IDEAL = {  # an answer each shipped check must accept: the checks can be passed
+    "summer-plan-without-festival": A_PLAN_ANSWER,
     "intention-keeps-building": '{"action": "say", "to": "Lina", "text": "Help me plant!"}',
     "say-to-someone-in-sight": '{"action": "say", "to": "Greta", "text": "Any vegetables?"}',
     "leave-talk-for-intention": '{"action": "work", "place": "flower garden", "until": "13:00"}',
@@ -549,6 +604,7 @@ def test_the_shipped_checks_load_and_can_be_passed() -> None:
     )
     assert "In sight: Greta (3 steps away)." in by_name["say-to-someone-in-sight"]
     assert "You are talking with Jonas (4 lines so far)." in by_name["leave-talk-for-intention"]
+    assert "festival" not in by_name["summer-plan-without-festival"].lower()  # out of season
     assert "A trader is at the market until 14:00" in by_name["buy-saplings"]
     assert "Hand out the work" in by_name["work-plan-buys"]
     frozen = next(c for c in checks if c["name"] == "proposals-valid")

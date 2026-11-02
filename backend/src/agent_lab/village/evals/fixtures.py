@@ -7,7 +7,7 @@ from typing import Any
 
 from agent_lab.village.build import CATALOGUE, entry, new_project
 from agent_lab.village.intention import start
-from agent_lab.village.memory import remember
+from agent_lab.village.memory import IMPORTANCE, remember
 from agent_lab.village.seasons import date, new_growth
 from agent_lab.village.trade import BASKET_GOODS, BUILDING_GOODS, trader_stock
 from agent_lab.village.world import (
@@ -107,8 +107,16 @@ def _villager(world: dict[str, Any], name: str, spec: dict[str, Any], day: int) 
     if "goal" in spec:
         goal = _place(spec["goal"])
         v["goal"] = {"kind": "home"} if goal == "home" else {"kind": "place", "place": goal}
-    for text in spec.get("memories", []):
-        remember(v, tick - 1, "conversation", text, [], None)
+    for memory in spec.get("memories", []):
+        if isinstance(memory, str):  # from just now
+            remember(v, tick - 1, "conversation", memory, [], None)
+            continue
+        kind = memory.get("kind", "conversation")  # or from a day of its own (M14)
+        if kind not in IMPORTANCE:
+            raise FixtureError(f"unknown memory kind {kind!r}")
+        at = (int(memory["day"]) - 1) * 1440 + _minute(memory.get("time", "18:00"))
+        about = list(memory.get("about", []))
+        remember(v, (at - FIRST_MINUTE) // 10, kind, memory["text"], about, None)
     v["learnings"] = [{"tick": tick - 1, "text": t} for t in spec.get("learnings", [])]
     v["inbox"] = [
         {"from": i["from"], "to": name, "text": i["text"], "tick": tick}

@@ -118,7 +118,7 @@ export type Villager = {
   beliefs: { villager: string; text: string; view: string | null }[];
   learnings: { day: number; text: string }[]; // oldest first (M8)
   views: { villager: string; text: string; day: number }[];
-  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival" | "meeting" | "built"; text: string }[]; // newest first
+  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival" | "meeting" | "built" | "summary"; text: string }[]; // newest first (summary: M14)
   plan: Plan | null; // today's plan (M11)
   basket: Goods | null; // one thing at a time, kept overnight: a basket (M11) or a load (M12)
   working: "fields" | "flower_garden" | "pier" | "site" | null; // where it works until it walks off (site: M12)

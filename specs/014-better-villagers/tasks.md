@@ -237,7 +237,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 6: User Story 4 — Memory that fades and fits the season (P3)
 
-- [ ] T016 [US4] backend/src/agent_lab/village/memory.py:
+- [X] T016 [US4] backend/src/agent_lab/village/memory.py:
   - `score(memory, tick, names, place)` subtracts 3 when the memory's season (from its tick) is
     not the current one and `names` does not intersect its `about`;
   - `IMPORTANCE["summary"] = 4`.
@@ -247,7 +247,7 @@ first. Runner tests pass `move_gap=0`.
   - a memory about someone at hand is not lowered.
 
   Requirement: FR-011.
-- [ ] T017 [US4] The summary.
+- [X] T017 [US4] The summary.
   - `reflection_prompt` adds "Your older reflections:" when more than 5 reflections are older
     than 3 days, and asks for a `"summary"` field.
   - `parse_reflection` accepts `summary` (up to 400 characters).
@@ -257,11 +257,11 @@ first. Runner tests pass `move_gap=0`.
 
   Tests: test_village_memory.py (the prompt, parsing) and test_village_runner.py (the fold, the
   refresh, an edited agent left alone). Requirement: FR-012.
-- [ ] T018 [P] [US4] backend/src/agent_lab/village/chronicle.py: `chronicle_prompt` appends
+- [X] T018 [P] [US4] backend/src/agent_lab/village/chronicle.py: `chronicle_prompt` appends
   "(talk, not the day's weather)" to notes whose text names weather the day did not have
   (`weather_slips(note, weather(day))`). Test in test_village_chronicle.py. Requirement:
   FR-013.
-- [ ] T019 [US4] backend/src/agent_lab/village/evals/checks.py: a new expectation
+- [X] T019 [US4] backend/src/agent_lab/village/evals/checks.py: a new expectation
   `{"excludes": [words]}`, passing when the raw answer names none of them (case ignored). Also
   backend/evals/checks/summer-plan-without-festival.json: the planner, Greta, on summer day 66,
   with memories of last autumn's festival. The expectation is

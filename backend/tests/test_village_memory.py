@@ -9,11 +9,15 @@ from agent_lab.blocks.model import BlocksConfig, layout_errors
 from agent_lab.village.memory import (
     IMPORTANCE,
     MEMORIES_KEPT,
+    OLD_REFLECT,
+    REFLECT,
+    older_reflections,
     parse_reflection,
     recall,
     reflection_agent,
     reflection_prompt,
     remember,
+    score,
     unreflected,
 )
 from agent_lab.village.world import VILLAGERS, new_world, upgrade
@@ -44,6 +48,7 @@ def test_remember_sets_importance_by_kind_and_cuts_long_text() -> None:
         "festival": 5,
         "meeting": 4,
         "built": 5,
+        "summary": 4,
     }
 
 
@@ -150,3 +155,50 @@ def test_upgrading_an_m7_world_keeps_it_and_adds_empty_memory() -> None:
     assert (upgraded["version"], upgraded["tick"], upgraded["reflection_agent_id"]) == (7, 40, None)
     assert all(v["memories"] == [] and v["views"] == {} for v in upgraded["villagers"])
     assert upgraded["conversations"][0]["transcript"] == []
+
+
+# --- M14 US4: memory that fades and fits the season (FR-011, FR-012) ---
+
+DAY = 144  # ticks
+
+
+def test_a_memory_from_another_season_counts_for_less() -> None:
+    v = hilde()
+    remember(v, 20 * DAY, "festival", "The harvest festival on the square.", ["Lina"], "square")
+    remember(v, 36 * DAY, "reflection", "You looked back on your day.", [], None)
+    now = 37 * DAY + 30  # summer of year 2; the festival was last autumn
+    festival, yesterday = v["memories"]
+    assert score(festival, now, set(), None) < score(yesterday, now, set(), None)
+    assert [m["kind"] for m in recall(v["memories"], now, set(), None, limit=1)] == ["reflection"]
+    with_lina = score(festival, now, {"Lina"}, None)
+    assert with_lina > score(yesterday, now, {"Lina"}, None)  # about someone at hand: kept
+
+
+def test_older_reflections_are_listed_and_asked_to_be_summed_up() -> None:
+    v = hilde()
+    for day in range(1, 8):
+        remember(v, day * DAY, "reflection", f"Looked back on day {day}.", [], None)
+    remember(v, 9 * DAY, "conversation", "Talked with Jonas.", ["Jonas"], None)
+    now = 10 * DAY
+    old = older_reflections(v["memories"], now)
+    assert [m["text"] for m in old] == [f"Looked back on day {d}." for d in range(1, 7)]
+    text = reflection_prompt(v, now)
+    assert "Your older reflections:\n- Day 2 04:30 Looked back on day 1.\n" in text
+    assert '"summary"' in text
+    v["memories"] = v["memories"][2:]  # five old ones are not yet worth folding
+    assert older_reflections(v["memories"], now) == []
+    assert "Your older reflections:" not in reflection_prompt(v, now)
+
+
+def test_a_reflection_may_carry_a_summary() -> None:
+    answer = json.dumps({"learnings": [], "summary": " Spring was busy. " + "z" * 500})
+    result, why = parse_reflection(answer, "Hilde")
+    assert why is None and result is not None
+    assert result["summary"] == ("Spring was busy. " + "z" * 500)[:400]
+    assert "summary" not in (parse_reflection('{"learnings": []}', "Hilde")[0] or {})
+    assert IMPORTANCE["summary"] == 4
+
+
+def test_the_reflection_text_asks_for_a_summary_and_keeps_its_history() -> None:
+    assert '"summary"' in REFLECT and all('"summary"' not in old for old in OLD_REFLECT)
+    assert REFLECT.startswith(OLD_REFLECT[0][:200])

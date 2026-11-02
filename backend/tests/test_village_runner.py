@@ -18,6 +18,7 @@ from agent_lab.store import Store
 from agent_lab.village import runner
 from agent_lab.village.build import new_project
 from agent_lab.village.intention import start
+from agent_lab.village.memory import remember
 from agent_lab.village.plan import plan_prompt
 from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
 from agent_lab.village.seasons import weather
@@ -2962,3 +2963,56 @@ async def test_two_talkers_going_to_the_same_place_walk_on_together(tmp_path: Pa
     assert (hilde["x"], hilde["y"]) != (sx, sy)  # walking
     assert max(abs(hilde["x"] - lina["x"]), abs(hilde["y"] - lina["y"])) <= 1
     assert len(v.world["conversations"]) == 1  # and still talking
+
+
+# --- M14 US4: summaries (FR-012) ---
+
+
+@pytest.mark.anyio
+async def test_a_night_reflection_folds_older_reflections_into_a_summary(tmp_path: Path) -> None:
+    folded = json.dumps({"learnings": ["Jonas fishes early."], "summary": "A busy spring."})
+    v, _ = village_for(tmp_path, {"Jonas:reflect": [folded]})
+    morning(v, tick=144 * 10 + bedtime_tick("Jonas"))  # day 11, at his door at bedtime
+    jonas = villager(v, "Jonas")
+    for day in range(1, 7):
+        remember(jonas, day * 144, "reflection", f"Looked back on day {day}.", [], None)
+    remember(jonas, 144 * 9 + 100, "reflection", "Looked back on day 10.", [], None)
+    remember(jonas, v.world["tick"], "conversation", "Talked with Lina.", ["Lina"], None)
+    await v.step()
+    assert jonas["asleep"]
+    kinds_texts = [(m["kind"], m["text"]) for m in jonas["memories"]]
+    assert ("summary", "Looking back on earlier days: A busy spring.") in kinds_texts
+    assert not any(t.startswith("Looked back on day 1.") for _, t in kinds_texts)
+    assert ("reflection", "Looked back on day 10.") in kinds_texts  # recent ones stay
+    assert kinds_texts[-1][0] == "reflection"  # tonight's
+
+
+@pytest.mark.anyio
+async def test_stored_reflection_agents_get_the_summary_text_unless_edited(tmp_path: Path) -> None:
+    from agent_lab.village.memory import OLD_REFLECT, REFLECT
+
+    v, _ = village_for(tmp_path)
+    agent = v.store.get_agent(v.world["reflection_agent_id"])
+    assert agent is not None
+
+    def store(system: str) -> None:
+        blocks = agent.config["blocks"]
+        v.store.update_agent(
+            agent.agent_id,
+            name=agent.name,
+            description=agent.description,
+            sample_prompt=agent.sample_prompt,
+            config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
+        )
+
+    def system() -> str:
+        found = v.store.get_agent(agent.agent_id)
+        assert found is not None
+        return found.config["blocks"][0]["system"]
+
+    store(OLD_REFLECT[0])
+    Village(store=v.store, models=v.models, bus=Bus())
+    assert system() == REFLECT
+    store("MY OWN REFLECTION")
+    Village(store=v.store, models=v.models, bus=Bus())
+    assert system() == "MY OWN REFLECTION"

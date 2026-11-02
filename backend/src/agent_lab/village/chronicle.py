@@ -38,10 +38,19 @@ def chronicle_prompt(world: dict[str, Any], record: dict[str, Any]) -> str:
         *([stalls_text(world["stalls"])] if festival_in(day) == 0 else []),
         *filter(None, [built_text(world)]),
         HAPPENED,
-        *([f"- {clock(i['tick'])[1]} {i['text']}" for i in record["items"]] or ["- nothing"]),
+        *(
+            [f"- {clock(i['tick'])[1]} {_marked(i['text'], day)}" for i in record["items"]]
+            or ["- nothing"]
+        ),
         "Write the chronicle entry for this day. Answer with one JSON object.",
     ]
     return "\n".join(lines)
+
+
+def _marked(note: str, day: int) -> str:
+    """A note naming weather the day did not have is talk: the chronicler took it for the
+    weather in 9 of 18 chronicles (M13)."""
+    return f"{note} (talk, not the day's weather)" if weather_slips(note, weather(day)) else note
 
 
 def weather_slips(text: str, kind: str) -> list[str]:

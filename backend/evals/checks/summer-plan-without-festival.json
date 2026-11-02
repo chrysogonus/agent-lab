@@ -1,0 +1,86 @@
+{
+  "name": "summer-plan-without-festival",
+  "agent": "planner",
+  "as": "Greta",
+  "situation": {
+    "fixture": {
+      "day": 66,
+      "time": "05:30",
+      "villagers": {
+        "Greta": {
+          "at": "home",
+          "memories": [
+            {
+              "day": 64,
+              "time": "07:00",
+              "text": "Talked with Lina: Lina: The beans are climbing! / Greta: They need poles."
+            },
+            {
+              "day": 64,
+              "time": "11:30",
+              "text": "Talked with Jonas at the market: Jonas: Fish for your carrots? / Greta: Gladly."
+            },
+            {
+              "day": 64,
+              "time": "15:00",
+              "text": "Talked with Hilde: Hilde: The trees by the square need water. / Greta: I'll help."
+            },
+            {
+              "day": 64,
+              "time": "19:00",
+              "text": "Talked with Lina: Lina: Hot day tomorrow. / Greta: Then I start early."
+            },
+            {
+              "day": 65,
+              "time": "06:30",
+              "text": "Talked with Jonas: Jonas: The lake is low. / Greta: The fields are dry too."
+            },
+            {
+              "day": 65,
+              "time": "09:00",
+              "text": "Talked with Hilde: Hilde: Can you weed by the town hall? / Greta: After noon."
+            },
+            {
+              "day": 65,
+              "time": "12:00",
+              "text": "Talked with Lina at the market: Lina: Sold all my roses! / Greta: Well done."
+            },
+            {
+              "day": 65,
+              "time": "14:30",
+              "text": "Talked with Jonas: Jonas: Mended the nets. / Greta: My hoe needs mending."
+            },
+            {
+              "day": 65,
+              "time": "17:00",
+              "text": "Talked with Hilde: Hilde: The meeting is tomorrow at five. / Greta: I'll come."
+            },
+            {
+              "day": 65,
+              "time": "20:00",
+              "text": "Talked with Lina: Lina: Sleep well! / Greta: You too."
+            },
+            {
+              "day": 49,
+              "kind": "festival",
+              "text": "The harvest festival on the square with Lina and Jonas. The stalls held fish, vegetables and flowers."
+            },
+            {
+              "day": 49,
+              "time": "21:00",
+              "kind": "reflection",
+              "text": "You looked back on your day: The festival needs vegetables early; bring them to the stalls."
+            }
+          ]
+        }
+      }
+    },
+    "prompt": "plan"
+  },
+  "expect": {
+    "excludes": [
+      "festival",
+      "stalls"
+    ]
+  }
+}

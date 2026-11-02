@@ -32,7 +32,7 @@ from agent_lab.village.world import new_world
 
 AGENTS = ("villager", "planner", "meeting")
 PROMPTS = ("decide", "plan", "propose", "vote", "decide_meeting", "work_plan")
-EXPECTS = ("action", "valid", "tasks_include", "not")
+EXPECTS = ("action", "valid", "tasks_include", "not", "excludes")
 ANSWER_SHOWN = 300
 
 Check = dict[str, Any]
@@ -118,6 +118,14 @@ def _valid(check: Check, answer: str, world: World | None) -> str | None:
 def judge(check: Check, answer: str | None, world: World | None) -> tuple[bool, str | None]:
     """Whether an answer is the kind wanted, and why not."""
     expect = check["expect"]
+    if "excludes" in expect:  # M14: words a (valid) answer must not name
+        named = [w for w in expect["excludes"] if w.lower() in (answer or "").lower()]
+        if named:
+            return False, f"it names: {', '.join(named)}"
+        if check["agent"] == "villager":
+            return True, None
+        why = _valid(check, answer or "", world)
+        return (False, f"not valid: {why}") if why else (True, None)
     if "valid" in expect or "tasks_include" in expect:
         why = _valid(check, answer or "", world)
         if why:
