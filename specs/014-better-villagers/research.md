@@ -173,7 +173,7 @@ What the failing turns show:
 `runner.py` is 1,533 lines, over "readable in one sitting" (principle I), and M14 touches its
 step loop.
 
-- **Decision**: a first phase moves the meeting runs (about 330 lines: `_meeting` to `_assign`)
+- **Decision**: a first phase moves the meeting runs (about 260 lines: `_meeting` to `_assign`)
   into `village/meeting_runs.py` as a mixin, with behaviour unchanged and every test green
   (code-simplification). Intention steps go into the new `intention.py`.
 - **Why**: the M12 plan deferred this split "after M12, behaviour unchanged". M14 changes the

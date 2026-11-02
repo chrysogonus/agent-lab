@@ -49,7 +49,7 @@ checks.
 
 | Principle | Status | How |
 |---|---|---|
-| I. Hand-built, readable | Pass, after Phase 1 | The meeting runs leave `runner.py` (about 1,530 lines down to about 1,200). The intention steps and affordances are small pure modules. |
+| I. Hand-built, readable | Pass, after Phase 1 | The meeting runs leave `runner.py` (about 1,530 lines down to about 1,275). The intention steps and affordances are small pure modules. |
 | II. Observable by default | Pass | Intentions start in decision runs; their `village_action` carries the intention, and every end is an event and a note. Certain steps make no model call, so no untraced call is added. |
 | III. Secure local defaults | Pass | New answer fields are validated (place keys, times, names, `say` cut to the speech length); nothing is executed. |
 | IV. Smallest change | Pass | The existing actions become intentions instead of a new answer shape. The affordance list reuses the refusal functions and replaces hints rather than adding to them. The summary is part of the existing nightly reflection. |
