@@ -20,7 +20,7 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
-from agent_lab.village.build import buildable, entry, new_project
+from agent_lab.village.build import buildable, entry, new_project, task_text
 from agent_lab.village.chronicle import (
     CHRONICLE_KEPT,
     chronicle_prompt,
@@ -39,10 +39,12 @@ from agent_lab.village.meeting import (
     next_meeting,
     parse_decision,
     parse_proposals,
+    parse_tasks,
     parse_vote,
     proposal_prompt,
     tally,
     vote_prompt,
+    work_plan_prompt,
 )
 from agent_lab.village.memory import (
     LEARNINGS_KEPT,
@@ -53,6 +55,8 @@ from agent_lab.village.memory import (
     unreflected,
 )
 from agent_lab.village.plan import (
+    OLD_PLANS,
+    PLAN,
     REVISIONS,
     entry_text,
     marks,
@@ -155,6 +159,7 @@ class Village:
         self.world = self._load()
         self.world["running"] = False  # a restarted backend shows the world paused
         self._refresh_rules()
+        self._refresh_planner()
         self.lock = asyncio.Lock()
         self.ticking = False
         self.task: asyncio.Task[None] | None = None
@@ -220,6 +225,25 @@ class Village:
                 sample_prompt=agent.sample_prompt,
                 config={**agent.config, "blocks": [first, *blocks[1:]]},
             )
+
+    def _refresh_planner(self) -> None:
+        """The shared planner still holding an earlier plan text verbatim gets the current one."""
+        agent = self.store.get_agent(self.world["planner_agent_id"] or "")
+        if agent is None:
+            return
+        blocks: list[dict[str, Any]] = agent.config.get("blocks") or []
+        system: str = blocks[0].get("system", "") if blocks else ""
+        old = next((text for text in OLD_PLANS if text in system), None)
+        if old is None or PLAN in system:
+            return
+        first = {**blocks[0], "system": system.replace(old, PLAN)}
+        self.store.update_agent(
+            agent.agent_id,
+            name=agent.name,
+            description=agent.description,
+            sample_prompt=agent.sample_prompt,
+            config={**agent.config, "blocks": [first, *blocks[1:]]},
+        )
 
     # --- what the API and the stream show ---
 
@@ -320,6 +344,7 @@ class Village:
             "trader": world["trader"]
             and {"stock": world["trader"]["stock"], "leaves": hhmm(TRADER_LEAVES)},
             "meeting": self._meeting_state(world["meeting"]),
+            "project": self._project_state(world["project"]),
             "next_meeting": next_meeting(day),
             "ticking": self.ticking,
             "log": [{**line, "time": clock(line["tick"])[1]} for line in world["log"]],
@@ -358,6 +383,22 @@ class Village:
             "current": current,
             "next": following,
             "revisions": plan["revisions"],
+        }
+
+    @staticmethod
+    def _project_state(project: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The project being built with its name, needs and progress."""
+        if project is None:
+            return None
+        p = entry(project["key"])
+        done, total = sum(project["used"].values()), sum(p.needs.values())
+        return {
+            **project,
+            "name": p.name,
+            "kind": p.kind,
+            "needs": p.needs,
+            "done": done,
+            "total": total,
         }
 
     @staticmethod
@@ -1071,7 +1112,7 @@ class Village:
                 self._note("Nobody but Hilde came to the town hall meeting.")
             self.meetings["decide"] = asyncio.create_task(self._decide_meeting(meeting))
         else:
-            self._end_meeting(meeting, "reviewed")
+            self.meetings["tasks"] = asyncio.create_task(self._assign(meeting))
 
     def _open_meeting(self, day: int) -> None:
         meeting: dict[str, Any] = {
@@ -1202,6 +1243,44 @@ class Village:
             memory += f" I voted for {entry(mine).name}." if mine else ""
             self._remember(self._villager(name), "meeting", memory, others)
         self._note(text)
+        self.meetings["tasks"] = asyncio.create_task(self._assign(meeting))
+
+    async def _assign(self, meeting: dict[str, Any]) -> None:
+        """Hilde hands out the work of the project: after a decision, or at a review meeting."""
+        run_id, answer, failed = await self._meeting_call(
+            "tasks", "Hilde", work_plan_prompt(self.world)
+        )
+        project = self.world["project"]
+        if not self._still(meeting) or project is None:
+            return
+        tasks, why = (None, failed) if failed else parse_tasks(answer)
+        tasks, why = redact(tasks, self.secrets), redact(why, self.secrets)
+        action: dict[str, Any] = {"action": "assign"}
+        if tasks:
+            project["tasks"] = tasks
+            shares: dict[str, list[str]] = {}
+            for task in tasks:
+                for name in task["villagers"]:
+                    shares.setdefault(name, []).append(task_text(task))
+            for name, share in shares.items():
+                v = self._villager(name)
+                said = "You took on:" if name == "Hilde" else "Hilde asked you to"
+                self._event(v, "task", f"{said} {'; '.join(share)}.")
+                if not v["asleep"]:
+                    self._trigger(v, "task")
+            handed = "; ".join(f"{task_text(t)}: {', '.join(t['villagers'])}" for t in tasks)
+            self._note(f"Hilde handed out the work (intentions, not events): {handed}.")
+            action["tasks"] = [
+                f"{t['task']}{' ' + t['goods'] if t['goods'] else ''}: {', '.join(t['villagers'])}"
+                for t in tasks
+            ]
+        else:
+            action["reason"] = why
+        if meeting["kind"] == "review":
+            self._end_meeting(meeting, "reviewed")
+        if run_id:
+            self.store.set_village_action(run_id, action)
+        self._publish()
 
     # --- one step ---
 

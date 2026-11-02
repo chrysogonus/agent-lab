@@ -77,14 +77,15 @@ export type VillageAction =
   | { action: "buy"; goods: BuildingGoods; paid: BasketGoods; reason?: string } // M12
   | { action: "propose"; proposals?: string[]; reason?: string }
   | { action: "vote"; project?: string; reason?: string }
-  | { action: "decide"; project?: string; reason?: string; against?: boolean; by?: "hilde" | "vote" };
+  | { action: "decide"; project?: string; reason?: string; against?: boolean; by?: "hilde" | "vote" }
+  | { action: "assign"; tasks?: string[]; reason?: string };
 
 export type VillageEvent = {
   tick: number;
   kind:
     | "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival"
     | "planned" | "worked" | "basket" | "gave" | "received" // M11
-    | "traded" | "proposed" | "meeting"; // M12
+    | "traded" | "proposed" | "meeting" | "task"; // M12
   text: string;
   from?: string;
   to?: string | null;
@@ -130,6 +131,20 @@ export type Plan = { entries: PlanEntry[]; current: number | null; next: number 
 export type BuildingGoods = "wood" | "paint" | "saplings";
 export type Goods = BasketGoods | BuildingGoods;
 export type Trader = { stock: Record<BuildingGoods, number>; leaves: string };
+export type Task = { task: "buy" | "bring" | "build"; goods: BuildingGoods | null; villagers: string[] };
+export type Project = {
+  key: string;
+  name: string;
+  kind: "paint" | "trees" | "stand" | "building" | "boat";
+  needs: Partial<Record<BuildingGoods, number>>;
+  site: Record<BuildingGoods, number>; // loads set down, not yet worked in
+  used: Record<BuildingGoods, number>; // loads worked in
+  done: number; // sum of used
+  total: number; // sum of needs
+  work: number; // working steps toward the next load
+  tasks: Task[];
+  day: number; // decided on
+};
 export type MeetingProposal = { key: string; name: string; reason: string; run_id: string | null };
 export type MeetingVote = { villager: string; key: string | null; name: string | null; reason: string; run_id: string | null }; // key null: not counted
 export type MeetingDecision = { key: string; name: string; reason: string; against: boolean; by: "hilde" | "vote"; run_id: string | null };
@@ -177,6 +192,7 @@ export type VillageState = {
   trader: Trader | null; // M12: at the market from 09:00 to 14:00
   meeting: Meeting | null; // the latest town hall meeting
   next_meeting: number; // the day of the next one
+  project: Project | null; // what the village is building
   running: boolean;
   ticking: boolean;
   interval: number;

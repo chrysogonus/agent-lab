@@ -16,9 +16,11 @@ from agent_lab.llm.base import ChatResponse, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 from agent_lab.village import runner
+from agent_lab.village.build import new_project
+from agent_lab.village.plan import plan_prompt
 from agent_lab.village.runner import CELLS_PER_STEP, CHANNEL, FRESH_START, StepConflict, Village
 from agent_lab.village.seasons import weather
-from agent_lab.village.turn import SPEECH_SHOWN, villager_agent
+from agent_lab.village.turn import SPEECH_SHOWN, observation, villager_agent
 from agent_lab.village.world import (
     PLACES,
     VILLAGERS,
@@ -2220,7 +2222,7 @@ async def test_an_invalid_decision_lets_the_vote_decide(tmp_path: Path) -> None:
 async def test_a_meeting_with_a_project_under_way_proposes_nothing(tmp_path: Path) -> None:
     v, llm = village_for(tmp_path)
     morning(v, tick_at(9, day=3))
-    v.world["project"] = {"key": "barn", "site": {}, "used": {}, "work": 0, "tasks": [], "day": 2}
+    v.world["project"] = new_project("barn", 2)
     villager(v, "Greta")["triggers"] = ["arrived"]
     await v.step()
     assert meeting_now(v)["kind"] == "review" and meetings_of(llm, "proposals") == []
@@ -2265,3 +2267,132 @@ def test_the_meeting_agent_is_created_once(tmp_path: Path) -> None:
     v.ensure_agents()
     meeting_agents = [a for a in v.store.list_agents() if a.name == "Village meeting"]
     assert [a.agent_id for a in meeting_agents] == [v.world["meeting_agent_id"]]
+
+
+# --- M12 US3: Hilde hands out the work ---
+
+
+async def decide_market_stand(v: Village) -> None:
+    """A meeting at 17:30 with Hilde and Greta at the town hall: the market stand is chosen."""
+    morning(v, tick_at(17, 20, day=3))
+    v.world["day_record"] = {"day": 3, "items": []}
+    proposed_meeting(v)
+    put(v, "Hilde", *TOWN_HALL[0])
+    await v.step()  # 17:30: Hilde decides alone, then hands out the work
+
+
+@pytest.mark.anyio
+async def test_the_work_is_handed_out_after_the_decision(tmp_path: Path) -> None:
+    v, llm = village_for(
+        tmp_path,
+        {
+            "meeting:decision": [json.dumps({"decision": "A market stand", "reason": "Quick."})],
+            "meeting:tasks": [
+                json.dumps(
+                    {
+                        "tasks": [
+                            {"task": "buy", "goods": "wood", "villagers": ["Jonas", "Greta"]},
+                            {"task": "build", "villagers": ["Greta"]},
+                        ]
+                    }
+                )
+            ],
+        },
+    )
+    await decide_market_stand(v)
+    project = v.world["project"]
+    assert project["key"] == "market_stand" and len(meetings_of(llm, "tasks")) == 1
+    assert project["tasks"] == [
+        {"task": "buy", "goods": "wood", "villagers": ["Jonas", "Greta"]},
+        {"task": "build", "goods": None, "villagers": ["Greta"]},
+    ]
+    assert texts(v, "Greta", "task") == [
+        "Hilde asked you to buy wood from the trader; build at the building site."
+    ]
+    assert "task" in villager(v, "Greta")["triggers"] and texts(v, "Lina", "task") == []
+    [assign] = actions(v, "Hilde", "assign")
+    assert assign["tasks"] == ["buy wood: Jonas, Greta", "build: Greta"]
+    assert any(n.startswith("Hilde handed out the work") for n in notes(v))
+    await v.step()  # Greta decides on her new task
+    prompt = calls_of(llm, "Greta")[-1]
+    assert "The village is building: A market stand (the building site is at the market)." in (
+        prompt
+    )
+    assert "Hilde asked you to: buy wood from the trader; build at the building site." in prompt
+    lina = observation(v.world, "Lina")
+    assert "Nothing is asked of you; you may still help." in lina
+    assert "Hilde asked you to: buy wood from the trader." in plan_prompt(v.world, "Jonas")
+    state = v.state()["project"]
+    assert (state["name"], state["done"], state["total"]) == ("A market stand", 0, 4)
+    assert state["needs"] == {"wood": 3, "paint": 1} and state["tasks"] == project["tasks"]
+
+
+@pytest.mark.anyio
+async def test_an_invalid_work_plan_leaves_the_project_without_tasks(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"meeting:tasks": ['{"tasks": [{"task": "dance"}]}']})
+    await decide_market_stand(v)
+    assert v.world["project"]["tasks"] == []
+    assert actions(v, "Hilde", "assign") == [
+        {"action": "assign", "reason": "no usable task in the work plan"}
+    ]
+
+
+@pytest.mark.anyio
+async def test_a_review_meeting_hands_out_the_work_again(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_at(17, 20, day=6))
+    project = {
+        "key": "barn",
+        "site": {"wood": 0, "paint": 0, "saplings": 0},
+        "used": {"wood": 4, "paint": 0, "saplings": 0},
+        "work": 0,
+        "tasks": [{"task": "buy", "goods": "wood", "villagers": ["Lina"]}],
+        "day": 3,
+    }
+    v.world["project"] = project
+    v.world["meeting"] = {
+        "day": 6,
+        "kind": "review",
+        "proposals": [],
+        "votes": {},
+        "present": [],
+        "decision": None,
+        "outcome": None,
+    }
+    put(v, "Hilde", *TOWN_HALL[0])
+    await v.step()
+    assert "4 of 19 loads worked in" in meetings_of(llm, "tasks")[0]
+    assert "- buy wood from the trader: Lina" in meetings_of(llm, "tasks")[0]
+    assert project["tasks"] == [{"task": "build", "goods": None, "villagers": ["Greta"]}]
+    assert meeting_now(v)["outcome"] == "reviewed"
+
+
+@pytest.mark.anyio
+async def test_stored_planners_get_the_new_plan_text_unless_edited(tmp_path: Path) -> None:
+    from agent_lab.village.plan import OLD_PLANS, PLAN
+
+    v, _ = village_for(tmp_path)
+    agent = v.store.get_agent(v.world["planner_agent_id"])
+    assert agent is not None and "what Hilde asked of the villager" in PLAN
+
+    def store(system: str) -> None:
+        blocks = agent.config["blocks"]
+        v.store.update_agent(
+            agent.agent_id,
+            name=agent.name,
+            description=agent.description,
+            sample_prompt=agent.sample_prompt,
+            config={**agent.config, "blocks": [{**blocks[0], "system": system}, *blocks[1:]]},
+        )
+
+    def system() -> str:
+        found = v.store.get_agent(agent.agent_id)
+        assert found is not None
+        return found.config["blocks"][0]["system"]
+
+    store(OLD_PLANS[0])
+    Village(store=v.store, models=v.models, bus=Bus())
+    assert system() == PLAN
+    store("MY OWN PLANNER")
+    Village(store=v.store, models=v.models, bus=Bus())
+    assert system() == "MY OWN PLANNER"

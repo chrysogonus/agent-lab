@@ -14,10 +14,13 @@ from agent_lab.village.meeting import (
     next_meeting,
     parse_decision,
     parse_proposals,
+    parse_tasks,
     parse_vote,
     proposal_prompt,
     tally,
+    task_text,
     vote_prompt,
+    work_plan_prompt,
 )
 from agent_lab.village.memory import remember
 from agent_lab.village.world import new_world
@@ -243,3 +246,69 @@ def test_the_meeting_agent_is_a_valid_block_agent() -> None:
     system = body["config"]["blocks"][0]["system"]
     for shape in ('{"proposals"', '{"vote"', '{"decision"', '{"tasks"'):
         assert shape in system
+
+
+def tasks_answer(*tasks: dict[str, Any]) -> str:
+    return json.dumps({"tasks": list(tasks)})
+
+
+def test_the_work_plan_prompt() -> None:
+    world = world_on(hour=18)
+    world["project"] = new_project("market_stand", 3)
+    world["villagers"][1]["basket"] = "fish"
+    prompt = work_plan_prompt(world)
+    assert prompt.startswith("You are Hilde,")
+    assert "The village builds A market stand; the building site is at the market." in prompt
+    assert (
+        "It still needs 3 wood and 1 paint; the site holds nothing; 0 of 4 loads worked in."
+        in prompt
+    )
+    assert "The trader has left; the next one comes tomorrow at 09:00." in prompt
+    assert "- Jonas: works at the pier, up 05:00 to 21:00, carries a basket of fish" in prompt
+    assert "- Greta: works at the fields, up 05:30 to 21:30, carries nothing" in prompt
+    assert "The work you handed out before:" not in prompt
+    assert prompt.endswith(
+        'Answer with one JSON object: {"tasks": [{"task": "buy", "goods": "wood", "villagers": '
+        '["Jonas"]}, {"task": "build", "villagers": ["Greta"]}]}'
+    )
+    world["project"]["tasks"] = [{"task": "build", "goods": None, "villagers": ["Greta"]}]
+    assert "The work you handed out before:\n- build at the building site: Greta" in (
+        work_plan_prompt(world)
+    )
+
+
+def test_parse_tasks() -> None:
+    answer = tasks_answer(
+        {"task": "Buy", "goods": "Wood", "villagers": ["jonas", "Mayor Hilde", "Tom"]},
+        {"task": "bring", "goods": "wood", "villagers": ["Jonas"]},
+        {"task": "build", "goods": "paint", "villagers": ["Greta", "Greta"]},
+        {"task": "buy", "villagers": ["Lina"]},  # buy what?
+        {"task": "buy", "goods": "fish", "villagers": ["Lina"]},  # the trader sells no fish
+        {"task": "dance", "villagers": ["Lina"]},
+        {"task": "build", "villagers": ["Tom"]},  # nobody left
+    )
+    found, why = parse_tasks(answer)
+    assert why is None and found == [
+        {"task": "buy", "goods": "wood", "villagers": ["Jonas", "Hilde"]},
+        {"task": "bring", "goods": "wood", "villagers": ["Jonas"]},
+        {"task": "build", "goods": None, "villagers": ["Greta"]},
+    ]
+    many = tasks_answer(*[{"task": "build", "villagers": ["Greta"]}] * 8)
+    assert len(parse_tasks(many)[0] or []) == 6
+    assert parse_tasks(tasks_answer({"task": "dance", "villagers": ["Lina"]})) == (
+        None,
+        "no usable task in the work plan",
+    )
+    assert parse_tasks("[]")[0] is None
+
+
+def test_task_text() -> None:
+    assert task_text({"task": "buy", "goods": "paint", "villagers": []}) == (
+        "buy paint from the trader"
+    )
+    assert task_text({"task": "bring", "goods": "wood", "villagers": []}) == (
+        "bring wood to the building site"
+    )
+    assert task_text({"task": "build", "goods": None, "villagers": []}) == (
+        "build at the building site"
+    )

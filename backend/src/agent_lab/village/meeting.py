@@ -6,16 +6,27 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from agent_lab.village.build import Project, buildable, built_text, entry, project_named
+from agent_lab.village.build import (
+    Project,
+    buildable,
+    built_text,
+    entry,
+    needs_left,
+    project_named,
+    task_text,
+)
 from agent_lab.village.memory import recall, when
 from agent_lab.village.seasons import WEATHER_TEXT, date_text, festival_in, weather
-from agent_lab.village.world import VILLAGERS, clock, listed
+from agent_lab.village.trade import BUILDING_GOODS, carried_text, goods_named, trader_text
+from agent_lab.village.world import VILLAGERS, clock, hhmm, label, listed, villager_named
 
 MEETING_OPENS = 17 * 60
 MEETING_CLOSES = 17 * 60 + 30  # who arrives by then still votes; then Hilde decides
 REASON_TEXT = 120
 PROPOSALS = 3
 MEMORIES_SHOWN = 8
+TASKS = 6
+TASK_KINDS = ("buy", "bring", "build")
 
 Meeting = dict[str, Any]
 
@@ -275,6 +286,78 @@ def parse_decision(
         return None, why
     fallback = "Hilde gave no valid decision; the vote decided"
     return {"key": top[0], "reason": fallback, "against": False, "by": "vote"}, why
+
+
+def work_plan_prompt(world: dict[str, Any]) -> str:
+    """What Hilde knows when she hands out the work of the current project."""
+    known = _known(world, "Hilde")
+    project = world["project"]
+    p = entry(project["key"])
+    done, total = sum(project["used"].values()), sum(p.needs.values())
+    left = listed([f"{n} {g}" for g, n in needs_left(world).items()]) or "nothing more"
+    held = listed([f"{n} {g}" for g, n in project["site"].items() if n]) or "nothing"
+    villagers: list[str] = []
+    for v in world["villagers"]:
+        c = VILLAGERS[v["name"]]
+        carries = f"a {carried_text(v['basket'])}" if v["basket"] else "nothing"
+        villagers.append(
+            f"- {v['name']}: works at the {label(c.work)}, up {hhmm(c.wake)} to {hhmm(c.bed)}, "
+            f"carries {carries}"
+        )
+    before = [f"- {task_text(t)}: {', '.join(t['villagers'])}" for t in project["tasks"]]
+    return "\n".join(
+        [
+            *known[:2],
+            f"The village builds {p.name}; the building site is {p.where}.",
+            f"It still needs {left}; the site holds {held}; {done} of {total} loads worked in.",
+            trader_text(world),
+            "The villagers:",
+            *villagers,
+            *(["The work you handed out before:", *before] if before else []),
+            *known[2:],
+            "Hand out the work: who buys which goods from the trader (paying with a basket from "
+            "their work), who brings them to the building site and who builds there. Not "
+            "everyone has to help. Answer with one JSON object: "
+            '{"tasks": [{"task": "buy", "goods": "wood", "villagers": ["Jonas"]}, '
+            '{"task": "build", "villagers": ["Greta"]}]}',
+        ]
+    )
+
+
+class _Task(BaseModel):
+    task: str
+    goods: str | None = None
+    villagers: list[str] = []
+
+
+class _Tasks(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tasks: list[_Task]
+
+
+def parse_tasks(answer: str | None) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """Up to six tasks for named villagers; unusable ones are dropped."""
+    parsed, why = _load(_Tasks, answer)
+    if parsed is None:
+        return None, why
+    found: list[dict[str, Any]] = []
+    for item in parsed.tasks:
+        kind = item.task.strip().lower()
+        goods = goods_named(item.goods) if item.goods else None
+        if kind not in TASK_KINDS or (kind != "build" and goods not in BUILDING_GOODS):
+            continue
+        names: list[str] = []
+        for text in item.villagers:
+            who = villager_named(text)
+            if who and who not in names:
+                names.append(who)
+        if names:
+            found.append(
+                {"task": kind, "goods": goods if kind != "build" else None, "villagers": names}
+            )
+    if not found:
+        return None, "no usable task in the work plan"
+    return found[:TASKS], None
 
 
 MEET = (

@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
+from agent_lab.village.build import project_text
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
@@ -257,6 +258,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         trader_text(world),
         meeting_text(world, name),
+        *project_text(world, name),
         *(
             [stalls_text(world["stalls"]), *filter(None, [delivery_text(world, name)])]
             if date(day)[1] == "autumn"

@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { BasketGoods, BuildingGoods, ChronicleEntry, Goods, Meeting, PlanEntry, Run, Stalls, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, BuildingGoods, ChronicleEntry, Goods, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
 
@@ -181,9 +181,12 @@ export function dayOf(tick: number): number {
   return 1 + Math.floor((270 + tick * TICK_MINUTES) / 1440);
 }
 
-type MeetingAction = Extract<NonNullable<Run["village_action"]>, { action: "propose" | "vote" | "decide" }>;
+type MeetingAction = Extract<NonNullable<Run["village_action"]>, { action: "propose" | "vote" | "decide" | "assign" }>;
 
 function meetingLabel(time: string, action: MeetingAction): string {
+  if (action.action === "assign") {
+    return action.tasks ? `${time}hands out ${action.tasks.length} tasks` : `${time}could not hand out the work: ${action.reason}`;
+  }
   if (action.action === "propose") {
     return action.proposals ? `${time}proposes ${action.proposals.length} projects for the meeting` : `${time}could not propose: ${action.reason}`;
   }
@@ -208,7 +211,7 @@ export function turnLabel(turn: Run): string {
     const day = turn.village_tick == null ? "" : ` on day ${dayOf(turn.village_tick)}`;
     return action.reason ? `${time}could not reflect: ${action.reason}` : `${time}reflects${day}`;
   }
-  if (action.action === "propose" || action.action === "vote" || action.action === "decide") return meetingLabel(time, action);
+  if (action.action === "propose" || action.action === "vote" || action.action === "decide" || action.action === "assign") return meetingLabel(time, action);
   if (action.reason) return `${time}waited: ${action.reason}`;
   if (action.action === "move") return `${time}walks ${action.place === "home" ? "home" : `to the ${placeLabel(action.place)}`}`;
   if (action.action === "find") return `${time}goes looking for ${action.villager}`;
@@ -297,4 +300,26 @@ export function meetingLines(meeting: Meeting): MeetingLine[] {
     lines.push({ text: `${meeting.outcome[0].toUpperCase()}${meeting.outcome.slice(1)}.`, runId: null });
   }
   return lines;
+}
+
+/** "Buy wood from the trader", "Build at the building site" */
+export function taskText(task: Task): string {
+  if (task.task === "buy") return `Buy ${task.goods} from the trader`;
+  if (task.task === "bring") return `Bring ${task.goods} to the building site`;
+  return "Build at the building site";
+}
+
+function loads(counts: Partial<Record<BuildingGoods, number>>): string {
+  return listed(BUILDING_GOODS.filter((g) => (counts[g] ?? 0) > 0).map((g) => `${counts[g]} ${g}`));
+}
+
+/** The project being built, for the projects panel: what is still needed, at the site, and who does what. */
+export function projectLines(project: Project): string[] {
+  const left = Object.fromEntries(BUILDING_GOODS.map((g) => [g, (project.needs[g] ?? 0) - project.site[g] - project.used[g]]));
+  const stillNeeded = loads(left);
+  return [
+    stillNeeded ? `Still to bring: ${stillNeeded}` : "Everything has been brought",
+    `At the building site: ${loads(project.site) || "nothing"}`,
+    ...(project.tasks.length ? project.tasks.map((t) => `${taskText(t)}: ${listed(t.villagers)}`) : ["Hilde has not handed out the work yet"]),
+  ];
 }

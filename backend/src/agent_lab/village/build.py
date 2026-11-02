@@ -4,7 +4,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from agent_lab.village.world import HOMES, Cell, door, letter_cells, place_cells
+from agent_lab.village.world import HOMES, Cell, door, letter_cells, listed, place_cells
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,7 @@ class Project:
     kind: str  # how the view draws it: paint, trees, stand, building or boat
     needs: dict[str, int]  # loads by goods; one load is one village hour of work
     site: list[Cell]  # where villagers set down loads and build
+    where: str  # the site in words: "at the town hall", "in front of Lina's house"
     at: list[Cell]  # where the result is drawn
     done_text: str
 
@@ -25,6 +26,7 @@ def _house(name: str) -> Project:
         kind="paint",
         needs={"paint": 2},
         site=[door(name)],
+        where=f"in front of {name}'s house",
         at=letter_cells(HOMES[name]),
         done_text=f"{name}'s house has been painted.",
     )
@@ -37,6 +39,7 @@ CATALOGUE = (
         kind="paint",
         needs={"paint": 2},
         site=place_cells("town_hall"),
+        where="at the town hall",
         at=letter_cells("B"),
         done_text="The town hall has been painted.",
     ),
@@ -49,6 +52,7 @@ CATALOGUE = (
         # shortcut: planted trees do not block walking, block them if villagers visibly walk
         # through them
         site=[(18, 10), (20, 10), (22, 10)],
+        where="by the square, east of it",
         at=[(18, 10), (20, 10), (22, 10)],
         done_text="Young trees now grow by the square.",
     ),
@@ -58,6 +62,7 @@ CATALOGUE = (
         kind="stand",
         needs={"wood": 3, "paint": 1},
         site=place_cells("market"),
+        where="at the market",
         at=[(26, 8)],  # beside the market's own stalls
         done_text="The market has a new stand.",
     ),
@@ -67,6 +72,7 @@ CATALOGUE = (
         kind="boat",
         needs={"wood": 4, "paint": 1},
         site=[(16, 16), (17, 16), (18, 16)],
+        where="on the shore west of the pier",
         at=[(20, 17)],
         done_text="A rowing boat lies at the pier.",
     ),
@@ -76,6 +82,7 @@ CATALOGUE = (
         kind="building",
         needs={"wood": 14, "paint": 3},
         site=[(14, 12), (15, 12), (16, 12)],
+        where="on the meadow south of the square",
         at=letter_cells("b"),
         done_text="The bakehouse on the meadow is finished.",
     ),
@@ -85,6 +92,7 @@ CATALOGUE = (
         kind="building",
         needs={"wood": 16, "paint": 3},
         site=[(10, 16), (11, 16), (12, 16)],
+        where="by the fields, next to Greta's house",
         at=letter_cells("r"),
         done_text="The barn by the fields is finished.",
     ),
@@ -136,3 +144,54 @@ def built_text(world: dict[str, Any]) -> str | None:
     if not world["built"]:
         return None
     return "Built so far: " + " ".join(entry(b["key"]).done_text for b in world["built"])
+
+
+def needs_left(world: dict[str, Any]) -> dict[str, int]:
+    """The loads the current project still needs brought to its site, by goods."""
+    project = world["project"]
+    if project is None:
+        return {}
+    needs = entry(project["key"]).needs
+    left = {g: n - project["site"][g] - project["used"][g] for g, n in needs.items()}
+    return {g: n for g, n in left.items() if n > 0}
+
+
+def _loads(loads: dict[str, int]) -> str:
+    return listed([f"{n} {goods}" for goods, n in loads.items() if n])
+
+
+def task_text(task: dict[str, Any]) -> str:
+    if task["task"] == "buy":
+        return f"buy {task['goods']} from the trader"
+    if task["task"] == "bring":
+        return f"bring {task['goods']} to the building site"
+    return "build at the building site"
+
+
+def project_text(world: dict[str, Any], name: str) -> list[str]:
+    """What a villager knows about the building: the project, its own share and what stands."""
+    lines: list[str] = []
+    project = world["project"]
+    if project:
+        p = entry(project["key"])
+        done, total = sum(project["used"].values()), sum(p.needs.values())
+        lines.append(
+            f"The village is building: {p.name} (the building site is {p.where}). It still "
+            f"needs {_loads(needs_left(world)) or 'nothing more'}; the site holds "
+            f"{_loads(project['site']) or 'nothing'}; {done} of {total} loads worked in."
+        )
+        mine = "; ".join(task_text(t) for t in project["tasks"] if name in t["villagers"])
+        if not project["tasks"]:
+            lines.append("Hilde has not handed out the work yet.")
+        elif name == "Hilde":
+            lines.append(
+                f"You took on: {mine}." if mine else "You handed out the work; you may help too."
+            )
+        else:
+            lines.append(
+                f"Hilde asked you to: {mine}."
+                if mine
+                else "Nothing is asked of you; you may still help."
+            )
+    built = built_text(world)
+    return lines + ([built] if built else [])

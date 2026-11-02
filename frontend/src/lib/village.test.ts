@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChronicleEntry, Meeting, Run, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Meeting, Project, Run, VillageState, Villager } from "./api";
 import {
   activity,
   cellKind,
@@ -27,6 +27,7 @@ import {
   carriedText,
   traderText,
   meetingLines,
+  projectLines,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -83,6 +84,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   trader: null,
   meeting: null,
   next_meeting: 3,
+  project: null,
   ...fields,
 });
 
@@ -376,5 +378,44 @@ describe("the town hall meeting", () => {
       "05:00 decides on A market stand (the vote decided)",
     );
     expect(turnLabel(run({ action: "decide", reason: "no answer" }))).toBe("05:00 could not decide: no answer");
+  });
+});
+
+describe("the project", () => {
+  const project: Project = {
+    key: "market_stand",
+    name: "A market stand",
+    kind: "stand",
+    needs: { wood: 3, paint: 1 },
+    site: { wood: 1, paint: 0, saplings: 0 },
+    used: { wood: 1, paint: 0, saplings: 0 },
+    done: 1,
+    total: 4,
+    tasks: [
+      { task: "buy", goods: "wood", villagers: ["Jonas", "Greta"] },
+      { task: "build", goods: null, villagers: ["Greta"] },
+    ],
+    day: 3,
+    work: 2,
+  };
+
+  it("says what is needed, what lies at the site and who does what", () => {
+    expect(projectLines(project)).toEqual([
+      "Still to bring: 1 wood and 1 paint",
+      "At the building site: 1 wood",
+      "Buy wood from the trader: Jonas and Greta",
+      "Build at the building site: Greta",
+    ]);
+    expect(projectLines({ ...project, site: { wood: 0, paint: 0, saplings: 0 }, used: { wood: 3, paint: 1, saplings: 0 }, tasks: [] })).toEqual([
+      "Everything has been brought",
+      "At the building site: nothing",
+      "Hilde has not handed out the work yet",
+    ]);
+  });
+
+  it("labels work-plan runs", () => {
+    const run = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(run({ action: "assign", tasks: ["buy wood: Jonas", "build: Greta"] }))).toBe("05:00 hands out 2 tasks");
+    expect(turnLabel(run({ action: "assign", reason: "no usable task in the work plan" }))).toBe("05:00 could not hand out the work: no usable task in the work plan");
   });
 });

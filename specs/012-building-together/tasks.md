@@ -215,7 +215,7 @@ contracts/http-api.md, quickstart.md)
 
 ## Phase 4: User Story 3 — Hilde plans and hands out the work (P1)
 
-- [ ] T012 [P] [US3] meeting.py:
+- [X] T012 [P] [US3] meeting.py:
   - `work_plan_prompt(world)`: Hilde's persona; the project, `needs_left` and its site; today's trader stock or "the trader comes tomorrow at 09:00"; each villager's work place, hours and what it carries; for a review, the progress and the previous tasks.
   - `parse_tasks(answer)`:
     - `task` is one of buy, bring, build;
@@ -231,7 +231,7 @@ contracts/http-api.md, quickstart.md)
   - Tests in test_village_meeting.py: the work-plan prompt for a new project and a review; every task drop rule; more than 6 cut; none → invalid.
   - Tests in test_village_build.py: `needs_left` with loads on the site and used; `project_text` with and without tasks.
   - Requirements: FR-008, FR-009.
-- [ ] T013 [US3] runner.py:
+- [X] T013 [US3] runner.py:
   - `_assign` runs after a decision, and at 17:30 at a review meeting Hilde came to. A valid answer sets `project["tasks"]`, gives each named villager the event "Hilde asked you to …" (kind `task`) and a `task` trigger, adds a note, and sets the outcome "reviewed" for a review. `village_action` is `{"action": "assign", "tasks": ["buy paint: Jonas", …]}` or the reason.
   - turn.py's facts part and plan.py's `plan_prompt` add `project_text`.
   - plan.py `PLAN` adds "Fit in what Hilde asked of the villager and the town hall meeting.", with `OLD_PLANS = (the M11 text,)`; runner.py `_refresh_planner` replaces it verbatim in the stored planner agent and leaves edited ones alone.
@@ -243,7 +243,7 @@ contracts/http-api.md, quickstart.md)
     - a review meeting replaces the tasks;
     - the planner refresh, and an edited planner left alone.
   - Requirements: FR-008, FR-009.
-- [ ] T014 [US3] Frontend: frontend/src/lib/api.ts (`VillageState.project`, the `VillageAction` assign, event kind `task`); lib/village.ts `projectLines(project)` (needs, site, done of total, tasks) and `turnLabel` assign; ProjectsPanel.tsx's current-project section with a progress bar and the tasks. Tests in village.test.ts. Requirement: FR-014.
+- [X] T014 [US3] Frontend: frontend/src/lib/api.ts (`VillageState.project`, the `VillageAction` assign, event kind `task`); lib/village.ts `projectLines(project)` (needs, site, done of total, tasks) and `turnLabel` assign; ProjectsPanel.tsx's current-project section with a progress bar and the tasks. Tests in village.test.ts. Requirement: FR-014.
 
 ## Phase 5: User Story 4 — Building and seeing it stay (P2)
 

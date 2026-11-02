@@ -1,5 +1,7 @@
 """The building catalogue, the sites and building work (FR-010 to FR-013, SC-002)."""
 
+from typing import Any
+
 import pytest
 
 from agent_lab.village.build import (
@@ -7,8 +9,10 @@ from agent_lab.village.build import (
     buildable,
     built_text,
     entry,
+    needs_left,
     new_project,
     project_named,
+    project_text,
 )
 from agent_lab.village.world import ROWS, new_world, walkable
 
@@ -84,3 +88,46 @@ def test_built_text() -> None:
     assert built_text(world) == (
         "Built so far: The town hall has been painted. A rowing boat lies at the pier."
     )
+
+
+def building(world: dict[str, Any], key: str, **changes: Any) -> dict[str, Any]:
+    world["project"] = new_project(key, 3) | changes
+    return world["project"]
+
+
+def test_needs_left_counts_what_lies_on_the_site_and_what_was_used() -> None:
+    world = new_world()
+    building(world, "market_stand")  # 3 wood, 1 paint
+    assert needs_left(world) == {"wood": 3, "paint": 1}
+    world["project"]["site"]["paint"] = 1
+    world["project"]["used"]["wood"] = 2
+    assert needs_left(world) == {"wood": 1}
+    world["project"] = None
+    assert needs_left(world) == {}
+
+
+def test_project_text() -> None:
+    world = new_world()
+    assert project_text(world, "Greta") == []
+    tasks = [
+        {"task": "buy", "goods": "paint", "villagers": ["Greta", "Lina"]},
+        {"task": "build", "goods": None, "villagers": ["Greta"]},
+    ]
+    building(world, "paint_lina", tasks=tasks)
+    world["project"]["site"]["paint"] = 1
+    world["built"] = [{"key": "boat", "day": 2}]
+    assert project_text(world, "Greta") == [
+        "The village is building: Paint Lina's house (the building site is in front of Lina's "
+        "house). It still needs 1 paint; the site holds 1 paint; 0 of 2 loads worked in.",
+        "Hilde asked you to: buy paint from the trader; build at the building site.",
+        "Built so far: A rowing boat lies at the pier.",
+    ]
+    assert project_text(world, "Jonas")[1] == "Nothing is asked of you; you may still help."
+    world["project"]["tasks"] = []
+    assert project_text(world, "Jonas")[1] == "Hilde has not handed out the work yet."
+    world["project"]["tasks"] = [{"task": "build", "goods": None, "villagers": ["Hilde"]}]
+    assert project_text(world, "Hilde")[1] == "You took on: build at the building site."
+
+
+def test_every_project_says_where_its_site_is() -> None:
+    assert all(p.where.startswith(("at ", "in front of ", "by ", "on ")) for p in CATALOGUE)

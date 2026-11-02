@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from agent_lab.village.build import project_text
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
@@ -81,6 +82,7 @@ def plan_prompt(world: dict[str, Any], name: str, revise: str | None = None) -> 
         *([f"You carry a {carried_text(me['basket'])}."] if me["basket"] else []),
         trader_text(world),
         meeting_text(world, name),
+        *project_text(world, name),
         *(
             ["Plan to take your basket to the square and set it out on the festival stalls."]
             if me["basket"] in BASKET_GOODS and date(day)[1] == "autumn"
@@ -154,7 +156,7 @@ def parse_plan(answer: str | None, name: str) -> tuple[list[Entry] | None, str |
     return entries, None
 
 
-PLAN = (
+_M11_PLAN = (
     "You help a villager of a small village plan its day. You get its character, its usual day, "
     "the date and weather, how the fields and the flower garden are doing, what it learned, what "
     "it thinks of the others and what it remembers. Reply with only one JSON object and nothing "
@@ -166,6 +168,8 @@ PLAN = (
     "own words. Plan what the villager wants to get done today, given its character, the season, "
     "the weather and what it remembers."
 )
+PLAN = _M11_PLAN + " Fit in what Hilde asked of the villager and the town hall meeting."
+OLD_PLANS = (_M11_PLAN,)  # stored planner agents holding one of these verbatim get PLAN
 
 
 def planner_agent() -> dict[str, Any]:
