@@ -279,7 +279,7 @@ first. Runner tests pass `move_gap=0`.
   - docs/api.md: the villager's `intention`.
   - AGENTS.md: `meeting_runs.py`, `intention.py` and `affordances.py` in the layout; the current
     feature.
-- [ ] T021 `make check`, then quickstart.md on the real model:
+- [X] T021 `make check`, then quickstart.md on the real model:
   - the checks at 20 repeats, compared with the M13 result;
   - the scenarios;
   - three village days on a scratch copy, with `evals health`;
@@ -358,3 +358,98 @@ Stories in order:
 | SC-001, SC-006 | quickstart step 1 (real model, compare with M13) |
 | SC-002 | quickstart step 2 |
 | SC-003, SC-004, SC-005 | quickstart step 3 |
+
+## Manual check results (2026-11-02, vLLM `qwen3.5-9b`, thinking off)
+
+The owner's village was backed up (`agent_lab.db.bak-before-m14`), then upgraded to world version 7
+by restarting `make dev` (day 67, 05:20, paused; nothing lost). The checks run against its
+refreshed agents.
+
+**Turn checks** (SC-001, SC-006). Run of record `58ee35f159d7`, 20 repeats each, compared with the
+two M13 runs `c5183d25de1b` (A) and `9423c8be75d6` (B):
+
+| Check | M13 A | M13 B | M14 | Compare |
+|---|---|---|---|---|
+| answer-when-spoken-to | 19/20 | 19/20 | 19/20 | no clear change |
+| build-with-loads | 0/20 | 0/20 | 4/20 | no clear change (7/20, "better", in an earlier M14 run) |
+| buy-saplings | 19/20 | 17/20 | 20/20 | no clear change |
+| find-the-one-to-see | 15/20 | 14/20 | 14/20 | no clear change |
+| load-at-site | 16/20 | 17/20 | 7/20 | **worse**, see below |
+| load-away | 20/20 | 20/20 | 2/20 | **worse**, see below |
+| meeting-call-far | 20/20 | 20/20 | 19/20 | no clear change |
+| meeting-call-talking | 15/20 | 12/20 | 15/20 | no clear change |
+| not-to-hilde | 20/20 | 20/20 | 20/20 | no clear change |
+| plan-valid | 20/20 | 20/20 | 20/20 | no clear change |
+| proposals-valid (frozen) | 17/20 | 19/20 | 18/20 | no clear change |
+| stalls-in-autumn | 19/20 | 20/20 | 13/20 | worse than B only |
+| work-at-own-place | 7/20 | 4/20 | 20/20 | **better** |
+| work-plan-buys | 15/20 | 11/20 | 11/20 | no clear change |
+| intention-keeps-building (new) | | | 20/20 | |
+| say-to-someone-in-sight (new) | | | 15/20 | |
+| leave-talk-for-intention (new) | | | 10/20 | below the 15/20 aimed for |
+| summer-plan-without-festival (new) | | | 20/20 | |
+
+- **The M13 load checks fail on M14's own answers.** The M13 checks stay unchanged, and they ask
+  for M12's answer shapes. In `load-at-site`, 11 failures answer `build` (parsed as work at the
+  site) and 1 answers `bring`; both set the load down at the site, so 19/20 do the right thing.
+  In `load-away`, 14 failures answer `bring`, which takes the load there, so 16/20 do the right
+  thing.
+- **The first M14 run found three regressions, fixed before the run of record:**
+  - at the site, the observation said "between places", because the removed hint had been the
+    only line naming the site;
+  - with the M11 autumn hint gone, villagers no longer set baskets out (`stalls-in-autumn` 4/20,
+    now 13/20 with "the festival stalls still lack fish: set yours out now");
+  - nothing offered finding the one a plan entry names (`find-the-one-to-see` 5/20, now 14/20).
+  Talkers due elsewhere by their plan are now offered the leaving goodbye
+  (`leave-talk-for-intention` 3/20, now 10/20).
+- **Variance between runs is large**: `stalls-in-autumn` read 16, 12, 10 and 13 in four M14 runs.
+
+**SC-001** is met for `work-at-own-place` only; `build-with-loads` (0 → 4 to 7) and
+`meeting-call-talking` (15 and 12 → 15) are not clearly better. **SC-006** is not met as
+measured: two M13 checks read worse, mostly because they accept only M12's answers, and
+`stalls-in-autumn` is worse than one M13 run. Of the new checks, two reach 15/20 and two do not.
+
+**Scenarios** (SC-002), 5 repeats each on fresh copies; the owner's village row checksum was the
+same before and after (`a9975bc4`):
+
+| Scenario | M13 | M14 run 1 | M14 run 2 |
+|---|---|---|---|
+| load-reaches-site | 5/5 | 0/5, miscounted | 5/5 |
+| meeting-attendance | 5/5 | 5/5 | 4/5 |
+| talk-then-go | 0/5 | 5/5 | 2/5 |
+
+In run 1 Lina bought, brought and set the saplings down by 10:50 every time, but the condition
+only counted `give` answers; it now reads the day's notes too (as does village health's
+`loads_set_down`, and `load_minutes` from the trail). In the failed talk-then-go runs, Jonas met
+Greta and left for the pier at once, as his plan said, so they never talked. Together
+talk-then-go holds 7/10.
+
+**Three village days** (SC-003 to SC-005) on a copy of the owner's database, days 67 to 69 (377 s
+on vLLM), against the owner's days 43 to 66:
+
+| Per 100 decisions | M13 | M14 |
+|---|---|---|
+| "there is no work for you here" | 6.0 | 1.5 |
+| "<villager> is not next to you" | 7.0 | 3.7 |
+| "you are talking with …; say goodbye first" | 6.9 | 0 |
+| "<villager>'s hands are full" | 2.4 | 1.7 |
+| waits | 44.3% | 28.4% |
+| model calls per day | 155 to 206 | 162 to 172 |
+
+- **SC-003**: the first and third refusals halve; "not next to you" falls by 47%, just short of
+  half.
+- **SC-004**: waits are well under 35%, and calls stay within the baseline's range.
+- **SC-005**:
+  - Out-of-season memories in plan prompts fell from 124 of 200 shown (days 64 to 66) to 4 of
+    192.
+  - None of the three chronicles named other weather; on the baseline days, 11 of 24 did.
+  - The word "festival" is still in every plan prompt. It now comes from this summer's own
+    learnings ("Hilde needs my fish … for the festival"): Hilde's persona plans a harvest
+    festival year-round. That is for a persona change, not for memory.
+
+**Found, not fixed**:
+- `test_the_trail_keeps_28_days_and_reset_clears_it` (M13) failed once in `make check`
+  (`born` not later after a Reset); it passed 6 of 6 reruns. Suspected cause, not confirmed:
+  two `time.time()` calls returning the same value.
+- Small models still answer `{"action": "walk"}`, `"go"` or `"home"` a few times a day.
+- A few answers give "until" equal to the current time, and these are refused.
