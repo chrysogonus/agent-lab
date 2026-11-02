@@ -168,6 +168,7 @@ def test_in_autumn_the_plan_sees_the_stalls_and_the_basket() -> None:
     prompt = plan_prompt(world, "Jonas")
     assert "You carry a basket of fish." in prompt
     assert "The festival stalls on the square are empty; they still lack fish, " in prompt
+    assert "Plan to take your basket to the square and set it out on the festival stalls." in prompt
     world["tick"] = 3  # spring
     jonas(world)["basket"] = None
     prompt = plan_prompt(world, "Jonas")

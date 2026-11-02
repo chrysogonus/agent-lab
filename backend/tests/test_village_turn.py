@@ -481,3 +481,25 @@ def test_the_rules_describe_work_and_give() -> None:
     assert '{"action": "work"}' in rules
     assert '{"action": "give", "to": "Hilde"}' in rules
     assert '{"action": "give"} on the square' in rules
+
+
+def test_in_autumn_a_carried_basket_is_meant_for_the_stalls() -> None:
+    fields = place_cells("fields")[0]
+    world = world_with(tick=_at(15, 9), Greta={**at(*fields), "basket": "vegetables"})
+    facts = observation(world, "Greta").split("What others told you")[0]
+    assert (
+        "The stalls still lack vegetables. Take your basket to the square and set it out on the "
+        "festival stalls." in facts
+    )
+    world["stalls"]["vegetables"] = 1
+    facts = observation(world, "Greta").split("What others told you")[0]
+    assert "still lack vegetables" not in facts
+    assert "Take your basket to the square and set it out on the festival stalls." in facts
+    sx, sy = label_cell("square")
+    villager_at_square = world_with(tick=_at(15, 9), Greta={**at(sx, sy), "basket": "vegetables"})
+    assert (
+        "You are on the square: set out your vegetables on the festival stalls now with "
+        '{"action": "give"}.' in observation(villager_at_square, "Greta")
+    )
+    summer = observation(world_with(tick=_at(8, 9), Greta={"basket": "vegetables"}), "Greta")
+    assert "You carry a basket of vegetables." in summer and "festival stalls" not in summer

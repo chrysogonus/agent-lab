@@ -68,8 +68,8 @@ still ends the conversation, just without the words.
 - **Give**: a villager hands its basket to someone next to it, or, standing on the square, sets it
   out on the **festival stalls**. A basket never goes straight back to whoever just gave it, and
   one that arrives while a villager is deciding waits for its next decision. In autumn every
-  villager is told what the stalls hold and still lack; the map shows the stalls and every
-  carried basket.
+  villager is told what the stalls hold and still lack, and one carrying a basket is told to take
+  it to the square and set it out; the map shows the stalls and every carried basket.
 
 ## A day in the village
 

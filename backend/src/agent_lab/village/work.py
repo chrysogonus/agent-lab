@@ -110,6 +110,22 @@ def work_step(world: dict[str, Any]) -> list[tuple[str, str]]:
     return baskets
 
 
+def delivery_text(world: dict[str, Any], name: str) -> str | None:
+    """Where a carried basket should go in autumn: villagers kept theirs instead of setting
+    them out."""
+    me = _villager(world, name)
+    goods = me["basket"]
+    if goods is None:
+        return None
+    lack = "" if world["stalls"][goods] else f"The stalls still lack {goods}. "
+    if _here(me) == "square":
+        return (
+            f"{lack}You are on the square: set out your {goods} on the festival stalls now "
+            'with {"action": "give"}.'
+        )
+    return f"{lack}Take your basket to the square and set it out on the festival stalls."
+
+
 def listed(items: list[str]) -> str:
     return " and ".join([", ".join(items[:-1]), items[-1]] if len(items) > 1 else items)
 

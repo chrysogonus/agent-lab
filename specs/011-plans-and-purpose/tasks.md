@@ -160,3 +160,13 @@ festival memory names them. Chronicle: 6 of 7 first entries named other weather 
 again; the kept entries are clean on 5 of 7 nights (day 16's retry was invalid JSON so the first
 entry stayed, day 18's retry still named a storm). Open: villagers keep baskets instead of setting
 them out; nothing yet points a carrying villager to the square.
+
+Then, in autumn, a villager carrying a basket is told to take it to the square and set it out
+("The stalls still lack fish. Take your basket to the square …", or on the square "set out your
+fish on the festival stalls now with {"action": "give"}"), and its plan prompt asks it to plan the
+delivery. Run D (as run C, with this; paused once by a host suspend at day 19 and resumed):
+1063 decisions; 31 baskets set out and 7 given between villagers (run C: 2 and 2); the give-back
+refusal fired once. The stalls held fish ×15, vegetables ×8 and flowers ×8 at the festival, all
+four villagers were there and every festival memory ends "The stalls held fish, vegetables and
+flowers."; the day-21 chronicle ends with every stall filled. 6 of 7 kept chronicle entries name
+only the day's weather (day 18 still a storm). Stalls cleared on the first winter morning.

@@ -77,6 +77,11 @@ def plan_prompt(world: dict[str, Any], name: str, revise: str | None = None) -> 
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
         *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
         *([f"You carry a basket of {me['basket']}."] if me["basket"] else []),
+        *(
+            ["Plan to take your basket to the square and set it out on the festival stalls."]
+            if me["basket"] and date(day)[1] == "autumn"
+            else []
+        ),
         "What you have learned:",
         *([f"- {item['text']}" for item in me["learnings"]] or ["- nothing yet"]),
         "What you think of the others:",
