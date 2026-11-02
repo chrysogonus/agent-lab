@@ -27,7 +27,7 @@ sequenceDiagram
     participant A as Villager's agent (block agent)
     participant M as Model
     W->>W: something happened (woke, met, spoken to …)
-    W->>A: run with an observation: time, weather, who is near, memories …
+    W->>A: run with an observation: time, weather, plan, who is near, memories …
     A->>M: one model call
     M-->>A: {"action": "say", "text": "Morning, Jonas!"}
     A-->>W: answer (checked: valid JSON)
@@ -35,12 +35,39 @@ sequenceDiagram
 ```
 
 A villager can **move** to a place, **find** someone where it thinks they are, **say**
-something to someone right next to it, say **goodbye** (and where it goes next) or **wait**.
-Anything invalid becomes a wait, and the reason is recorded. Every decision is an ordinary
+something to someone right next to it, say **goodbye** (and where it goes next), **work** where
+it stands, **give** its basket to someone or **wait**. Anything invalid becomes a wait, and the
+reason is recorded. Every decision is an ordinary
 traced run: click a villager, then a turn, to see the exact prompt and answer.
 
 Villagers only talk face to face and stay together until one says goodbye. Each keeps its own
 idea of where the others are (seen, heard, or their usual routine), which can be out of date.
+
+The observation puts **what a villager knows for sure** (the date and the real weather, where it
+is, its plan, who is next to it) before **what others told it**, which is marked as claims that
+may be wrong. The rules tell villagers to trust what they see over what they hear, and the
+chronicler never reports a claim as an event.
+
+A villager is shown its last three lines, and a line that repeats one of them (ignoring case,
+spaces and punctuation) is refused with "you already said that". A goodbye that repeats a line
+still ends the conversation, just without the words.
+
+## Plans and purpose
+
+- **Daily plans**: when a villager wakes, the shared **Village planner** agent writes its plan for
+  the day: two to six entries, each a time, a place or someone to see, and a purpose ("11:00 see
+  Jonas: ask for fish for the stalls"). The plan is part of every decision that day, with the
+  current and next entry marked, and shows under **Today's plan** in the villager panel. After a
+  conversation of four lines or more, both villagers may revise their plans, at most twice a day.
+- **Work**: at the fields or the flower garden anyone can work; at the pier Jonas fishes, and
+  others can fish with him while he does. A villager works until it walks off or goes to bed;
+  talking does not stop it. Everyone's work on a place adds up.
+- **Baskets**: every village hour of work at a place fills a basket: fish at the pier, vegetables
+  from ripe or harvested fields, flowers from a blooming garden. It goes to the worker who worked
+  there longest with empty hands; each villager carries one basket at a time, overnight too.
+- **Give**: a villager hands its basket to someone next to it, or, standing on the square, sets it
+  out on the **festival stalls**. In autumn every villager is told what the stalls hold and still
+  lack; the map shows the stalls and every carried basket.
 
 ## A day in the village
 
@@ -71,11 +98,12 @@ flowchart LR
   and stand bare in winter; days are longer in summer.
 - Every day has its own weather fitting the season (sun, clouds, rain, storm, fog, snow), shown
   on the map and told to the villagers.
-- The **fields** grow only on days someone spends an hour on them (rain helps): tilled, sown,
+- The **fields** grow only on days villagers work an hour on them (rain helps): tilled, sown,
   sprouting, growing, ripe, harvested in autumn. Weeds show when they are left alone.
-- The **flower garden** blooms while it is watered or rained on and wilts when it dries out.
+- The **flower garden** blooms while it is worked on or rained on and wilts when it dries out.
 - On the last day of autumn, Hilde's **harvest festival** decorates the square. The villagers hear
-  about it for days, gather there in the evening and remember it.
+  about it for days, gather there in the evening and remember it, with what made it onto the
+  stalls; the chronicle names the goods too. The stalls are cleared when winter comes.
 
 ## Controls
 
@@ -93,13 +121,11 @@ in which every decision failed (for example, the model server is down).
 
 Each villager is a block agent under **My agents**, created on the first Start. **Edit its
 agent** (in the villager panel) opens it in the builder; an edit applies from its next decision.
-Reflections and the chronicle run on the shared **Village reflection** and **Village
-chronicler** agents, editable the same way.
+Plans, reflections and the chronicle run on the shared **Village planner**, **Village
+reflection** and **Village chronicler** agents, editable the same way.
 
 ## What's next
 
-- **M11 Plans and purpose**: a plan for each day, facts kept apart from gossip, no repeated
-  lines, and work that fills baskets for the festival.
 - **M12 Building together**: painting houses, planting trees, market stands, new buildings that
   take several days, boat trips.
 - **M13 Daily happenings**: something different every day: the postman, a visiting friend, a

@@ -691,18 +691,18 @@ class Village:
 
     def _start_plan(self, name: str, revise: str | None = None) -> None:
         previous = self.plans.get(name)  # one villager's plans never overlap
-        self.plans[name] = asyncio.create_task(self._plan(name, revise, previous))
+        plan = self._villager(name)["plan"]
+        revision = plan["revisions"] if revise is not None and plan else 0  # counted on starting
+        self.plans[name] = asyncio.create_task(self._plan(name, revise, revision, previous))
 
     async def _plan(
-        self, name: str, revise: str | None, previous: asyncio.Task[None] | None
+        self, name: str, revise: str | None, revision: int, previous: asyncio.Task[None] | None
     ) -> None:
         """A plan for the day on waking, or a revision (`revise`: the conversation just had)."""
         if previous:
             await asyncio.gather(previous, return_exceptions=True)
         tick = self.world["tick"]
         day = clock(tick)[0]
-        v = self._villager(name)
-        revision = v["plan"]["revisions"] if revise is not None and v["plan"] else 0
         prompt = plan_prompt(self.world, name, revise)
         try:
             run_id, answer, failed = await self._run(
@@ -720,7 +720,9 @@ class Village:
         if entries and (v["asleep"] or clock(self.world["tick"])[0] != day):
             entries, reason = None, "the day it was for is over"  # one plan a villager a day
         if entries:
-            v["plan"] = {"day": day, "entries": entries, "revisions": revision}
+            # The count as it stands now: a later revision may have started meanwhile.
+            counted = v["plan"]["revisions"] if revise is not None and v["plan"] else 0
+            v["plan"] = {"day": day, "entries": entries, "revisions": counted}
             text = "; ".join(entry_text(e) for e in entries)
             if revise is None:
                 self._event(v, "planned", "You planned your day.")

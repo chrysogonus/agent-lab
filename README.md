@@ -19,7 +19,7 @@ Status: a personal learning project that runs on your own machine (both servers 
 |---|---|
 | **Run and trace agents**<br>Pick one of six agents (ReAct plus five workflow patterns), ask something and watch the graph light up node by node. Click a span to see its prompt, answer, tokens and latency. → [docs/agents.md](docs/agents.md) | <img src="docs/images/run-view.png" alt="run view" width="420"> |
 | **Build your own**<br>Customize any template by clicking its nodes, or snap together a block agent (model calls, tools, checks, routers, parallel groups, loops). Saved agents run like the built-in ones. → [docs/builder.md](docs/builder.md) | <img src="docs/images/builder.png" alt="builder" width="420"> |
-| **Watch a village live**<br>Four villagers wake, work, talk face to face, remember, reflect at night and live through seasons and weather. A chronicler writes a diary entry every night. → [docs/village.md](docs/village.md) | <img src="docs/images/chronicle.png" alt="the village chronicle" width="420"> |
+| **Watch a village live**<br>Four villagers plan their day, work, talk face to face, remember, reflect at night and live through seasons and weather. Their work fills baskets for the harvest festival's stalls. A chronicler writes a diary entry every night. → [docs/village.md](docs/village.md) | <img src="docs/images/chronicle.png" alt="the village chronicle" width="420"> |
 
 ## How it works
 
@@ -71,7 +71,7 @@ backend/src/agent_lab/
   agents/      ReAct agent, traced steps (chat, call_tool, decide), the template registry
   workflows/   chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer
   blocks/      block agents: layout rules, graph, runner
-  village/     map and clock, observations and actions, memory, seasons, chronicle, step loop
+  village/     map and clock, observations and actions, plans, work, memory, seasons, chronicle, step loop
   tracing/     spans, tracer, redaction of secrets
   llm/         model client, configured models, FakeLLM for tests
   api.py       HTTP and WebSocket endpoints
@@ -91,7 +91,7 @@ specs/                   one folder per milestone: spec, plan, tasks (Spec Kit)
 | ✅ M3 | Agent builder from templates | ✅ M8 | Memories and nightly reflection |
 | ✅ M4 | Model choice per agent (local, OpenAI) | ✅ M9 | Smooth motion, work animations, light |
 | ✅ M5 | Block builder | ✅ M10 | Seasons, weather, growth, festival, chronicle |
-| | | 📝 M11 | Plans and purpose (specified and planned) |
+| | | ✅ M11 | Plans, work and festival deliveries |
 | | | ⏳ M12 | Building together |
 | | | ⏳ M13 | Daily happenings |
 

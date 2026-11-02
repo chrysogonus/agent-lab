@@ -1527,6 +1527,24 @@ async def test_a_long_talk_revises_both_plans_twice_a_day_at_most(tmp_path: Path
 
 
 @pytest.mark.anyio
+async def test_revisions_started_back_to_back_still_count_two(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, delay=0.05)
+    morning(v)
+    today_plan(v, "Greta")
+    v._end_conversation(talk(v, "Greta", "Lina", 4), "test")  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.01)  # the first revision is running
+    v._end_conversation(talk(v, "Greta", "Jonas", 4), "test")  # pyright: ignore[reportPrivateUsage]
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert len(plans_of(llm, "Greta")) == 2
+    assert villager(v, "Greta")["plan"]["revisions"] == 2
+    revisions = [(t.village_action or {}).get("revision") for t in v.store.list_turns("Greta")]
+    assert sorted(r for r in revisions if r is not None) == [1, 2]
+    v._end_conversation(talk(v, "Greta", "Lina", 4), "test")  # pyright: ignore[reportPrivateUsage]
+    await v._settle()  # pyright: ignore[reportPrivateUsage]
+    assert len(plans_of(llm, "Greta")) == 2  # no third revision
+
+
+@pytest.mark.anyio
 async def test_a_plan_finishing_on_another_day_is_dropped(tmp_path: Path) -> None:
     v, _ = village_for(tmp_path, delay=0.05)
     morning(v)

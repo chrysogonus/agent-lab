@@ -32,10 +32,10 @@ curl -s "http://127.0.0.1:8000/runs/$RUN_ID"
 
 | Endpoint | What it does |
 |---|---|
-| `GET /village` | the whole village state: clock, calendar, weather, villagers, log, chronicle, map |
+| `GET /village` | the whole village state: clock, calendar, weather, villagers (with plans and baskets), festival stalls, log, chronicle, map |
 | `POST /village/start`, `/pause`, `/step`, `/reset` | the controls |
 | `PUT /village/interval` | seconds per step, 1–30 (the UI sends 15, 5 or 2) |
-| `GET /village/villagers/{name}/turns` | a villager's turns (decisions, reflections), newest first |
+| `GET /village/villagers/{name}/turns` | a villager's turns (decisions, plans, reflections), newest first |
 | `WS /village/stream` | the state after every move, step and decision |
 
 Details per milestone: `specs/*/contracts/`.

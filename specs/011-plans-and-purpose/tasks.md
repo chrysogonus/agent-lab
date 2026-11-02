@@ -59,8 +59,8 @@ Runner tests pass `move_gap=0`.
 
 ## Phase 6: Polish
 
-- [ ] T013 README.md (plans, work and baskets, the festival stalls, the M11 row in Milestones marked done), docs/village.md (plans, facts and claims, no repeated lines, work and give), AGENTS.md (`plan.py`, `work.py` in the layout; the planner in the village contracts; current feature)
-- [ ] T014 `make check`; quickstart manual steps on the real model on a scratch backend with a copy of the database, results recorded below (SC-004–SC-006)
+- [X] T013 README.md (plans, work and baskets, the festival stalls, the M11 row in Milestones marked done), docs/village.md (plans, facts and claims, no repeated lines, work and give), AGENTS.md (`plan.py`, `work.py` in the layout; the planner in the village contracts; current feature)
+- [X] T014 `make check`; quickstart manual steps on the real model on a scratch backend with a copy of the database, results recorded below (SC-004–SC-006)
 
 ## Dependencies
 
@@ -108,6 +108,32 @@ the invented storms), no repeated lines, work and deliveries; each phase is ship
 | SC-005 | quickstart step 4 (real model) |
 | SC-006 | quickstart step 3 (real model) |
 
-## Manual check results
+## Manual check results (2026-11-02)
 
-(filled in by T014)
+Screenshots (scratch autumn worlds, 1600 × 1000, checked in a headless browser, not committed):
+the square with three bare stalls and with fish, vegetable crates and flower pots; baskets beside
+Greta (vegetables) and Jonas (fish); "Working at the pier" in the list; the stalls line under the
+weather in autumn (T012).
+
+Real model (vLLM `qwen3.5-9b`), two scratch backends on copies of the owner's database, Fast
+pace, driven over the API with a WebSocket viewer:
+
+| Check | Result |
+|---|---|
+| A: two days from Reset (SC-004, SC-006) | 293 steps in 7.8 min; 305 decisions, 19 plan runs. First plan entry kept within the hour: day 1 4/4, day 2 3/4. Every decision prompt starts with "What you know for sure:"; all four stored villager agents were refreshed to the final rules. Chronicles: "bright spring sun" on sunny day 1, "heavy rain" on rainy day 2. No line repeated, none refused. |
+| B: autumn day 1 to the festival, ripe fields, blooming garden (SC-004, SC-005, SC-006) | 7 days in 27 min; 1151 decisions, 56 plan runs. First plan entry kept: 4/4 on days 15–18, 2/4, 2/3, 3/4 on days 19–21. 11 says refused with "you already said that", none heard. 8 baskets filled (fish 3, vegetables 2, flowers 3), 5 set out on the stalls; the festival stalls held fish ×2 and flowers ×3, vegetables were carried but never set out. All four on the square in the evening; every festival memory ends "The stalls held fish and flowers."; the day-21 chronicle prompt names the stalls and the entry tells of baskets passed around "to fill the stalls". Stalls cleared on the first winter morning. Jonas and Lina worked one place together twice (garden day 16, pier day 20); decisions are too sparse to time those baskets, so "half the time" rests on the scripted tests (SC-003). |
+
+Fixed during the checks: two long conversations ending close together could reset a villager's
+revision count (the first revision, finishing, wrote back its own number), labelling both
+revisions 1 and allowing a third (SC-001); a revision now takes its number when it starts and a
+finishing one keeps the count as it stands (test: revisions started back to back still count two).
+
+Observed, not fixed:
+- Baskets often go back and forth between villagers (24 gives between villagers against 5 set
+  out; Hilde and Greta passed flowers back and forth seven times on days 17–18), which is why vegetables missed the
+  stalls.
+- Every chronicle opens with the day's real weather (7/7), but four entries later repeat weather
+  talk from the record, e.g. "before the storm worsened" on a rain day and "stormy weather" on a
+  foggy one. The source is the villagers' plan notes ("Cast the nets in the rain"), which reach
+  the record unmarked; only conversations are marked as claims.
+- One plan run failed when the model server dropped a connection; the village kept going.
