@@ -20,7 +20,16 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
-from agent_lab.village.build import buildable, entry, new_project, task_text
+from agent_lab.village.build import (
+    CATALOGUE,
+    build_step,
+    buildable,
+    entry,
+    new_project,
+    site_at,
+    site_cells,
+    task_text,
+)
 from agent_lab.village.chronicle import (
     CHRONICLE_KEPT,
     chronicle_prompt,
@@ -344,6 +353,10 @@ class Village:
             "trader": world["trader"]
             and {"stock": world["trader"]["stock"], "leaves": hhmm(TRADER_LEAVES)},
             "meeting": self._meeting_state(world["meeting"]),
+            "built": [
+                {**b, "name": entry(b["key"]).name, "kind": entry(b["key"]).kind}
+                for b in world["built"]
+            ],
             "project": self._project_state(world["project"]),
             "next_meeting": next_meeting(day),
             "ticking": self.ticking,
@@ -359,6 +372,16 @@ class Village:
                 "homes": [
                     {"villager": n, "letter": letter, "door": list(door(n))}
                     for n, letter in HOMES.items()
+                ],
+                "catalogue": [
+                    {
+                        "key": p.key,
+                        "name": p.name,
+                        "kind": p.kind,
+                        "site": [list(c) for c in p.site],
+                        "at": [list(c) for c in p.at],
+                    }
+                    for p in CATALOGUE
                 ],
             },
         }
@@ -590,6 +613,8 @@ class Village:
 
     def _targets(self, v: Villager) -> list[tuple[int, int]]:
         goal = v["goal"]
+        if goal["kind"] == "place" and goal["place"] == "site":
+            return site_cells(self.world) or [cell(v)]  # nothing left to build: arrived
         if goal["kind"] == "place":
             return place_cells(goal["place"])
         if goal["kind"] == "home":
@@ -943,6 +968,11 @@ class Village:
     def _give(self, v: Villager, to: str | None, goods: str) -> None:
         name = v["name"]
         v["basket"] = None
+        if to is None and site_at(self.world, cell(v)):
+            self.world["project"]["site"][goods] += 1
+            self._event(v, "gave", f"You set down a {carried_text(goods)} at the building site.")
+            self._note(f"{name} set down a {carried_text(goods)} at the building site.")
+            return
         if to is None:
             self.world["stalls"][goods] += 1
             self._event(v, "gave", f"You set out your {goods} on the festival stalls.")
@@ -1068,6 +1098,24 @@ class Village:
             tasks += self.meetings.values()
             tasks += [self.chronicle] if self.chronicle else []
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    # --- building (M12) ---
+
+    def _finish(self, key: str) -> None:
+        """The project's last load is worked in: it stands for good and everyone hears of it."""
+        done = entry(key).done_text
+        self.world["built"].append({"key": key, "day": clock(self.world["tick"])[0]})
+        self.world["project"] = None
+        for v in self.world["villagers"]:
+            if v["working"] and v["working"]["place"] == "site":
+                v["working"] = None
+            if v["goal"] and v["goal"].get("place") == "site":
+                v["goal"] = None
+            if not v["asleep"]:
+                self._event(v, "built", done)
+                self._remember(v, "built", done, [])
+                self._trigger(v, "built")
+        self._note(done)
 
     # --- the town hall meeting (M12) ---
 
@@ -1328,6 +1376,9 @@ class Village:
             self._event(v, "basket", f"You filled a basket of {goods}.")
             self._trigger(v, "basket")
             self._note(f"{name} filled a basket of {goods}.")
+        finished = build_step(world)
+        if finished:
+            self._finish(finished)
         self._festival_guests()
         self._meeting()
         if self.outcomes:

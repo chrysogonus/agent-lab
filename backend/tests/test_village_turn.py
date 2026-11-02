@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from agent_lab.blocks.model import BlocksConfig, layout_errors
+from agent_lab.village.build import new_project
 from agent_lab.village.seasons import WEATHER_TEXT, date, weather
 from agent_lab.village.turn import (
     SPEECH_SHOWN,
@@ -566,3 +567,45 @@ def test_the_facts_name_the_town_hall_meeting() -> None:
     assert "The next town hall meeting is on day 3 at 17:00." in facts
     on_the_day = observation(world_with(tick=_at(3, 9)), "Hilde")
     assert "You chair today's town hall meeting at 17:00; be there." in on_the_day
+
+
+def with_project(key: str = "market_stand", **site: int) -> dict[str, Any]:
+    world = world_with()
+    world["project"] = new_project(key, 1)
+    world["project"]["site"] |= site
+    return world
+
+
+def test_work_and_give_at_the_building_site() -> None:
+    world = with_project(wood=1)
+    world["villagers"][2] |= {**at(*MARKET), "basket": "paint"}
+    assert parse_action('{"action": "work"}', world, "Greta") == (
+        {"action": "work", "place": "site"},
+        None,
+    )
+    assert parse_action('{"action": "give"}', world, "Greta") == (
+        {"action": "give", "to": None, "goods": "paint"},
+        None,
+    )
+
+
+def test_walking_to_the_building_site() -> None:
+    world = with_project("bakehouse")
+    for text in ("building site", "the site", "Building Site"):
+        assert parse_action(json.dumps({"action": "move", "place": text}), world, "Lina") == (
+            {"action": "move", "place": "site"},
+            None,
+        )
+    places = observation(world, "Lina").split("Places: ")[1].split("\n")[0]
+    assert "building site " in places and places.endswith("steps.")
+    nothing = world_with()
+    assert parse_action('{"action": "move", "place": "building site"}', nothing, "Lina") == (
+        {"action": "wait"},
+        "nothing is being built",
+    )
+    assert "building site" not in observation(nothing, "Lina").split("Places: ")[1]
+    world["villagers"][3] |= at(14, 12)
+    assert parse_action('{"action": "move", "place": "site"}', world, "Lina") == (
+        {"action": "wait"},
+        "already at the building site",
+    )

@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from agent_lab.village.build import project_text
+from agent_lab.village.build import project_text, site_at, site_cells
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
@@ -238,6 +238,8 @@ def observation(world: dict[str, Any], name: str) -> str:
     x, y = cell(me)
     places = [f"{label(p)} {steps_to(x, y, place_cells(p))} steps" for p in PLACES if p != here]
     places.append(f"your home {steps_to(x, y, [door(name)])} steps")
+    if world["project"] and not site_at(world, (x, y)):
+        places.append(f"building site {steps_to(x, y, site_cells(world))} steps")
     goal = goal_text(me["goal"])
     matters = {*next_to, *talking}  # whose memories matter right now
     if me["goal"] and me["goal"]["kind"] == "find":
@@ -339,9 +341,8 @@ def parse_action(
     if isinstance(action, Work):
         why = work_refusal(world, name)
         me = villager_of(world, name)
-        return (
-            (wait, why) if why else ({"action": "work", "place": place_at(me["x"], me["y"])}, None)
-        )
+        place = "site" if site_at(world, cell(me)) else place_at(me["x"], me["y"])
+        return (wait, why) if why else ({"action": "work", "place": place}, None)
     if isinstance(action, Buy):
         why = buy_refusal(world, name, action.goods)
         if why:
@@ -398,6 +399,12 @@ def _destination(world: dict[str, Any], name: str, text: str) -> tuple[str | Non
         return None, f"unknown place {text!r}"
     if place == "home" and cell(me) == door(name):
         return None, "already at your home"
+    if place == "site":
+        if world["project"] is None:
+            return None, "nothing is being built"
+        if site_at(world, cell(me)):
+            return None, "already at the building site"
+        return place, None
     if place != "home" and place_at(me["x"], me["y"]) == place:
         return None, f"already at the {label(place)}"
     return place, None
@@ -533,12 +540,26 @@ _M12_BUY_RULES = _M11_RULES.replace(
     "basket you carry for a load of wood, paint or saplings for building,\n"
     '{"action": "wait"} to go on',
 )
-RULES = _M12_BUY_RULES.replace(
+_M12_MEETING_RULES = _M12_BUY_RULES.replace(
     "something more important comes up.",
     "something more important comes up. Hilde holds a town hall meeting every third day at "
     "17:00 where the village chooses what to build.",
 )
-OLD_RULES = (_M7_RULES, _M9_RULES, _M11_PLAN_RULES, _M11_RULES, _M12_BUY_RULES)
+RULES = _M12_MEETING_RULES.replace(
+    '{"action": "wait"} to go on',
+    '{"action": "move", "place": "building site"} to walk to what the village is building, '
+    '{"action": "give"} at the building site to set down a load it needs, and '
+    '{"action": "work"} there to build with the loads lying there,\n'
+    '{"action": "wait"} to go on',
+)
+OLD_RULES = (
+    _M7_RULES,
+    _M9_RULES,
+    _M11_PLAN_RULES,
+    _M11_RULES,
+    _M12_BUY_RULES,
+    _M12_MEETING_RULES,
+)
 
 
 def villager_agent(name: str) -> dict[str, Any]:

@@ -54,7 +54,7 @@ Cell = tuple[int, int]
 
 
 def label(place: str) -> str:
-    return PLACES[place][1]
+    return "building site" if place == "site" else PLACES[place][1]  # the site: M12
 
 
 def walkable(x: int, y: int) -> bool:
@@ -266,6 +266,8 @@ def place_named(text: str) -> str | None:
     wanted = text.strip().lower().removeprefix("the ").replace("_", " ")
     if wanted in ("home", "my home", "your home"):
         return "home"
+    if wanted in ("site", "building site"):
+        return "site"  # the current project's site, checked against the world by the caller
     return next((key for key in PLACES if label(key) == wanted), None)
 
 

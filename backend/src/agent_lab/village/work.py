@@ -2,15 +2,17 @@
 
 from typing import Any
 
+from agent_lab.village.build import site_at, site_refusal
 from agent_lab.village.trade import BASKET_GOODS, carried_text
 from agent_lab.village.world import adjacent, listed, place_at, villager_named
 
 GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers"}
 BASKET_STEPS = 6  # one village hour of work, added up over everyone working a place
 NO_GIVING = (
-    "nobody to give it to: name someone next to you, or stand on the square to set it out for "
-    "the festival"
+    "nobody to give it to: name someone next to you, stand on the square to set it out for the "
+    "festival, or stand at the building site to set down a load"
 )
+SITE_TAKES = "the building site takes loads of wood, paint or saplings"
 STALLS_TAKE = "the festival stalls take fish, vegetables and flowers"
 
 Villager = dict[str, Any]
@@ -40,6 +42,12 @@ def work_refusal(world: dict[str, Any], name: str) -> str | None:
     """Why a villager cannot work where it stands, or None."""
     me = _villager(world, name)
     here = _here(me)
+    if site_at(world, (me["x"], me["y"])):  # building comes first where a site is
+        if (me["working"] and me["working"]["place"] == "site") or any(
+            world["project"]["site"].values()
+        ):
+            return None
+        return "the building site has nothing to work with yet: bring goods first"
     if me["working"] and me["working"]["place"] == here:
         return None  # keeps going, even after Jonas left the pier
     if here in ("fields", "flower_garden"):
@@ -67,6 +75,8 @@ def give_refusal(world: dict[str, Any], name: str, to: str | None) -> str | None
     if me["basket"] is None:
         return "your hands are empty"
     if to is None:
+        if site_at(world, (me["x"], me["y"])):
+            return SITE_TAKES if me["basket"] in BASKET_GOODS else site_refusal(world, me["basket"])
         if _here(me) != "square":
             return NO_GIVING
         return None if me["basket"] in BASKET_GOODS else STALLS_TAKE
@@ -94,8 +104,8 @@ def work_step(world: dict[str, Any]) -> list[tuple[str, str]]:
     with goods fills a basket for the longest worker there with empty hands."""
     workers: dict[str, list[Villager]] = {}
     for v in world["villagers"]:
-        if v["working"] and not v["asleep"]:
-            workers.setdefault(v["working"]["place"], []).append(v)
+        if v["working"] and v["working"]["place"] != "site" and not v["asleep"]:
+            workers.setdefault(v["working"]["place"], []).append(v)  # the site: build_step
     baskets: list[tuple[str, str]] = []
     for place, here in workers.items():
         if place in world["tended"]:

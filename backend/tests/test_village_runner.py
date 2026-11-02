@@ -1124,12 +1124,12 @@ def system_of(v: Village, name: str) -> str:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("old", range(5))
+@pytest.mark.parametrize("old", range(6))
 async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old: int) -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
     v, _ = village_for(tmp_path)
-    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11, M12 buy
+    set_rules(v, "Hilde", OLD_RULES[old])  # M7, M9, M11 plans, M11, M12 buy and meeting
     set_rules(v, "Jonas", "MY OWN RULES")
     Village(store=v.store, models=v.models, bus=Bus())  # loading refreshes the rules
     hilde = system_of(v, "Hilde")
@@ -1141,14 +1141,17 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old
 def test_the_rules_history() -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
-    _m7, _m9, m11_plans, m11, m12_buy = OLD_RULES
+    _m7, _m9, m11_plans, m11, m12_buy, m12_meeting = OLD_RULES
     assert "Trust what you see over what you hear" in RULES and "Trust what you see" in m11_plans
     assert "Follow your plan for the day" in RULES
     assert '{"action": "work"}' in RULES and '{"action": "work"}' in m11
     assert '{"action": "buy", "goods": "wood"}' in RULES and "buy" not in m11
     assert '{"action": "buy", "goods": "wood"}' in m12_buy and "town hall meeting" not in m12_buy
     assert "Hilde holds a town hall meeting every third day at 17:00" in RULES
-    assert len(set(OLD_RULES)) == 5 and RULES not in OLD_RULES
+    assert "Hilde holds a town hall meeting" in m12_meeting and "building site" not in m12_meeting
+    assert '{"action": "move", "place": "building site"}' in RULES
+    assert '{"action": "give"} at the building site' in RULES
+    assert len(set(OLD_RULES)) == 6 and RULES not in OLD_RULES
 
 
 @pytest.mark.anyio
@@ -2396,3 +2399,106 @@ async def test_stored_planners_get_the_new_plan_text_unless_edited(tmp_path: Pat
     store("MY OWN PLANNER")
     Village(store=v.store, models=v.models, bus=Bus())
     assert system() == "MY OWN PLANNER"
+
+
+# --- M12 US4: building and seeing it stay ---
+
+
+@pytest.mark.anyio
+async def test_from_meeting_to_a_finished_project_that_stays(tmp_path: Path) -> None:
+    """SC-002: decided, handed out, bought, brought, built, and still there the next day."""
+    v, _ = village_for(
+        tmp_path,
+        {
+            "Lina:vote": [vote_for("Paint the town hall")],
+            "Lina": [buy("paint"), move("building site"), give(), WORK],
+        },
+    )
+    morning(v, tick_at(17, 20, day=3))
+    v.world["day_record"] = {"day": 3, "items": []}
+    proposed_meeting(v)
+    put(v, "Hilde", *TOWN_HALL[0], neighbours=["Lina"])
+    put(v, "Lina", *TOWN_HALL[1], neighbours=["Hilde"])  # no "met": nobody decides yet
+    await steps(v, 2)  # 17:30 Lina votes; 17:40 Hilde decides and hands out the work
+    project = v.world["project"]
+    assert project["key"] == "paint_town_hall" and project["tasks"]
+    # the next morning Lina trades fish for paint at the market and paints with Hilde's help
+    morning(v, tick_at(10, day=4))
+    v.world["day_record"] = {"day": 4, "items": []}
+    v.world["trader"] = {"day": 4, "stock": {"wood": 0, "paint": 2, "saplings": 0}}
+    lina = put(v, "Lina", *MARKET_CELLS[0], basket="fish", triggers=["arrived"])
+    await v.step()
+    assert lina["basket"] == "paint"
+    lina["triggers"] = ["spoken to"]
+    for _ in range(12):  # walk to the town hall
+        await v.step()
+        if lina["goal"] is None:
+            break
+    assert place_at(lina["x"], lina["y"]) == "town_hall"
+    lina["triggers"] = ["arrived"]
+    await v.step()  # sets the paint down
+    assert lina["basket"] is None and project["site"]["paint"] == 1
+    assert texts(v, "Lina", "gave")[-1] == "You set down a load of paint at the building site."
+    project["site"]["paint"] += 1  # a second load from someone else
+    lina["triggers"] = ["arrived"]
+    await v.step()  # works
+    assert lina["working"]["place"] == "site"
+    for _ in range(14):
+        await v.step()
+        if v.world["project"] is None:
+            break
+    assert v.world["project"] is None
+    assert [b["key"] for b in v.world["built"]] == ["paint_town_hall"]
+    assert lina["working"] is None
+    assert texts(v, "Greta", "built") == ["The town hall has been painted."]
+    assert any(m["kind"] == "built" for m in lina["memories"])
+    assert "The town hall has been painted." in notes(v)
+    v.world["tick"] = tick_at(4, 20, day=5) - 1
+    await v.step()  # a new day
+    built = v.state()["built"]
+    assert built == [
+        {"key": "paint_town_hall", "name": "Paint the town hall", "kind": "paint", "day": 4}
+    ]
+
+
+@pytest.mark.anyio
+async def test_a_load_the_site_does_not_need_is_kept(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina": [give()]})
+    morning(v)
+    v.world["project"] = new_project("market_stand", 1)
+    lina = put(v, "Lina", *MARKET_CELLS[0], basket="saplings", triggers=["arrived"])
+    await v.step()
+    assert lina["basket"] == "saplings"
+    assert lina["last_action"]["reason"] == "the building site does not need saplings"
+
+
+@pytest.mark.anyio
+async def test_the_building_goes_on_the_next_day(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    project = new_project("barn", 1)
+    project["site"]["wood"] = 3
+    project["used"]["wood"] = 5
+    v.world["project"] = project
+    v.world["tick"] = tick_at(4, 20, day=2) - 1
+    await v.step()
+    assert v.world["project"] is project and project["site"]["wood"] == 3
+    assert project["used"]["wood"] == 5
+
+
+def test_the_chronicle_and_the_map_know_what_is_built(tmp_path: Path) -> None:
+    from agent_lab.village.chronicle import chronicle_prompt
+
+    v, _ = village_for(tmp_path)
+    v.world["built"] = [{"key": "boat", "day": 2}]
+    record: dict[str, Any] = {"day": 3, "items": []}
+    assert "Built so far: A rowing boat lies at the pier." in chronicle_prompt(v.world, record)
+    catalogue = v.state()["map"]["catalogue"]
+    boat = next(c for c in catalogue if c["key"] == "boat")
+    assert boat == {
+        "key": "boat",
+        "name": "A rowing boat",
+        "kind": "boat",
+        "site": [[16, 16], [17, 16], [18, 16]],
+        "at": [[20, 17]],
+    }

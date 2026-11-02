@@ -287,7 +287,7 @@ const PLACE_TILE: Record<string, string> = { T: "vt-stone", S: "vt-stone", M: "v
 
 /** A building two cells tall whose bottom row is the area's bottom row: the town hall (its
  * row of `B` cells, with a flag) or a villager's house (roof in its owner's color). */
-function Building({ area, roof, roofDark, flag }: { area: Area; roof: string; roofDark: string; flag?: boolean }) {
+export function Building({ area, roof, roofDark, flag }: { area: Area; roof: string; roofDark: string; flag?: boolean }) {
   const x = area.x0 * TILE;
   const y = (area.y1 - 1) * TILE;
   const w = (area.x1 - area.x0 + 1) * TILE;

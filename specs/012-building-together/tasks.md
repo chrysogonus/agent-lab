@@ -247,7 +247,7 @@ contracts/http-api.md, quickstart.md)
 
 ## Phase 5: User Story 4 — Building and seeing it stay (P2)
 
-- [ ] T015 [P] [US4] build.py (research §4):
+- [X] T015 [P] [US4] build.py (research §4):
   - `site_cells(world)`, `site_at(world, cell)`.
   - `site_refusal(world, name, goods)`: "the building site does not need paint" / "the building site has all the wood it needs".
   - `build_step(world) -> str | None`:
@@ -261,7 +261,7 @@ contracts/http-api.md, quickstart.md)
     - "a fully stocked bakehouse that one worker cannot finish within one waking day";
     - the finish returned once.
   - Requirements: FR-010, FR-011, FR-013.
-- [ ] T016 [US4] work.py and turn.py:
+- [X] T016 [US4] work.py and turn.py:
   - `work_refusal` checks `site_at` first: valid while the site holds loads, else "the building site has nothing to work with yet: bring goods first". The parsed action is `{"action": "work", "place": "site"}`.
   - `give_refusal` without a name on a site cell uses `site_refusal` and refuses basket goods.
   - `NO_GIVING` adds "or stand at the building site to set down a load".
@@ -269,8 +269,8 @@ contracts/http-api.md, quickstart.md)
   - turn.py `_destination`: "building site" or "site" resolves to the site while a project runs, else "nothing is being built". Places adds "building site N steps".
   - Tests in test_village_work.py and test_village_turn.py: each refusal, the move, and the Places line with and without a project.
   - Requirements: FR-010, FR-011.
-- [ ] T017 [US4] turn.py: `RULES` adds the building site (give without a name there to set down a load, work there to build, move to "building site") and the T010 text joins `OLD_RULES`. Test in test_village_runner.py: an agent holding the T010 rules gets the final rules. Requirement: FR-016.
-- [ ] T018 [US4] runner.py:
+- [X] T017 [US4] turn.py: `RULES` adds the building site (give without a name there to set down a load, work there to build, move to "building site") and the T010 text joins `OLD_RULES`. Test in test_village_runner.py: an agent holding the T010 rules gets the final rules. Requirement: FR-016.
+- [X] T018 [US4] runner.py:
   - `_give` at the site: `project["site"][goods] += 1`, the event "You set down a load of paint at the building site.", and a note.
   - `_set_off` and `_seek` handle the site goal.
   - `_advance` calls `build_step` after `work_step`. A finished project:
@@ -288,7 +288,7 @@ contracts/http-api.md, quickstart.md)
     - the chronicle prompt names what is built;
     - the finished project's memories and events.
   - Requirements: FR-010–FR-012, FR-015.
-- [ ] T019 [US4] Frontend:
+- [X] T019 [US4] Frontend:
   - frontend/src/lib/api.ts: `VillageState.built`, `map.catalogue`, `Villager.working` `"site"`, event kind `built`.
   - lib/village.ts: `cellKind` for `b` and `r` (a new kind `plot`), `stateText` "Building at the site".
   - building.tsx:
@@ -303,7 +303,7 @@ contracts/http-api.md, quickstart.md)
   - VillageView.tsx draws them.
   - ProjectsPanel.tsx gets a "Built so far" section.
   - Tests in village.test.ts: `cellKind` plots, `stateText` building.
-  - Screenshots of a site under construction, every kind finished, and the panel.
+  - Screenshots of a site under construction, every kind finished, and the panel (taken with T021).
   - Requirements: FR-012, FR-014.
 
 ## Phase 6: Polish

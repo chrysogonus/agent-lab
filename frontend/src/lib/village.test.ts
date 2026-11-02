@@ -28,6 +28,8 @@ import {
   traderText,
   meetingLines,
   projectLines,
+  boxOf,
+  builtLines,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -71,7 +73,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   interval: 5,
   paused_reason: null,
   log: [],
-  map: { width: 32, height: 22, rows: [], places: [], homes: [] },
+  map: { width: 32, height: 22, rows: [], places: [], homes: [], catalogue: [] },
   villagers: [],
   calendar: { year: 1, season: "spring", day_of_season: 1, festival_in: null },
   weather: "sun",
@@ -85,6 +87,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   meeting: null,
   next_meeting: 3,
   project: null,
+  built: [],
   ...fields,
 });
 
@@ -417,5 +420,26 @@ describe("the project", () => {
     const run = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
     expect(turnLabel(run({ action: "assign", tasks: ["buy wood: Jonas", "build: Greta"] }))).toBe("05:00 hands out 2 tasks");
     expect(turnLabel(run({ action: "assign", reason: "no usable task in the work plan" }))).toBe("05:00 could not hand out the work: no usable task in the work plan");
+  });
+});
+
+describe("building and what stands", () => {
+  it("reads building plots and boxes cells", () => {
+    expect(["b", "r"].map(cellKind)).toEqual(["plot", "plot"]);
+    expect(placeAreas(["bb.", "bb."])).toEqual({});
+    expect(boxOf([[14, 13], [17, 14], [15, 13]])).toEqual({ x0: 14, y0: 13, x1: 17, y1: 14 });
+  });
+
+  it("says who builds and what is set down", () => {
+    expect(stateText(villager({ state: "working", working: "site", place: null }))).toBe("Building at the site");
+    const run = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(run({ action: "give", to: null, goods: "paint" }))).toBe("05:00 sets down a load of paint at the building site");
+    expect(turnLabel(run({ action: "work", place: "site" }))).toBe("05:00 works at the building site");
+    expect(turnLabel(run({ action: "move", place: "site" }))).toBe("05:00 walks to the building site");
+  });
+
+  it("lists what has been built", () => {
+    expect(builtLines([])).toEqual([]);
+    expect(builtLines([{ key: "boat", name: "A rowing boat", kind: "boat", day: 9 }])).toEqual(["Day 9: A rowing boat"]);
   });
 });

@@ -13,13 +13,13 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { GOODS, PACES, PERIOD_SKY, activity, calendarText, clockText, glideMs, figures, isBasket, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine, traderText } from "@/lib/village";
+import { GOODS, PACES, PERIOD_SKY, activity, boxOf, calendarText, clockText, glideMs, figures, isBasket, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine, traderText } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
-import { Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
+import { Building, Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Basket, Festival, Puddles, Stalls, WEATHER_WORDS, WeatherIcon, WeatherLayer } from "./seasons";
-import { Load, Trader } from "./building";
+import { Built, Load, Plot, Site, Trader } from "./building";
 import { VillagerPanel } from "./VillagerPanel";
 
 const SEEN_KEY = "village-chronicle-seen";
@@ -81,6 +81,32 @@ function useVillage(): VillageStream {
   return { state, setState, error, turnsStarted };
 }
 
+const BUILDING_ROOFS: Record<string, [string, string]> = { bakehouse: ["#c98b4a", "#8a5328"], barn: ["#b5483d", "#7e2f28"] };
+
+/** The building plots, fenced until something stands on them, and everything the village built. */
+function BuiltLayer({ state }: { state: VillageState }) {
+  const catalogue = new Map(state.map.catalogue.map((c) => [c.key, c]));
+  const standing = new Set(state.built.map((b) => b.key));
+  const plots = state.map.catalogue.filter((c) => c.kind === "building" && !standing.has(c.key));
+  return (
+    <g pointerEvents="none" aria-hidden>
+      {plots.map((c) => (
+        <Plot key={c.key} area={boxOf(c.at)} />
+      ))}
+      {state.built.map((b, i) => {
+        const c = catalogue.get(b.key);
+        if (!c) return null;
+        if (c.kind === "building") {
+          const [roof, roofDark] = BUILDING_ROOFS[c.key] ?? ["#c98b4a", "#8a5328"];
+          return <Building key={b.key} area={boxOf(c.at)} roof={roof} roofDark={roofDark} />;
+        }
+        if (c.kind === "trees") return c.at.map((cell) => <Built key={`${b.key}-${cell.join(",")}`} kind="trees" area={boxOf([cell])} index={i} />);
+        return <Built key={b.key} kind={c.kind} area={boxOf(c.at)} index={i} />;
+      })}
+    </g>
+  );
+}
+
 function VillageMap({ state, selected, onSelect }: { state: VillageState; selected: string | null; onSelect: (name: string) => void }) {
   const { width, height, rows, places, homes } = state.map;
   const map = rows.join("\n");
@@ -93,6 +119,8 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
   const houses = homes.map((h) => `${h.letter}:${owners.get(h.villager)?.color ?? "#d6584b"}`).join(",");
   const placed = figures(state).sort((a, b) => a.cy - b.cy); // lower on the map is nearer, drawn later
   const glide = glideMs(state);
+  const catalogue = new Map(state.map.catalogue.map((c) => [c.key, c]));
+  const building = state.project && catalogue.get(state.project.key);
   return (
     <svg
       viewBox={`0 0 ${width * TILE} ${height * TILE}`}
@@ -115,6 +143,8 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
         garden={state.growth.flower_garden.stage}
         neglected={state.growth.fields.neglected}
       />
+      <BuiltLayer state={state} />
+      {building && state.project && <Site at={boxOf(building.at)} site={building.site[0]} loads={state.project.site} />}
       {wet && <Puddles rows={rows} />}
       {weather !== "snow" && <LakeRings map={map} />}
       {!dark && warm && !wet && areas.G && <Butterflies area={areas.G} />}

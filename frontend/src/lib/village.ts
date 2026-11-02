@@ -1,7 +1,7 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { BasketGoods, BuildingGoods, ChronicleEntry, Goods, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
 
-export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place";
+export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place" | "plot";
 
 /** B is the town hall building, h j g l the villagers' houses (specs/007-village-life). */
 export function cellKind(char: string): CellKind {
@@ -11,6 +11,7 @@ export function cellKind(char: string): CellKind {
   if (char === "t") return "tree";
   if (char === "i") return "lamp";
   if ("Bhjgl".includes(char)) return "building";
+  if ("br".includes(char)) return "plot"; // fenced building plots (M12)
   return "place";
 }
 
@@ -105,7 +106,7 @@ export function stateText(villager: Villager): string {
     case "talking":
       return `Talking with ${villager.talking_with.join(" and ")}`;
     case "working":
-      return `Working at the ${placeLabel(villager.working)}`;
+      return villager.working === "site" ? "Building at the site" : `Working at the ${placeLabel(villager.working)}`;
     case "walking":
       return villager.goal ? villager.goal[0].toUpperCase() + villager.goal.slice(1) : "Walking";
     default:
@@ -162,6 +163,7 @@ const PLACE_LABELS: Record<string, string> = {
   pier: "pier",
   fields: "fields",
   flower_garden: "flower garden",
+  site: "building site",
 };
 
 export function placeLabel(key: string | null): string | null {
@@ -219,7 +221,8 @@ export function turnLabel(turn: Run): string {
   if (action.action === "say") return `${time}says${action.to ? ` to ${action.to}` : ""}: ${action.text}`;
   if (action.action === "work") return `${time}works at the ${placeLabel(action.place)}`;
   if (action.action === "give") {
-    return action.to ? `${time}gives a ${carriedText(action.goods)} to ${action.to}` : `${time}sets out ${action.goods} on the festival stalls`;
+    if (action.to) return `${time}gives a ${carriedText(action.goods)} to ${action.to}`;
+    return isBasket(action.goods) ? `${time}sets out ${action.goods} on the festival stalls` : `${time}sets down a ${carriedText(action.goods)} at the building site`;
   }
   if (action.action === "buy") return `${time}trades a ${carriedText(action.paid)} for a ${carriedText(action.goods)}`;
   return `${time}waits`;
@@ -322,4 +325,16 @@ export function projectLines(project: Project): string[] {
     `At the building site: ${loads(project.site) || "nothing"}`,
     ...(project.tasks.length ? project.tasks.map((t) => `${taskText(t)}: ${listed(t.villagers)}`) : ["Hilde has not handed out the work yet"]),
   ];
+}
+
+/** The box around some cells: where a catalogue project is drawn. */
+export function boxOf(cells: [number, number][]): Area {
+  const xs = cells.map(([x]) => x);
+  const ys = cells.map(([, y]) => y);
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+
+/** "Day 9: A rowing boat", in the order they were finished. */
+export function builtLines(built: Built[]): string[] {
+  return built.map((b) => `Day ${b.day}: ${b.name}`);
 }

@@ -195,3 +195,52 @@ def project_text(world: dict[str, Any], name: str) -> list[str]:
             )
     built = built_text(world)
     return lines + ([built] if built else [])
+
+
+# --- the building site (research §4) ---
+
+BUILD_STEPS = 6  # one village hour of work, added up over everyone at the site, uses one load
+
+
+def site_cells(world: dict[str, Any]) -> list[Cell]:
+    return entry(world["project"]["key"]).site if world["project"] else []
+
+
+def site_at(world: dict[str, Any], cell: Cell) -> bool:
+    return cell in site_cells(world)
+
+
+def site_refusal(world: dict[str, Any], goods: str) -> str | None:
+    """Why a load of `goods` cannot be set down at the building site, or None."""
+    if goods not in entry(world["project"]["key"]).needs:
+        return f"the building site does not need {goods}"
+    if not needs_left(world).get(goods):
+        return f"the building site has all the {goods} it needs"
+    return None
+
+
+def build_step(world: dict[str, Any]) -> str | None:
+    """One step of building: everyone working at the site adds up, and each village hour of it
+    works in one load lying there. The project's key once its last load is worked in."""
+    project = world["project"]
+    if project is None:
+        return None
+    workers = [
+        v
+        for v in world["villagers"]
+        if v["working"] and v["working"]["place"] == "site" and not v["asleep"]
+    ]
+    needs = entry(project["key"]).needs
+    lying = [goods for goods in needs if project["site"][goods]]  # catalogue order
+    if not workers or not lying:
+        return None
+    for v in workers:
+        v["working"]["steps"] += 1
+    project["work"] = min(project["work"] + len(workers), BUILD_STEPS)
+    if project["work"] < BUILD_STEPS:
+        return None
+    goods = lying[0]
+    project["site"][goods] -= 1
+    project["used"][goods] += 1
+    project["work"] = 0
+    return project["key"] if all(project["used"][g] == n for g, n in needs.items()) else None

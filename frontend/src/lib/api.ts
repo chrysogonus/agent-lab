@@ -85,7 +85,7 @@ export type VillageEvent = {
   kind:
     | "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival"
     | "planned" | "worked" | "basket" | "gave" | "received" // M11
-    | "traded" | "proposed" | "meeting" | "task"; // M12
+    | "traded" | "proposed" | "meeting" | "task" | "built"; // M12
   text: string;
   from?: string;
   to?: string | null;
@@ -118,7 +118,7 @@ export type Villager = {
   memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival" | "meeting" | "built"; text: string }[]; // newest first
   plan: Plan | null; // today's plan (M11)
   basket: Goods | null; // one thing at a time, kept overnight: a basket (M11) or a load (M12)
-  working: "fields" | "flower_garden" | "pier" | null; // where it works until it walks off
+  working: "fields" | "flower_garden" | "pier" | "site" | null; // where it works until it walks off (site: M12)
 };
 
 // M11: plans and purpose. See specs/011-plans-and-purpose/contracts/http-api.md.
@@ -131,11 +131,14 @@ export type Plan = { entries: PlanEntry[]; current: number | null; next: number 
 export type BuildingGoods = "wood" | "paint" | "saplings";
 export type Goods = BasketGoods | BuildingGoods;
 export type Trader = { stock: Record<BuildingGoods, number>; leaves: string };
+export type ProjectKind = "paint" | "trees" | "stand" | "building" | "boat";
+export type CatalogueEntry = { key: string; name: string; kind: ProjectKind; site: [number, number][]; at: [number, number][] };
+export type Built = { key: string; name: string; kind: ProjectKind; day: number };
 export type Task = { task: "buy" | "bring" | "build"; goods: BuildingGoods | null; villagers: string[] };
 export type Project = {
   key: string;
   name: string;
-  kind: "paint" | "trees" | "stand" | "building" | "boat";
+  kind: ProjectKind;
   needs: Partial<Record<BuildingGoods, number>>;
   site: Record<BuildingGoods, number>; // loads set down, not yet worked in
   used: Record<BuildingGoods, number>; // loads worked in
@@ -193,6 +196,7 @@ export type VillageState = {
   meeting: Meeting | null; // the latest town hall meeting
   next_meeting: number; // the day of the next one
   project: Project | null; // what the village is building
+  built: Built[]; // what stands, in order
   running: boolean;
   ticking: boolean;
   interval: number;
@@ -204,6 +208,7 @@ export type VillageState = {
     rows: string[];
     places: { key: string; label: string; x: number; y: number }[];
     homes: { villager: string; letter: string; door: [number, number] }[];
+    catalogue: CatalogueEntry[]; // what can be built, where (M12)
   };
   villagers: Villager[];
 };

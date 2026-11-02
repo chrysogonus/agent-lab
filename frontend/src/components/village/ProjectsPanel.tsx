@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { getRun, type Run, type VillageState } from "@/lib/api";
-import { meetingLines, projectLines } from "@/lib/village";
+import { builtLines, meetingLines, projectLines } from "@/lib/village";
 
 /** What the village builds: the latest town hall meeting, the current project and what stands. */
 export function ProjectsPanel({
@@ -10,7 +10,7 @@ export function ProjectsPanel({
   onClose,
   onOpenTurn,
 }: {
-  state: Pick<VillageState, "meeting" | "next_meeting" | "day" | "project">;
+  state: Pick<VillageState, "meeting" | "next_meeting" | "day" | "project" | "built">;
   onClose: () => void;
   onOpenTurn: (run: Run) => void;
 }) {
@@ -83,6 +83,20 @@ export function ProjectsPanel({
           </ul>
         ) : (
           <p className="mt-2 text-sm text-dusk-muted">No meeting yet. Every third day Hilde proposes what to build, the others vote and she decides.</p>
+        )}
+      </div>
+      <div>
+        <h3 className="text-lg leading-snug">Built so far</h3>
+        {state.built.length ? (
+          <ul className="mt-1 flex flex-col gap-1">
+            {builtLines(state.built).map((line) => (
+              <li key={line} className="font-sans text-sm leading-relaxed text-dusk">
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-dusk-muted">Nothing yet: what the village builds stays on the map.</p>
         )}
       </div>
     </section>

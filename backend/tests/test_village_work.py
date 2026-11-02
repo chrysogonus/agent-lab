@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from agent_lab.village.build import new_project
 from agent_lab.village.work import (
     delivery_text,
     give_refusal,
@@ -103,8 +104,8 @@ def test_give_refusals() -> None:
     assert give_refusal(world, "Hilde", "Jonas") is None
     villager(world, "Hilde").update(at(PIER[0]))
     assert give_refusal(world, "Hilde", None) == (
-        "nobody to give it to: name someone next to you, or stand on the square to set it out "
-        "for the festival"
+        "nobody to give it to: name someone next to you, stand on the square to set it out for "
+        "the festival, or stand at the building site to set down a load"
     )
 
 
@@ -233,3 +234,54 @@ def test_no_festival_delivery_hint_for_a_load() -> None:
     world = world_with(Hilde=at(SQUARE, basket="paint"))
     world["tick"] = 144 * 14 + 30  # autumn
     assert delivery_text(world, "Hilde") is None
+
+
+STAND = place_cells("market")  # the market stand's site is the market
+
+
+def with_stand(**site: int) -> dict[str, Any]:
+    world = world_with()
+    world["project"] = new_project("market_stand", 1)
+    world["project"]["site"] |= site
+    return world
+
+
+def test_building_at_the_site_needs_loads_to_start() -> None:
+    world = with_stand()
+    villager(world, "Greta").update(at(STAND[0]))
+    assert work_refusal(world, "Greta") == (
+        "the building site has nothing to work with yet: bring goods first"
+    )
+    world["project"]["site"]["wood"] = 1
+    assert work_refusal(world, "Greta") is None
+    world["project"]["site"]["wood"] = 0
+    villager(world, "Greta").update(working("site"))
+    assert work_refusal(world, "Greta") is None  # goes on, waiting for the next load
+    world["project"] = None
+    villager(world, "Greta")["working"] = None
+    assert work_refusal(world, "Greta") == "there is no work for you here"
+
+
+def test_setting_down_loads_at_the_site() -> None:
+    world = with_stand(wood=3)
+    villager(world, "Lina").update(at(STAND[0]), basket="paint")
+    assert give_refusal(world, "Lina", None) is None
+    villager(world, "Lina")["basket"] = "wood"
+    assert give_refusal(world, "Lina", None) == "the building site has all the wood it needs"
+    villager(world, "Lina")["basket"] = "saplings"
+    assert give_refusal(world, "Lina", None) == "the building site does not need saplings"
+    villager(world, "Lina")["basket"] = "flowers"
+    assert give_refusal(world, "Lina", None) == (
+        "the building site takes loads of wood, paint or saplings"
+    )
+    villager(world, "Lina").update(at(PIER[0]))
+    assert give_refusal(world, "Lina", None) == (
+        "nobody to give it to: name someone next to you, stand on the square to set it out for "
+        "the festival, or stand at the building site to set down a load"
+    )
+
+
+def test_work_step_leaves_the_site_to_the_building() -> None:
+    world = with_stand(wood=1)
+    villager(world, "Greta").update(at(STAND[0]), **working("site"))
+    assert work_step(world) == [] and villager(world, "Greta")["working"]["steps"] == 0
