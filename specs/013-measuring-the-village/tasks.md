@@ -311,7 +311,7 @@ test first; runner tests pass `move_gap=0`.
     - `health.py`, `health_view.py` and `village/evals/` in the layout;
     - "real-model evals never run in `make check`";
     - the current feature.
-- [ ] T014 `make check`, then quickstart.md's manual steps on the real model:
+- [X] T014 `make check`, then quickstart.md's manual steps on the real model:
   - health on the owner's village;
   - the checks at 10 repeats, then twice at 20 with `compare`;
   - the scenarios at 5 repeats, with the owner's village row checksummed before and after;
@@ -380,3 +380,71 @@ Stories in order:
 | SC-004 | quickstart step 3 (real model, checksum) |
 | SC-005 | test_village_evals.py (compare); quickstart step 2 (twice at 20 repeats) |
 | SC-006 | quickstart step 4 (baseline in tasks.md) |
+
+## Manual check results (2026-11-02, vLLM `qwen3.5-9b`, thinking off)
+
+**Village health on the owner's village** (SC-002, FR-003):
+- `evals health --days 28` ran in 0.8 s (19 days, 3,077 decisions).
+- The panel lists the days newest first. Day 61 is marked "so far", and days before M13 show "–"
+  for plan kept, stuck hours and loads worked in. `GET /village/health` agrees.
+- Screenshot checked in a headless browser, not committed.
+
+**Turn checks** (SC-003, SC-005): 14 checks, all completed well inside 15 minutes.
+
+| Check | 10 repeats | 20 repeats (A) | 20 repeats (B) |
+|---|---|---|---|
+| answer-when-spoken-to | 9/10 | 19/20 | 19/20 |
+| build-with-loads | **0/10** | **0/20** | **0/20** |
+| buy-saplings | 8/10 | 19/20 | 17/20 |
+| find-the-one-to-see | 8/10 | 15/20 | 14/20 |
+| load-at-site | 10/10 | 16/20 | 17/20 |
+| load-away | 10/10 | 20/20 | 20/20 |
+| meeting-call-far | 10/10 | 20/20 | 20/20 |
+| meeting-call-talking | 9/10 | 15/20 | 12/20 |
+| not-to-hilde | 10/10 | 20/20 | 20/20 |
+| plan-valid | 10/10 | 20/20 | 20/20 |
+| proposals-valid (frozen) | 10/10 | 17/20 | 19/20 |
+| stalls-in-autumn | 9/10 | 19/20 | 20/20 |
+| work-at-own-place | **3/10** | **7/20** | **4/20** |
+| work-plan-buys | 7/10 | 15/20 | 11/20 |
+| overall | 113/140 (27 s) | 222/280 | 213/280 |
+
+- Comparing A and B, with nothing changed, marked **0 of 14** checks as changed (at most 2
+  allowed).
+- `build-with-loads`: standing at the site with "build here" in her prompt, Greta walks to the
+  market (her midday routine) instead of working.
+- `work-at-own-place`: at the fields in the morning, Greta mostly leaves instead of working.
+
+**Scenarios** (SC-004): 5 repeats each on fresh copies in `backend/data/evals/`. The checksum of
+the owner's village row was the same before and after (`53d7e07e…`).
+
+| Scenario | Held / finished | Notes |
+|---|---|---|
+| load-reaches-site | 5/5 | Lina set the saplings down at 10:50 every time |
+| meeting-attendance | 5/5 | Hilde, Greta and Lina came; Jonas stayed at the pier every time |
+| talk-then-go | **0/5** | 3 runs: they never talked (in one, Greta tried to *find* Jonas while he stood next to her, then he left). 2 runs: after a talk of 1 or 3 lines Greta kept trying to "work" on the path ("there is no work for you here") |
+
+**Baseline for M14** (SC-006). The owner's days 43–61 hold 3,077 decisions, 45% of them waits,
+and 314 talks with a median of 2 lines and none of 8 or more. The three weakest behaviours:
+
+1. **Work in the wrong place.**
+   - In the owner's days, 188 refusals were "there is no work for you here", and 103 were
+     "your hands are empty".
+   - Checks: `work-at-own-place` passed 7/20 and 4/20; `build-with-loads` passed 0/20 twice.
+   - Scenario: in talk-then-go, Greta was stuck trying to work on the path.
+2. **Reaching each other.**
+   - In the owner's days, 225 refusals were "<villager> is not next to you", 43 were
+     "<villager> is already next to you", and 62 were "<villager>'s hands are full" (handing
+     things to whoever is near).
+   - Scenario: in talk-then-go, the pair never talked in 3 of 5 runs.
+3. **Leaving a talk.**
+   - In the owner's days, 188 refusals were "you are talking with <villager>; say goodbye
+     first". Talks are short, but villagers try to walk off without a goodbye.
+   - Check: `meeting-call-talking` passed 15/20 and 12/20.
+
+Also seen: 9 of 18 chronicles name weather the day did not have (the open M11 issue).
+
+**Found, not fixed**: a load given straight back is refused with "…set it out on the festival
+stalls on the square", but a load belongs at the building site (M12, `work.py`
+`give_refusal`). It shows in the owner's health on day 60.
+
