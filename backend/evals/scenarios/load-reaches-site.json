@@ -1,0 +1,52 @@
+{
+  "name": "load-reaches-site",
+  "start": {
+    "day": 67,
+    "time": "10:00",
+    "project": {
+      "key": "trees_square",
+      "tasks": [
+        {
+          "task": "buy",
+          "goods": "saplings",
+          "villagers": [
+            "Lina"
+          ]
+        }
+      ]
+    },
+    "trader": {
+      "wood": 2,
+      "paint": 1,
+      "saplings": 2
+    },
+    "villagers": {
+      "Lina": {
+        "at": "market",
+        "carrying": "flowers",
+        "triggers": [
+          "arrived"
+        ]
+      },
+      "Hilde": {
+        "at": "town_hall"
+      },
+      "Jonas": {
+        "at": "pier",
+        "working": "pier"
+      },
+      "Greta": {
+        "at": "fields",
+        "working": "fields"
+      }
+    }
+  },
+  "horizon": {
+    "until": "12:00"
+  },
+  "condition": {
+    "kind": "load_at_site",
+    "goods": "saplings",
+    "by": "12:00"
+  }
+}

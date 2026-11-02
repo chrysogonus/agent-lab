@@ -1,0 +1,69 @@
+{
+  "name": "talk-then-go",
+  "start": {
+    "day": 67,
+    "time": "10:00",
+    "villagers": {
+      "Jonas": {
+        "at": [
+          10,
+          5
+        ],
+        "triggers": [
+          "met"
+        ],
+        "plan": [
+          {
+            "time": "10:30",
+            "place": "pier",
+            "purpose": "Mend the nets"
+          },
+          {
+            "time": "14:00",
+            "place": "market",
+            "purpose": "Sell fish"
+          }
+        ]
+      },
+      "Greta": {
+        "at": [
+          11,
+          5
+        ],
+        "triggers": [
+          "met"
+        ],
+        "plan": [
+          {
+            "time": "10:30",
+            "place": "fields",
+            "purpose": "Weed the rows"
+          },
+          {
+            "time": "14:00",
+            "place": "market",
+            "purpose": "Sell vegetables"
+          }
+        ]
+      },
+      "Hilde": {
+        "at": "town_hall"
+      },
+      "Lina": {
+        "at": "flower_garden"
+      }
+    }
+  },
+  "horizon": {
+    "hours": 2
+  },
+  "condition": {
+    "kind": "talk_then_go",
+    "pair": [
+      "Jonas",
+      "Greta"
+    ],
+    "max_lines": 6,
+    "within_hours": 1
+  }
+}

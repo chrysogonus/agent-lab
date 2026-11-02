@@ -1,0 +1,27 @@
+{
+  "name": "load-away",
+  "agent": "villager",
+  "as": "Lina",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "11:00",
+      "project": {
+        "key": "trees_square"
+      },
+      "villagers": {
+        "Lina": {
+          "at": "flower_garden",
+          "carrying": "saplings"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "move",
+      "place": "site"
+    }
+  }
+}

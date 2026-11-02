@@ -1,0 +1,23 @@
+{
+  "name": "work-at-own-place",
+  "agent": "villager",
+  "as": "Greta",
+  "situation": {
+    "fixture": {
+      "day": 10,
+      "time": "08:00",
+      "villagers": {
+        "Greta": {
+          "at": "fields"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "work",
+      "place": "fields"
+    }
+  }
+}

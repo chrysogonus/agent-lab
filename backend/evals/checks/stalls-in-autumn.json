@@ -1,0 +1,24 @@
+{
+  "name": "stalls-in-autumn",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 18,
+      "time": "15:00",
+      "villagers": {
+        "Jonas": {
+          "at": "square",
+          "carrying": "fish"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "give",
+      "to": null
+    }
+  }
+}

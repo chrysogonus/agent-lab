@@ -26,7 +26,7 @@ KEYS = {
 }
 VILLAGER_KEYS = {
     *("at", "asleep", "carrying", "working", "goal", "memories", "learnings", "inbox"),
-    *("said", "events", "plan"),
+    *("said", "events", "plan", "triggers"),
 }
 FIRST_MINUTE = 270  # 04:30 of day 1, tick 0
 
@@ -114,6 +114,7 @@ def _villager(world: dict[str, Any], name: str, spec: dict[str, Any], day: int) 
         for i in spec.get("inbox", [])
     ]
     v["said"] = list(spec.get("said", []))
+    v["triggers"] = list(spec.get("triggers", []))  # a reason to decide on the first step
     v["events"] = [{"tick": tick - 1, "kind": "event", "text": t} for t in spec.get("events", [])]
     if "plan" in spec:
         entries = [

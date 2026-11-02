@@ -1,0 +1,38 @@
+{
+  "name": "not-to-hilde",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "11:00",
+      "project": {
+        "key": "barn"
+      },
+      "villagers": {
+        "Jonas": {
+          "at": [
+            13,
+            8
+          ],
+          "carrying": "wood"
+        },
+        "Hilde": {
+          "at": [
+            14,
+            8
+          ]
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "not": [
+      {
+        "action": "give",
+        "to": "Hilde"
+      }
+    ]
+  }
+}

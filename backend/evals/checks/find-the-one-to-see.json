@@ -1,0 +1,38 @@
+{
+  "name": "find-the-one-to-see",
+  "agent": "villager",
+  "as": "Lina",
+  "situation": {
+    "fixture": {
+      "day": 68,
+      "time": "11:00",
+      "villagers": {
+        "Lina": {
+          "at": "flower_garden",
+          "plan": [
+            {
+              "time": "07:00",
+              "place": "flower_garden",
+              "purpose": "Water the flowers"
+            },
+            {
+              "time": "11:00",
+              "villager": "Greta",
+              "purpose": "Ask Greta for seeds"
+            }
+          ]
+        },
+        "Greta": {
+          "at": "fields"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "find",
+      "villager": "Greta"
+    }
+  }
+}

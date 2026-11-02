@@ -1,0 +1,33 @@
+{
+  "name": "plan-valid",
+  "agent": "planner",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 66,
+      "time": "05:00",
+      "meeting": {
+        "kind": "vote",
+        "proposals": [
+          {
+            "key": "market_stand",
+            "reason": "Greta needs a place to sell."
+          },
+          {
+            "key": "trees_square",
+            "reason": "Shade for everyone."
+          }
+        ]
+      },
+      "villagers": {
+        "Jonas": {
+          "at": "home"
+        }
+      }
+    },
+    "prompt": "plan"
+  },
+  "expect": {
+    "valid": true
+  }
+}

@@ -303,6 +303,37 @@ class Store:
             ).fetchone()
         return row["prompt"] if row else None
 
+    def copy_agents_from(self, path: str | Path, agent_ids: list[str]) -> None:
+        """The agents with these ids from another database (opened read-only), replacing any
+        earlier copy: the evals run the owner's current agents."""
+        source = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        source.row_factory = sqlite3.Row
+        try:
+            rows = [r for r in source.execute("SELECT * FROM agents") if r["agent_id"] in agent_ids]
+        finally:
+            source.close()
+        with self._lock:
+            for r in rows:
+                self._db.execute(
+                    "INSERT OR REPLACE INTO agents (agent_id, template_id, name, name_key,"
+                    " description, sample_prompt, config, created_at, updated_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?)",
+                    tuple(
+                        r[k]
+                        for k in (
+                            "agent_id",
+                            "template_id",
+                            "name",
+                            "name_key",
+                            "description",
+                            "sample_prompt",
+                            "config",
+                            "created_at",
+                            "updated_at",
+                        )
+                    ),
+                )
+
     def get_spans(self, run_id: str) -> list[Span]:
         with self._lock:
             rows = self._db.execute(

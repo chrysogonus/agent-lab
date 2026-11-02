@@ -1,11 +1,24 @@
 """Fixtures, turn checks, scenarios and their results (FR-004 to FR-014, SC-005)."""
 
+from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import answer, fake_models
+from test_village_runner import responder
 
+from agent_lab.agents.react import build_graph
+from agent_lab.bus import Bus
+from agent_lab.llm.fake import FakeLLM
+from agent_lab.llm.models import Models
+from agent_lab.store import Run, Store
 from agent_lab.village.build import entry
+from agent_lab.village.evals.__main__ import main, parser
+from agent_lab.village.evals.checks import add_check, judge, load_checks, prompt_of, run_checks
 from agent_lab.village.evals.fixtures import FixtureError, build_world
+from agent_lab.village.evals.results import Results, checks_table, compare, compare_table, wilson
+from agent_lab.village.evals.scenarios import CONDITIONS, run_scenarios
+from agent_lab.village.runner import Village
 from agent_lab.village.trade import trader_stock
 from agent_lab.village.turn import observation
 from agent_lab.village.world import clock, door, place_at, place_cells
@@ -143,3 +156,523 @@ def test_a_cell_fixture_and_a_place_fixture_agree() -> None:
     cell = place_cells("pier")[0]
     world = build_world({"day": 2, "time": "06:00", "villagers": {"Jonas": {"at": list(cell)}}})
     assert place_at(villager(world, "Jonas")["x"], villager(world, "Jonas")["y"]) == "pier"
+
+
+# --- results: ranges, comparisons, storage ---
+
+
+def test_wilson_ranges() -> None:
+    low, high = wilson(7, 10)
+    assert (round(low, 2), round(high, 2)) == (0.4, 0.89)
+    assert wilson(0, 10)[0] == 0 and round(wilson(0, 10)[1], 2) == 0.28
+    assert round(wilson(10, 10)[0], 2) == 0.72 and wilson(10, 10)[1] == 1
+    assert wilson(0, 0) == (0.0, 1.0)
+
+
+def a_result(
+    result_id: str, rates: dict[str, tuple[int, int]], repeats: int = 10, model: str = "local/qwen"
+) -> dict[str, Any]:
+    checks = [
+        {
+            "name": n,
+            "kind": "fixture",
+            "passes": p,
+            "attempts": a,
+            "interval": list(wilson(p, a)),
+            "failures": [],
+        }
+        for n, (p, a) in rates.items()
+    ]
+    return {
+        "result_id": result_id,
+        "kind": "checks",
+        "created_at": 1.0,
+        "model": model,
+        "settings": {},
+        "repeats": repeats,
+        "data": {"checks": checks},
+    }
+
+
+def test_compare_marks_only_changes_beyond_chance() -> None:
+    before = a_result("a", {"x": (2, 20), "y": (12, 20), "z": (19, 20)})
+    after = a_result("b", {"x": (17, 20), "y": (14, 20), "z": (5, 20)})
+    lines, notes = compare(before, after)
+    assert [(line["name"], line["verdict"]) for line in lines] == [
+        ("x", "better"),
+        ("y", "no clear change"),
+        ("z", "worse"),
+    ]
+    assert notes == []
+    _, notes = compare(before, a_result("c", {"x": (1, 5)}, repeats=5, model="openai/gpt"))
+    assert notes == ["the models differ: local/qwen and openai/gpt", "the repeats differ: 10 and 5"]
+
+
+def test_results_are_kept(tmp_path: Path) -> None:
+    results = Results(tmp_path / "evals.db")
+    first = a_result("r1", {"x": (3, 10)})
+    results.save(first)
+    results.save(a_result("r2", {"x": (4, 10)}) | {"created_at": 2.0})
+    assert results.load("r1") == first
+    assert [r["result_id"] for r in results.list("checks")] == ["r2", "r1"]
+    assert results.load("nope") is None
+
+
+def test_the_tables() -> None:
+    result = a_result("r1", {"load-at-site": (7, 10)})
+    result["data"]["checks"][0]["failures"] = [
+        {"run_id": "abc", "answer": "{}", "why": "answered wait: nobody"}
+    ]
+    table = checks_table(result)
+    assert "load-at-site" in table and "7/10" in table and "[40% to 89%]" in table
+    assert "answered wait: nobody (run abc)" in table
+    lines, notes = compare(result, a_result("r2", {"load-at-site": (10, 10)}))
+    assert "load-at-site" in compare_table(lines, notes) and "7/10 → 10/10" in compare_table(
+        lines, notes
+    )
+
+
+# --- turn checks ---
+
+AT_THE_SITE = {
+    "day": 67,
+    "time": "10:00",
+    "project": {"key": "trees_square"},
+    "villagers": {"Lina": {"at": "site", "carrying": "saplings"}},
+}
+
+
+def a_check(expect: dict[str, Any], **changes: Any) -> dict[str, Any]:
+    check: dict[str, Any] = {
+        "name": "load-at-site",
+        "agent": "villager",
+        "as": "Lina",
+        "situation": {"fixture": AT_THE_SITE, "prompt": "decide"},
+        "expect": expect,
+    }
+    return check | changes
+
+
+def test_a_fixture_check_builds_its_prompt_with_todays_code() -> None:
+    prompt, world = prompt_of(a_check({"action": {"action": "give"}}))
+    assert world is not None and prompt == observation(world, "Lina")
+    assert "You are at the building site: set down your load of saplings now" in prompt
+    frozen = a_check(
+        {"valid": True},
+        agent="meeting",
+        situation={"frozen": "PROMPT AS RECORDED", "prompt": "propose"},
+    )
+    assert prompt_of(frozen) == ("PROMPT AS RECORDED", None)
+
+
+@pytest.mark.parametrize(
+    ("expect", "answer", "passed", "why"),
+    [
+        ({"action": {"action": "give", "to": None}}, '{"action": "give"}', True, None),
+        (
+            {"action": {"action": "give"}},
+            '{"action": "give", "to": "Hilde"}',
+            False,
+            "answered wait: Hilde is asleep",
+        ),
+        (
+            {"action": {"action": "move", "place": "site"}},
+            '{"action": "move", "place": "market"}',
+            False,
+            "place was 'market', not 'site'",
+        ),
+        (
+            {"action": {"action": "give"}},
+            "not json",
+            False,
+            "answered wait: the answer is not JSON",
+        ),
+        ({"not": [{"action": "give", "to": "Hilde"}]}, '{"action": "give"}', True, None),
+        (
+            {"not": [{"action": "give"}]},
+            '{"action": "give"}',
+            False,
+            "an answer that is not wanted: {'action': 'give'}",
+        ),
+    ],
+)
+def test_judging_a_villagers_answer(
+    expect: dict[str, Any], answer: str, passed: bool, why: str | None
+) -> None:
+    check = a_check(expect)
+    _, world = prompt_of(check)
+    verdict, reason = judge(check, answer, world)
+    assert verdict is passed
+    if why:
+        assert reason is not None and reason.startswith(why)
+
+
+def test_judging_planner_and_meeting_answers() -> None:
+    plan = a_check(
+        {"valid": True}, agent="planner", situation={"fixture": AT_THE_SITE, "prompt": "plan"}
+    )
+    good_plan = (
+        '{"plan": [{"time": "08:00", "place": "market", "purpose": "a"}, '
+        '{"time": "12:00", "place": "pier", "purpose": "b"}]}'
+    )
+    assert judge(plan, good_plan, prompt_of(plan)[1]) == (True, None)
+    assert judge(plan, '{"plan": []}', prompt_of(plan)[1])[0] is False
+    tasks = a_check(
+        {"tasks_include": {"task": "buy", "goods": "saplings"}},
+        agent="meeting",
+        situation={"fixture": AT_THE_SITE, "prompt": "work_plan"},
+    )
+    _, world = prompt_of(tasks)
+    buys = '{"tasks": [{"task": "buy", "goods": "saplings", "villagers": ["Lina"]}]}'
+    builds = '{"tasks": [{"task": "build", "villagers": ["Lina"]}]}'
+    assert judge(tasks, buys, world) == (True, None)
+    assert judge(tasks, builds, world) == (False, "no such task in the work plan")
+    frozen = a_check(
+        {"valid": True}, agent="meeting", situation={"frozen": "x", "prompt": "propose"}
+    )
+    proposals = '{"proposals": [{"project": "A market stand", "reason": "r"}]}'
+    assert judge(frozen, proposals, None) == (True, None)
+    broken = proposals[:-1]
+    verdict, why = judge(frozen, broken, None)
+    assert verdict is False and why == "not valid: the answer is not JSON"
+
+
+def owner_db(tmp_path: Path) -> Path:
+    """An owner's database with its village and agents, as `make dev` leaves it."""
+    path = tmp_path / "owner.db"
+    village = Village(store=Store(path), models=fake_models(FakeLLM([])), bus=Bus())
+    village.ensure_agents()
+    return path
+
+
+@pytest.mark.anyio
+async def test_running_checks_counts_and_keeps_the_owner_untouched(tmp_path: Path) -> None:
+    owner = owner_db(tmp_path)
+    before = owner.read_bytes()
+    answers = iter(
+        ['{"action": "give"}', '{"action": "give", "to": "Hilde"}', '{"action": "give"}']
+    )
+    llm = FakeLLM([lambda _: answer(next(answers))] * 3)
+    check = a_check({"action": {"action": "give", "to": None}})
+    result = await run_checks([check], fake_models(llm), owner, tmp_path / "evals.db", repeats=3)
+    [row] = result["data"]["checks"]
+    assert (row["name"], row["kind"], row["passes"], row["attempts"]) == (
+        "load-at-site",
+        "fixture",
+        2,
+        3,
+    )
+    assert row["failures"][0]["why"] == "answered wait: Hilde is asleep"
+    assert owner.read_bytes() == before  # only read
+    evals = Store(tmp_path / "evals.db")
+    run = evals.get_run(row["failures"][0]["run_id"])
+    assert run is not None and run.eval_id == result["result_id"] and run.villager == "Lina"
+    assert evals.list_turns("Lina") == []  # check runs stay out of the turns
+    assert Results(tmp_path / "evals.db").load(result["result_id"]) is not None
+    assert result["data"]["overall"]["passes"] == 2
+
+
+@pytest.mark.anyio
+async def test_a_failed_run_is_a_failed_attempt(tmp_path: Path) -> None:
+    owner = owner_db(tmp_path)
+    llm = FakeLLM([RuntimeError("model down")])
+    check = a_check({"action": {"action": "give"}})
+    result = await run_checks([check], fake_models(llm), owner, tmp_path / "evals.db", repeats=1)
+    assert result["data"]["checks"][0]["failures"][0]["why"] == "the run failed"
+
+
+def test_a_check_from_a_recorded_turn(tmp_path: Path) -> None:
+    owner = owner_db(tmp_path)
+    store = Store(owner)
+    world = store.load_village()
+    assert world is not None
+    lina = next(v["agent_id"] for v in world["villagers"] if v["name"] == "Lina")
+    store.create_run(
+        Run(
+            run_id="t1",
+            agent_id=lina,
+            config_version="v",
+            prompt="WHAT LINA SAW",
+            status="completed",
+            graph=build_graph([]),
+            config={},
+            started_at=1.0,
+            village_tick=40,
+            villager="Lina",
+        )
+    )
+    store.set_village_action("t1", {"action": "wait", "reason": "Hilde's hands are full"})
+    path = add_check(
+        owner, "t1", "not-to-hilde", {"not": [{"action": "give", "to": "Hilde"}]}, tmp_path
+    )
+    [check] = load_checks(tmp_path)
+    assert path.name == "not-to-hilde.json"
+    assert check["agent"] == "villager" and check["as"] == "Lina"
+    assert check["situation"] == {"frozen": "WHAT LINA SAW", "from_run": "t1", "prompt": "decide"}
+    assert prompt_of(check) == ("WHAT LINA SAW", None)
+
+
+def test_bad_check_files_are_named(tmp_path: Path) -> None:
+    (tmp_path / "broken.json").write_text('{"name": "x", "agent": "cat", "situation": {}}')
+    with pytest.raises(ValueError, match=r"broken\.json: bad agent"):
+        load_checks(tmp_path)
+
+
+# --- the command line ---
+
+
+def test_the_command_line_parses_every_command() -> None:
+    args = parser().parse_args(["checks", "--repeats", "20", "--only", "a", "b"])
+    assert (args.command, args.repeats, args.only, args.db) == (
+        "checks",
+        20,
+        ["a", "b"],
+        "data/agent_lab.db",
+    )
+    assert parser().parse_args(["scenarios"]).repeats == 5
+    add = parser().parse_args(["add-check", "--run", "r1", "--name", "n", "--expect", "{}"])
+    assert (add.run, add.name, add.expect) == ("r1", "n", "{}")
+    assert parser().parse_args(["compare", "a", "b"]).results == ["a", "b"]
+    assert parser().parse_args(["results", "--kind", "checks"]).kind == "checks"
+    assert parser().parse_args(["health", "--days", "3"]).days == 3
+
+
+def test_health_on_the_command_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    owner = owner_db(tmp_path)
+    store = Store(owner)
+    world = store.load_village()
+    assert world is not None
+    store.create_run(
+        Run(
+            run_id="t1",
+            agent_id="a",
+            config_version="v",
+            prompt="p",
+            status="completed",
+            graph=build_graph([]),
+            config={},
+            started_at=world["born"] + 1,
+            village_tick=0,
+            villager="Lina",
+        )
+    )
+    store.set_village_action("t1", {"action": "wait", "reason": "Hilde is not next to you"})
+    assert main(["health", "--db", str(owner)]) == 0
+    out = capsys.readouterr().out
+    assert "Day 1 (so far)" in out and "Waits 100%" in out
+    assert "1x <villager> is not next to you" in out
+
+
+def test_results_and_compare_on_the_command_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    results = Results(tmp_path / "evals.db")
+    results.save(a_result("r1", {"x": (2, 20)}))
+    results.save(a_result("r2", {"x": (18, 20)}) | {"created_at": 2.0})
+    evals = str(tmp_path / "evals.db")
+    assert main(["results", "--evals", evals]) == 0
+    assert main(["compare", "r1", "r2", "--evals", evals]) == 0
+    out = capsys.readouterr().out
+    assert "r2" in out and "x" in out and "better" in out
+    assert main(["compare", "r1", "nope", "--evals", evals]) == 1
+
+
+SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
+IDEAL = {  # an answer each shipped check must accept: the checks can be passed
+    "load-at-site": '{"action": "give"}',
+    "load-away": '{"action": "move", "place": "building site"}',
+    "meeting-call-talking": '{"action": "goodbye", "place": "town hall"}',
+    "meeting-call-far": '{"action": "move", "place": "town hall"}',
+    "answer-when-spoken-to": '{"action": "say", "text": "A good catch!", "to": "Greta"}',
+    "buy-saplings": '{"action": "buy", "goods": "saplings"}',
+    "build-with-loads": '{"action": "work"}',
+    "stalls-in-autumn": '{"action": "give"}',
+    "find-the-one-to-see": '{"action": "find", "villager": "Greta"}',
+    "not-to-hilde": '{"action": "move", "place": "building site"}',
+    "work-at-own-place": '{"action": "work"}',
+    "plan-valid": '{"plan": [{"time": "06:00", "place": "pier", "purpose": "Fish"}, '
+    '{"time": "17:00", "place": "town hall", "purpose": "The meeting"}]}',
+    "work-plan-buys": '{"tasks": [{"task": "buy", "goods": "saplings", "villagers": ["Lina"]}]}',
+    "proposals-valid": '{"proposals": [{"project": "A market stand", "reason": "r"}]}',
+}
+
+
+def test_the_shipped_checks_load_and_can_be_passed() -> None:
+    checks = load_checks(SHIPPED_CHECKS)
+    assert len(checks) >= 12 and {c["name"] for c in checks} == set(IDEAL)
+    for check in checks:
+        prompt, world = prompt_of(check)
+        assert judge(check, IDEAL[check["name"]], world) == (True, None), check["name"]
+        assert prompt
+    by_name = {c["name"]: prompt_of(c)[0] for c in checks}
+    assert "set down your load of saplings now" in by_name["load-at-site"]
+    assert "Take your load of saplings to the building site" in by_name["load-away"]
+    assert "The town hall meeting starts at 17:00" in by_name["meeting-call-talking"]
+    assert "A trader is at the market until 14:00" in by_name["buy-saplings"]
+    assert "Hand out the work" in by_name["work-plan-buys"]
+    frozen = next(c for c in checks if c["name"] == "proposals-valid")
+    assert "frozen" in frozen["situation"] and frozen["situation"]["from_run"]
+
+
+# --- scenarios ---
+
+MEETING_START = {
+    "day": 66,
+    "time": "16:50",
+    "meeting": {"kind": "vote", "proposals": [{"key": "market_stand", "reason": "r"}]},
+    "villagers": {
+        "Hilde": {"at": "town_hall"},
+        "Greta": {"at": [3, 3]},
+        "Lina": {"at": [4, 3]},
+        "Jonas": {"at": "pier"},
+    },
+}
+
+
+def a_scenario(condition: dict[str, Any], **changes: Any) -> dict[str, Any]:
+    scenario: dict[str, Any] = {
+        "name": "meeting-attendance",
+        "start": MEETING_START,
+        "horizon": {"until": "17:50"},
+        "condition": condition,
+    }
+    return scenario | changes
+
+
+def fake_village_models() -> Models:
+    """The test responder: villagers wait, meetings take the defaults."""
+    return fake_models(FakeLLM([responder({})] * 400))
+
+
+@pytest.mark.anyio
+async def test_a_scenario_runs_on_fresh_copies_and_leaves_the_owner_alone(tmp_path: Path) -> None:
+    owner = owner_db(tmp_path)
+    before = owner.read_bytes()
+    scenario = a_scenario({"kind": "meeting_attendance", "at_least": 3})
+    result = await run_scenarios(
+        [scenario],
+        fake_village_models(),
+        owner,
+        tmp_path / "copies",
+        tmp_path / "evals.db",
+        repeats=2,
+    )
+    assert owner.read_bytes() == before
+    [s] = result["data"]["scenarios"]
+    assert (s["name"], s["attempts"], s["finished"], s["held"]) == ("meeting-attendance", 2, 2, 2)
+    run = s["runs"][0]
+    assert run["held"] is True and run["why"] == "3 came: Hilde, Greta, Lina"
+    assert Path(run["db"]).exists() and Path(run["db"]).parent == tmp_path / "copies"
+    copy = Store(run["db"]).load_village()
+    assert copy is not None and clock(copy["tick"])[:2] == (66, "17:50")  # stopped at the horizon
+    assert run["health"] and run["health"][0]["day"] == 66
+    assert Results(tmp_path / "evals.db").load(result["result_id"]) is not None
+
+
+@pytest.mark.anyio
+async def test_a_scenario_whose_village_gives_up_is_unfinished(tmp_path: Path) -> None:
+    owner = owner_db(tmp_path)
+    down = fake_models(FakeLLM([RuntimeError("model down")] * 400))
+    scenario = a_scenario(
+        {"kind": "meeting_attendance", "at_least": 3},
+        start=MEETING_START | {"time": "10:00"},
+        horizon={"hours": 2},
+    )
+    for v in scenario["start"]["villagers"].values():
+        v["at"] = "market"
+    result = await run_scenarios(
+        [scenario], down, owner, tmp_path / "copies", tmp_path / "evals.db", repeats=1
+    )
+    [s] = result["data"]["scenarios"]
+    assert (s["finished"], s["held"]) == (0, 0) and s["runs"][0]["finished"] is False
+
+
+def test_the_conditions() -> None:
+    world = build_world(MEETING_START)
+    world["meeting"]["present"] = ["Hilde", "Greta"]
+    store = Store(":memory:")
+    held, why = CONDITIONS["meeting_attendance"](store, world, 0, {"at_least": 3})
+    assert (held, why) == (False, "2 came: Hilde, Greta")
+    world["built"] = [{"key": "boat", "day": 66}]
+    assert CONDITIONS["built"](store, world, 0, {"key": "boat", "by_day": 66})[0] is True
+    assert CONDITIONS["built"](store, world, 0, {"key": "barn", "by_day": 66}) == (
+        False,
+        "barn was not built by day 66",
+    )
+
+
+def test_talk_then_go_reads_the_notes_and_the_trail() -> None:
+    world = build_world(MEETING_START | {"time": "10:00"})
+    store = Store(":memory:")
+    talk: dict[str, Any] = {
+        "tick": world["tick"] + 2,
+        "text": "Jonas and Greta talked; what they said (their claims): a / b / c",
+    }
+    world["day_record"]["items"].append(talk)
+    params = {"pair": ["Greta", "Jonas"], "max_lines": 6, "within_hours": 1}
+    assert CONDITIONS["talk_then_go"](store, world, world["tick"], params) == (
+        False,
+        "after their talk of 3 lines, Greta did not move on within 1 hour",
+    )
+    for i, (greta, jonas) in enumerate([("idle", "walking"), ("working", "idle")]):
+        store.add_trail(
+            talk["tick"] + 1 + i,
+            {"v": [["Greta", 0, 0, None, greta, None], ["Jonas", 0, 0, None, jonas, None]]},
+        )
+    assert CONDITIONS["talk_then_go"](store, world, world["tick"], params) == (
+        True,
+        "they talked 3 lines and both moved on",
+    )
+    world["day_record"]["items"][-1]["text"] = talk["text"] + " / d / e / f / g"
+    assert CONDITIONS["talk_then_go"](store, world, world["tick"], params) == (
+        False,
+        "they talked 7 lines, more than 6",
+    )
+
+
+def test_load_at_site_reads_the_deliveries(tmp_path: Path) -> None:
+    store = Store(tmp_path / "copy.db")
+    world = build_world(MEETING_START | {"time": "10:00"})
+    store.create_run(
+        Run(
+            run_id="g",
+            agent_id="a",
+            config_version="v",
+            prompt="p",
+            status="completed",
+            graph=build_graph([]),
+            config={},
+            started_at=world["born"] + 1,
+            village_tick=world["tick"] + 8,
+            villager="Lina",
+        )
+    )
+    store.set_village_action("g", {"action": "give", "to": None, "goods": "saplings"})
+    held, why = CONDITIONS["load_at_site"](
+        store, world, world["tick"], {"goods": "saplings", "by": "12:00"}
+    )
+    assert (held, why) == (True, "Lina set down saplings at 11:20")
+    late = CONDITIONS["load_at_site"](
+        store, world, world["tick"], {"goods": "saplings", "by": "11:00"}
+    )
+    assert late == (False, "no saplings set down at the site by 11:00")
+
+
+def test_a_fixture_can_give_a_reason_to_decide() -> None:
+    world = build_world(
+        {"day": 67, "time": "10:00", "villagers": {"Jonas": {"at": [10, 5], "triggers": ["met"]}}}
+    )
+    assert villager(world, "Jonas")["triggers"] == ["met"]
+
+
+def test_the_shipped_scenarios_load_and_start() -> None:
+    from agent_lab.village.evals.scenarios import load_scenarios
+
+    scenarios = load_scenarios(Path(__file__).parent.parent / "evals" / "scenarios")
+    assert {s["name"] for s in scenarios} == {
+        "meeting-attendance",
+        "load-reaches-site",
+        "talk-then-go",
+    }
+    for s in scenarios:
+        assert build_world(s["start"])["day_record"] is not None  # notes kept from the start

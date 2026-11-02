@@ -1,4 +1,4 @@
-.PHONY: install check check-backend check-frontend dev dev-llm stop-llm dev-backend dev-frontend
+.PHONY: install check check-backend check-frontend dev dev-llm stop-llm dev-backend dev-frontend eval-checks eval-scenarios
 
 ENV_FILE := $(if $(wildcard .env),--env-file ../.env,)
 
@@ -48,6 +48,13 @@ dev:
 
 dev-backend:
 	cd backend && uv run $(ENV_FILE) uvicorn agent_lab.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Real-model evals (M13): never part of `make check`. Results go to backend/data/evals.db.
+eval-checks:
+	cd backend && uv run $(ENV_FILE) python -m agent_lab.village.evals checks
+
+eval-scenarios:
+	cd backend && uv run $(ENV_FILE) python -m agent_lab.village.evals scenarios
 
 dev-frontend:
 	cd frontend && pnpm dev

@@ -1,0 +1,27 @@
+{
+  "name": "load-at-site",
+  "agent": "villager",
+  "as": "Lina",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "11:00",
+      "project": {
+        "key": "trees_square"
+      },
+      "villagers": {
+        "Lina": {
+          "at": "site",
+          "carrying": "saplings"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "give",
+      "to": null
+    }
+  }
+}

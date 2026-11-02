@@ -1,0 +1,26 @@
+{
+  "name": "work-plan-buys",
+  "agent": "meeting",
+  "as": "Hilde",
+  "situation": {
+    "fixture": {
+      "day": 66,
+      "time": "17:40",
+      "project": {
+        "key": "trees_square"
+      },
+      "villagers": {
+        "Hilde": {
+          "at": "town_hall"
+        }
+      }
+    },
+    "prompt": "work_plan"
+  },
+  "expect": {
+    "tasks_include": {
+      "task": "buy",
+      "goods": "saplings"
+    }
+  }
+}

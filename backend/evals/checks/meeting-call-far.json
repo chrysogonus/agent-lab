@@ -1,0 +1,39 @@
+{
+  "name": "meeting-call-far",
+  "agent": "villager",
+  "as": "Hilde",
+  "situation": {
+    "fixture": {
+      "day": 66,
+      "time": "16:40",
+      "meeting": {
+        "kind": "vote",
+        "proposals": [
+          {
+            "key": "market_stand",
+            "reason": "Greta needs a place to sell."
+          },
+          {
+            "key": "trees_square",
+            "reason": "Shade for everyone."
+          }
+        ]
+      },
+      "villagers": {
+        "Hilde": {
+          "at": "fields",
+          "events": [
+            "Your town hall meeting starts at 17:00: go to the town hall now to chair it ({\"action\": \"move\", \"place\": \"town hall\"}; if you are talking, {\"action\": \"goodbye\", \"place\": \"town hall\"})."
+          ]
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "move",
+      "place": "town_hall"
+    }
+  }
+}

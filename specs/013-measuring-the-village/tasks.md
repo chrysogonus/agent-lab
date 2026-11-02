@@ -190,7 +190,7 @@ test first; runner tests pass `move_gap=0`.
 
 ## Phase 3: User Story 2 — Turn checks (P1)
 
-- [ ] T007 [P] [US2] New backend/src/agent_lab/village/evals/results.py (research §5, §8):
+- [X] T007 [P] [US2] New backend/src/agent_lab/village/evals/results.py (research §5, §8):
   - `wilson(passes, n) -> (low, high)` gives the 95% Wilson score interval (z = 1.96), or (0, 1)
     for n = 0;
   - `compare(a, b)` gives per name `better`, `worse` or `no clear change` (intervals that do not
@@ -207,7 +207,7 @@ test first; runner tests pass `move_gap=0`.
   - the tables.
 
   Requirements: FR-006, FR-007, SC-005.
-- [ ] T008 [US2] New backend/src/agent_lab/village/evals/checks.py (research §5, data-model.md
+- [X] T008 [US2] New backend/src/agent_lab/village/evals/checks.py (research §5, data-model.md
   "Turn check"):
   - `load_checks(dir)` validates every file and rejects unknown kinds.
   - `prompt_of(check, world)`:
@@ -242,7 +242,7 @@ test first; runner tests pass `move_gap=0`.
   - `add_check` from a stored run.
 
   Requirements: FR-004–FR-007, FR-013.
-- [ ] T009 [US2] New backend/src/agent_lab/village/evals/__main__.py (contracts/interfaces.md
+- [X] T009 [US2] New backend/src/agent_lab/village/evals/__main__.py (contracts/interfaces.md
   "Command line", `argparse`):
   - `checks`, `add-check`, `results`, `compare` and `health` (the same numbers as the panel,
     printed for any `--db`);
@@ -254,7 +254,7 @@ test first; runner tests pass `move_gap=0`.
 
   Tests in test_village_evals.py: argument parsing for each command, and `health` on a scripted
   database. Requirement: FR-013.
-- [ ] T010 [P] [US2] backend/evals/checks/*.json, the 14 checks of research §5 ("The checks that
+- [X] T010 [P] [US2] backend/evals/checks/*.json, the 14 checks of research §5 ("The checks that
   ship"). All are fixtures except `proposals-valid`, which is frozen from the M12 run-E proposal
   prompt (copied into the file).
 
@@ -264,7 +264,7 @@ test first; runner tests pass `move_gap=0`.
 
 ## Phase 4: User Story 3 — Scenarios (P2)
 
-- [ ] T011 [US3] New backend/src/agent_lab/village/evals/scenarios.py (research §6, data-model.md
+- [X] T011 [US3] New backend/src/agent_lab/village/evals/scenarios.py (research §6, data-model.md
   "Scenario"):
   - `load_scenarios(dir)`;
   - `CONDITIONS`:
@@ -293,7 +293,7 @@ test first; runner tests pass `move_gap=0`.
   - health per day is in the result.
 
   Requirements: FR-008–FR-011, FR-014.
-- [ ] T012 [US3] `__main__.py`: `scenarios` (`--repeats`, `--only`), with results saved and
+- [X] T012 [US3] `__main__.py`: `scenarios` (`--repeats`, `--only`), with results saved and
   `compare` working on scenario results too. backend/evals/scenarios/*.json: the 3 scenarios of
   research §6.
 

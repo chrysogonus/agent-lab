@@ -1,0 +1,44 @@
+{
+  "name": "answer-when-spoken-to",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 68,
+      "time": "10:00",
+      "villagers": {
+        "Jonas": {
+          "at": [
+            22,
+            7
+          ],
+          "inbox": [
+            {
+              "from": "Greta",
+              "text": "Jonas, how was the catch today?"
+            }
+          ]
+        },
+        "Greta": {
+          "at": [
+            23,
+            7
+          ]
+        }
+      },
+      "conversations": [
+        [
+          "Greta",
+          "Jonas",
+          1
+        ]
+      ]
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "say"
+    }
+  }
+}

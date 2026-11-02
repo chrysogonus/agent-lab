@@ -1,0 +1,29 @@
+{
+  "name": "build-with-loads",
+  "agent": "villager",
+  "as": "Greta",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "13:00",
+      "project": {
+        "key": "trees_square",
+        "site": {
+          "saplings": 2
+        }
+      },
+      "villagers": {
+        "Greta": {
+          "at": "site"
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "work",
+      "place": "site"
+    }
+  }
+}
