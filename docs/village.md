@@ -94,7 +94,7 @@ still ends the conversation, just without the words.
   meeting only reviews it and may hand out the work again.
 - **The building site**: villagers walk there (`"building site"`), set down their loads and
   work there. A villager carrying a load the project needs is told to take it there and set it
-  down, one standing at a site with loads is told it can build, and while the site has nothing
+  down, while loads lie at the site everyone is told to come and build, and while it has nothing
   to build with, anyone carrying a basket is told what to buy; at 17:00 on a meeting day
   everyone away is called to the town hall. Every village hour of work, added up over everyone at the site, works in one load.
   The site shows scaffolding and the loads lying there.

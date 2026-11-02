@@ -195,10 +195,16 @@ def _site_hints(world: dict[str, Any], name: str) -> list[str]:
                 f"at the market while the trader is there ({action})."
             ]
     working = me["working"] and me["working"]["place"] == "site"
-    if here and not working and any(project["site"].values()):
-        held = _loads(project["site"])
+    held = _loads(project["site"])
+    if not held or working:
+        return []
+    if here:
         return [f'The building site holds {held}: build here with {{"action": "work"}}.']
-    return []
+    return [  # builders left after half an hour on the real model and never came back
+        f"The building site ({entry(project['key']).where}) holds {held} waiting to be built "
+        'with: go and build ({"action": "move", "place": "building site"}, then '
+        '{"action": "work"}).'
+    ]
 
 
 def project_text(world: dict[str, Any], name: str) -> list[str]:

@@ -230,7 +230,10 @@
     home at bedtime does, and the talk ends when they walk apart. A fourth run had all four at
     the meeting, a vote and a decision, but Hilde handed out only "build": nobody bought the
     saplings. Her work-plan prompt now says nothing can be built until the goods are bought,
-    and while the site holds nothing, a villager carrying a basket is told what to buy.
+    and while the site holds nothing, a villager carrying a basket is told what to buy. A fifth
+    run bought and brought all three saplings, but builders left after half an hour and nobody
+    came back: while loads lie at the site, every villager not building is told where it is and
+    to come and build.
   - **Asking again**: an unusable proposal or work-plan answer (a run that failed, often JSON
     missing its last brace on the real model, or nothing usable in it) is asked for once more;
     the first run records the reason with "; asked again". A missed proposal would cost the
