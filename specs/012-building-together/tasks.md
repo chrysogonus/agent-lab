@@ -420,8 +420,13 @@ days at Fast (about 22 minutes, about 1,050 runs each):
 Run K against the success criteria:
 - SC-004: the day-66 meeting had all four villagers (at least three), and a project (the trees)
   was finished on day 68, within six days. Pass.
-- SC-005: all four traded a basket for a load (Greta, Lina, Jonas once, Hilde twice); three
-  worked at the site (Lina 6 turns, Hilde 4, Greta 1). Pass.
+- SC-005 (the first project): three traded a basket for saplings (Greta flowers on day 67,
+  Lina flowers and Hilde fish on day 68), and three worked at the site (Lina 4 turns, Hilde 3,
+  Greta 1). Pass. For the second project Hilde (flowers) and Jonas (fish) bought paint on day 70.
+- Quickstart step 5: baskets paid were flowers ×3 and fish ×2 (summer: no vegetables were
+  carried at the trader); no trade was refused for empty hands. Refused buys: 7 with no trader
+  there (after 14:00), 4 when the trader had no saplings left; once a villager tried to give its
+  basket to "the trader".
 - Everyone remembered "Young trees now grow by the square." and the meetings ("Hilde chose …
   I voted for …"); no run failed.
 
