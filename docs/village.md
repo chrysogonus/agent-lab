@@ -91,7 +91,9 @@ still ends the conversation, just without the words.
   and in what they are told until the project is done; while a project is under way, the
   meeting only reviews it and may hand out the work again.
 - **The building site**: villagers walk there (`"building site"`), set down their loads and
-  work there. Every village hour of work, added up over everyone at the site, works in one load.
+  work there. A villager carrying a load the project needs is told to take it there and set it
+  down, and one standing at a site with loads is told it can build; at 17:00 on a meeting day
+  everyone away is called to the town hall. Every village hour of work, added up over everyone at the site, works in one load.
   The site shows scaffolding and the loads lying there.
 - **What stays**: the catalogue holds ten projects: painting the town hall or one of the four
   houses (2 paint each), young trees by the square (3 saplings), a market stand (3 wood, 1

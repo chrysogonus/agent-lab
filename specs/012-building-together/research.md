@@ -216,6 +216,12 @@
     Applied: `project["tasks"] = tasks`, event "Hilde asked you to …" for each named villager and
     a `task` trigger, and a note. On a review meeting it runs at 17:30 when Hilde came. Tasks stay
     until the project is done or a review replaces them.
+  - **Hints from the first real-model run** (as M11's delivery hint): a villager carrying a
+    load the project still needs is told "Take your load of wood to the building site (…) and
+    set it down there" (or, at the site, "set down your load … now with {"action": "give"}"),
+    and one at a site holding loads, not yet building, "build here with {"action": "work"}";
+    at 17:00 every villager up and away from the town hall gets a `meeting` event and trigger.
+    Without them only one load was set down in six days and two villagers came to the meeting.
   - **Asking again**: an unusable proposal or work-plan answer (a run that failed, often JSON
     missing its last brace on the real model, or nothing usable in it) is asked for once more;
     the first run records the reason with "; asked again". A missed proposal would cost the
