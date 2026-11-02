@@ -185,7 +185,7 @@ def test_a_talker_due_elsewhere_by_its_plan_is_offered_to_leave() -> None:
         conversations=[["Jonas", "Lina", 4]],
     )
     leave = (
-        {"action": "goodbye", "text": "…", "place": "flower garden"},
+        {"action": "goodbye", "place": "flower garden"},
         "your plan has you at the flower garden at 11:00",
     )
     assert leave in can_do(world, "Lina")
@@ -194,3 +194,24 @@ def test_a_talker_due_elsewhere_by_its_plan_is_offered_to_leave() -> None:
     world["tick"] += 2
     world["conversations"] = []  # not talking: it simply goes
     assert leave not in can_do(world, "Lina")
+
+
+def test_a_plan_to_see_someone_offers_to_find_them() -> None:
+    plan = [
+        {"time": "07:00", "place": "flower garden", "purpose": "water"},
+        {"time": "11:00", "villager": "Greta", "purpose": "ask for seeds"},
+    ]
+    world = world_of(
+        time="11:00",
+        villagers={"Lina": {"at": "flower garden", "plan": plan}, "Greta": {"at": "fields"}},
+    )
+    see = ({"action": "find", "villager": "Greta"}, "your plan has you see Greta at 11:00")
+    assert see in can_do(world, "Lina")
+    world["villagers"][2] |= {"x": world["villagers"][3]["x"] + 1, "y": world["villagers"][3]["y"]}
+    assert see not in can_do(world, "Lina")  # next to her: say it
+    world["villagers"][2] |= {"x": 1, "y": 14}
+    world["conversations"] = [{"a": "Lina", "b": "Jonas", "lines": 2, "last_tick": 0}]
+    assert (
+        {"action": "goodbye", "villager": "Greta"},
+        "your plan has you see Greta at 11:00",
+    ) in can_do(world, "Lina")

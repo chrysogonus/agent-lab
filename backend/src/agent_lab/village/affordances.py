@@ -71,11 +71,16 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
             why = f"the festival stalls still lack {goods}: set yours out now"
         found.append(({"action": "give"}, why))
     due = _due_elsewhere(world, me)
-    if due and any(name in (c["a"], c["b"]) for c in world["conversations"]):
+    talking = any(name in (c["a"], c["b"]) for c in world["conversations"])
+    if due and due["villager"]:  # find them; talking, say goodbye and go
+        why = f"your plan has you see {due['villager']} at {hhmm(due['minute'])}"
+        kind = "goodbye" if talking else "find"
+        found.append(({"action": kind, "villager": due["villager"]}, why))
+    elif due and talking:  # not talking, it simply moves: the places are listed
         where = "home" if due["place"] == "home" else label(due["place"])
         at = "home" if due["place"] == "home" else f"at the {where}"
         why = f"your plan has you {at} at {hhmm(due['minute'])}"
-        found.append(({"action": "goodbye", "text": "…", "place": where}, why))
+        found.append(({"action": "goodbye", "place": where}, why))
     for v in world["villagers"]:
         if (
             v is not me
@@ -91,15 +96,19 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
 
 
 def _due_elsewhere(world: dict[str, Any], me: dict[str, Any]) -> dict[str, Any] | None:
-    """Today's plan entry for now or the next half hour, when it is somewhere else."""
+    """Today's plan entry for now or the next half hour, when it is somewhere else or someone
+    not next to the villager."""
     plan, tick = me["plan"], world["tick"]
     if not plan or plan["day"] != clock(tick)[0]:
         return None
     soon = minute_of_day(tick) + DUE_SOON
-    entries = [e for e in plan["entries"] if e["place"] and e["minute"] <= soon]
+    entries = [e for e in plan["entries"] if (e["place"] or e["villager"]) and e["minute"] <= soon]
     if not entries:
         return None
     entry = entries[-1]
+    if entry["villager"]:
+        other = _villager(world, entry["villager"])
+        return None if adjacent((me["x"], me["y"]), (other["x"], other["y"])) else entry
     if entry["place"] == "home":
         return None if (me["x"], me["y"]) == door(me["name"]) else entry
     if entry["place"] == "site":
