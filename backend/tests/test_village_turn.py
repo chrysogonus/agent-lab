@@ -529,8 +529,9 @@ def test_in_autumn_a_carried_basket_is_meant_for_the_stalls() -> None:
     assert "Take your basket" not in facts  # M14: the hint left; what you can do says it
     sx, sy = label_cell("square")
     villager_at_square = world_with(tick=_at(15, 9), Greta={**at(sx, sy), "basket": "vegetables"})
-    assert '- {"action": "give"}: set out your vegetables on the festival stalls' in observation(
-        villager_at_square, "Greta"
+    assert (
+        '- {"action": "give"}: the festival stalls still lack vegetables: set yours out now'
+        in observation(villager_at_square, "Greta")
     )
     summer = observation(world_with(tick=_at(8, 9), Greta={"basket": "vegetables"}), "Greta")
     assert "You carry a basket of vegetables." in summer and "festival stalls" not in summer
@@ -798,3 +799,10 @@ def test_finding_someone_next_to_you_is_a_wait_with_a_hint() -> None:
         {"action": "wait"},
         'Jonas is right next to you; say what you want: {"action": "say", "to": "Jonas", ...}',
     )
+
+
+def test_on_the_building_site_the_observation_says_so() -> None:
+    """The M12 hints said it; without them a villager at the site thought it was elsewhere."""
+    world = with_project("trees_square")
+    world["villagers"][3] |= at(18, 10)
+    assert "\nYou are at the building site.\n" in observation(world, "Lina")

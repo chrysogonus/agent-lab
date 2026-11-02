@@ -9,7 +9,7 @@ from agent_lab.village.turn import parse_action
 
 
 def world_of(**fixture: Any) -> dict[str, Any]:
-    return build_world({"day": 20, "time": "10:00", **fixture})
+    return build_world({"day": 20, "time": "10:00"} | fixture)
 
 
 def actions(world: dict[str, Any], name: str) -> list[dict[str, Any]]:
@@ -75,6 +75,10 @@ def test_buy_what_the_trader_has_and_the_project_needs() -> None:
 
 def test_give_onto_the_stalls_on_the_square() -> None:
     world = world_of(villagers={"Jonas": {"at": "square", "carrying": "fish"}})
+    assert can_do(world, "Jonas") == [
+        ({"action": "give"}, "the festival stalls still lack fish: set yours out now")
+    ]
+    world["stalls"]["fish"] = 1
     assert can_do(world, "Jonas") == [
         ({"action": "give"}, "set out your fish on the festival stalls")
     ]
@@ -151,7 +155,9 @@ def test_every_listed_answer_is_accepted() -> None:
         listed = actions(world, name)
         assert listed
         for action in listed:
-            answer = action | ({"text": "Hello there"} if action["action"] == "say" else {})
+            answer = action | (
+                {"text": "Hello there"} if action["action"] in ("say", "goodbye") else {}
+            )
             assert parse_action(json.dumps(answer), world, name)[1] is None, action
 
 
@@ -166,3 +172,25 @@ def test_the_lines() -> None:
         "What you can do here:",
         "- nothing here; walk somewhere with move, or find someone",
     ]
+
+
+def test_a_talker_due_elsewhere_by_its_plan_is_offered_to_leave() -> None:
+    plan = [
+        {"time": "10:00", "place": "market", "purpose": "sell flowers"},
+        {"time": "11:00", "place": "flower garden", "purpose": "water the beds"},
+    ]
+    world = world_of(
+        time="10:40",
+        villagers={"Lina": {"at": [23, 7], "plan": plan}, "Jonas": {"at": [22, 7]}},
+        conversations=[["Jonas", "Lina", 4]],
+    )
+    leave = (
+        {"action": "goodbye", "text": "…", "place": "flower garden"},
+        "your plan has you at the flower garden at 11:00",
+    )
+    assert leave in can_do(world, "Lina")
+    world["tick"] -= 2  # 10:20: not yet due
+    assert leave not in can_do(world, "Lina")
+    world["tick"] += 2
+    world["conversations"] = []  # not talking: it simply goes
+    assert leave not in can_do(world, "Lina")

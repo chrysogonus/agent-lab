@@ -181,6 +181,8 @@ def where_text(world: dict[str, Any], v: Villager) -> str:
     here = place_at(v["x"], v["y"])
     if v["asleep"]:
         return "You are asleep at home."
+    if site_at(world, cell(v)):  # some sites lie on a place: the market, the town hall
+        return "You are at the building site" + (f", at the {label(here)}." if here else ".")
     if here:
         return f"You are at the {label(here)}."
     if cell(v) == door(v["name"]):

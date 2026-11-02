@@ -11,9 +11,19 @@ from typing import Any
 from agent_lab.village.build import needs_left, site_at
 from agent_lab.village.trade import BUILDING_GOODS, buy_refusal, carried_text
 from agent_lab.village.work import give_refusal, goods_at, work_refusal
-from agent_lab.village.world import adjacent, label, listed, place_at
+from agent_lab.village.world import (
+    adjacent,
+    clock,
+    door,
+    hhmm,
+    label,
+    listed,
+    minute_of_day,
+    place_at,
+)
 
 MOST = 6  # entries shown: the list stays short
+DUE_SOON = 30  # minutes: a talker whose plan takes it elsewhere this soon is offered to leave
 
 Entry = tuple[dict[str, Any], str]
 
@@ -53,12 +63,19 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
             why = f"trade your basket for a load; the trader has {left} left"
             found.append(({"action": "buy", "goods": wanted}, why))
     if goods and give_refusal(world, name, None) is None:
-        why = (
-            f"set down your {carried_text(goods)} at the building site"
-            if at_site
-            else f"set out your {goods} on the festival stalls"
-        )
+        if at_site:
+            why = f"set down your {carried_text(goods)} at the building site"
+        elif world["stalls"][goods]:
+            why = f"set out your {goods} on the festival stalls"
+        else:  # as the M11 hint said it: without it, baskets stayed in hand (M14 checks)
+            why = f"the festival stalls still lack {goods}: set yours out now"
         found.append(({"action": "give"}, why))
+    due = _due_elsewhere(world, me)
+    if due and any(name in (c["a"], c["b"]) for c in world["conversations"]):
+        where = "home" if due["place"] == "home" else label(due["place"])
+        at = "home" if due["place"] == "home" else f"at the {where}"
+        why = f"your plan has you {at} at {hhmm(due['minute'])}"
+        found.append(({"action": "goodbye", "text": "…", "place": where}, why))
     for v in world["villagers"]:
         if (
             v is not me
@@ -71,6 +88,23 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
                 ({"action": "say", "to": v["name"], "text": "…"}, f"{v['name']} is next to you")
             )
     return found[:MOST]
+
+
+def _due_elsewhere(world: dict[str, Any], me: dict[str, Any]) -> dict[str, Any] | None:
+    """Today's plan entry for now or the next half hour, when it is somewhere else."""
+    plan, tick = me["plan"], world["tick"]
+    if not plan or plan["day"] != clock(tick)[0]:
+        return None
+    soon = minute_of_day(tick) + DUE_SOON
+    entries = [e for e in plan["entries"] if e["place"] and e["minute"] <= soon]
+    if not entries:
+        return None
+    entry = entries[-1]
+    if entry["place"] == "home":
+        return None if (me["x"], me["y"]) == door(me["name"]) else entry
+    if entry["place"] == "site":
+        return None if site_at(world, (me["x"], me["y"])) else entry
+    return None if place_at(me["x"], me["y"]) == entry["place"] else entry
 
 
 def can_do_lines(world: dict[str, Any], name: str) -> list[str]:
