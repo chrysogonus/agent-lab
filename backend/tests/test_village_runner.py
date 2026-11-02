@@ -2176,7 +2176,10 @@ async def test_a_meeting_hilde_does_not_come_to_is_called_off(tmp_path: Path) ->
     v.world["day_record"] = {"day": 3, "items": []}
     proposed_meeting(v)
     put(v, "Greta", *TOWN_HALL[0])
-    await steps(v, 4)
+    await steps(v, 4)  # 17:30: Hilde may still be on her way
+    assert v.world["meeting"]["outcome"] is None
+    put(v, "Hilde", 1, 20)  # far away, not coming
+    await steps(v, 6)  # 18:30
     meeting = v.world["meeting"]
     assert meeting["outcome"] == "called off: Hilde did not come"
     assert meeting["votes"]["Greta"]["key"] == "paint_town_hall"  # the vote stays on record
@@ -2556,14 +2559,39 @@ def test_meeting_answers_count_only_on_their_day(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_at_five_everyone_away_is_called_to_the_meeting_once(tmp_path: Path) -> None:
+async def test_at_half_past_four_everyone_away_is_called_to_the_meeting_once(
+    tmp_path: Path,
+) -> None:
     v, _ = village_for(tmp_path)
-    morning(v, tick_at(16, 50, day=3))
+    morning(v, tick_at(16, 20, day=3))
     proposed_meeting(v)
-    put(v, "Hilde", *TOWN_HALL[0])
+    put(v, "Jonas", 1, 1)
     put(v, "Lina", *TOWN_HALL[1])  # already there
-    await steps(v, 2)  # 17:00 and 17:10
-    called = "The town hall meeting is starting at the town hall: come and vote."
+    await steps(v, 2)  # 16:30 and 16:40
+    called = (
+        "The town hall meeting starts at 17:00: go to the town hall now to vote "
+        '({"action": "move", "place": "town hall"}; if you are talking, '
+        '{"action": "goodbye", "place": "town hall"}).'
+    )
     assert texts(v, "Jonas", "meeting") == [called] and texts(v, "Greta", "meeting") == [called]
-    assert texts(v, "Hilde", "meeting") == []
-    assert texts(v, "Lina", "meeting") == ["You voted for Paint the town hall."]  # no call
+    assert texts(v, "Hilde", "meeting") == [
+        "Your town hall meeting starts at 17:00: go to the town hall now to chair it "
+        '({"action": "move", "place": "town hall"}; if you are talking, '
+        '{"action": "goodbye", "place": "town hall"}).'
+    ]
+    assert texts(v, "Lina", "meeting") == []  # already there
+
+
+@pytest.mark.anyio
+async def test_the_meeting_waits_for_hilde_until_half_past_six(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, {"Greta:vote": [vote_for("A market stand")]})
+    morning(v, tick_at(17, 20, day=3))
+    proposed_meeting(v)
+    put(v, "Greta", *TOWN_HALL[1])
+    await steps(v, 3)  # 17:50, no Hilde yet
+    assert v.world["meeting"]["outcome"] is None and meetings_of(llm, "decision") == []
+    put(v, "Hilde", *TOWN_HALL[0])  # she arrives late
+    put(v, "Lina", *TOWN_HALL[2])  # and so does Lina, in time to vote
+    await steps(v, 2)
+    meeting = meeting_now(v)
+    assert meeting["outcome"] == "decided" and sorted(meeting["votes"]) == ["Greta", "Lina"]

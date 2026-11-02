@@ -40,6 +40,8 @@ from agent_lab.village.chronicle import (
     weather_slips,
 )
 from agent_lab.village.meeting import (
+    HILDE_WAITED,
+    MEETING_CALL,
     MEETING_CLOSES,
     MEETING_OPENS,
     decision_prompt,
@@ -1135,9 +1137,9 @@ class Village:
             return
         if meeting["outcome"]:
             return
-        if minute >= MEETING_OPENS and not meeting.get("called"):
+        if minute >= MEETING_CALL and not meeting.get("called"):
             self._call_to_meeting(meeting)
-        if MEETING_OPENS <= minute <= MEETING_CLOSES:
+        if MEETING_OPENS <= minute <= HILDE_WAITED:  # everyone who comes before she decides
             for v in self.world["villagers"]:
                 name = v["name"]
                 here = place_at(v["x"], v["y"]) == "town_hall"
@@ -1157,7 +1159,8 @@ class Village:
         if minute < MEETING_CLOSES or self.meetings:
             return
         if "Hilde" not in meeting["present"]:
-            self._end_meeting(meeting, "called off: Hilde did not come")
+            if minute >= HILDE_WAITED:  # she may still be on her way until then
+                self._end_meeting(meeting, "called off: Hilde did not come")
         elif meeting["kind"] == "vote":
             if meeting["present"] == ["Hilde"]:
                 self._note("Nobody but Hilde came to the town hall meeting.")
@@ -1168,19 +1171,21 @@ class Village:
             self._start_meeting_run("tasks", self._assign(meeting))
 
     def _call_to_meeting(self, meeting: dict[str, Any]) -> None:
-        """At 17:00 everyone up and away hears the meeting begin (only Hilde and Greta came on
-        the real model without it), as for the festival."""
+        """At 16:30 everyone up and away is called to the town hall, with the action to take:
+        on the real model villagers stayed in their talks or came too late without it."""
         meeting["called"] = True
-        why = (
-            "come and vote" if meeting["kind"] == "vote" else "come and hear how the building goes"
+        why = "vote" if meeting["kind"] == "vote" else "hear how the building goes"
+        how = (
+            '({"action": "move", "place": "town hall"}; if you are talking, '
+            '{"action": "goodbye", "place": "town hall"}).'
         )
         for v in self.world["villagers"]:
             if v["asleep"] or v["bedtime"] or place_at(v["x"], v["y"]) == "town_hall":
                 continue
-            if v["name"] == "Hilde":
-                text = "Your town hall meeting is starting at the town hall: go and chair it."
-            else:
-                text = f"The town hall meeting is starting at the town hall: {why}."
+            hilde = v["name"] == "Hilde"
+            whose, goal = ("Your", "chair it") if hilde else ("The", why)
+            text = f"{whose} town hall meeting starts at 17:00: go to the town hall now to {goal}"
+            text += f" {how}"
             self._event(v, "meeting", text)
             self._trigger(v, "meeting")
 

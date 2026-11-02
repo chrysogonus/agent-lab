@@ -124,7 +124,7 @@ the reason, and the meeting still ends with a decision or with none.
    and the day record and the chronicle note it.
 6. **Given** a meeting where only Hilde is at the town hall, **When** it starts, **Then** she
    decides alone, and the record says nobody else came; a meeting Hilde does not come to by
-   17:30 is called off, and the record says so.
+   18:30 is called off, and the record says so.
 7. **Given** a project still unfinished on a meeting day, **When** the meeting is held,
    **Then** nothing new is proposed: Hilde reviews the progress and may hand out the work again.
 8. **Given** the villager panel and the chronicle, **When** the owner looks after a meeting,
@@ -198,8 +198,9 @@ building without loads, or at another place, is refused with the reason.
 
 - **A load at bedtime.** A villager carrying a load goes to bed and keeps it overnight. A
   villager carries one thing at a time: a basket or a load.
-- **Late to the meeting.** 17:00 is before everyone's bedtime. A villager still walking to the
-  town hall at 17:00 can vote if it arrives within half an hour.
+- **Late to the meeting.** 17:00 is before everyone's bedtime. Everyone away is called at 16:30
+  (the walk can take half an hour). A villager arriving before Hilde decides still votes; Hilde
+  decides from 17:30 once she is there.
 - **Festival day.** A meeting day that is also the festival day moves the meeting to the next
   day.
 - **Bad proposals.** Hilde proposes a project that is built already or not in the catalogue →
@@ -210,7 +211,7 @@ building without loads, or at another place, is refused with the reason.
 - **A bad decision.** Hilde's decision names nothing she proposed → the proposal with the most
   valid votes is built (ties: her order); with no valid votes, nothing is decided until the next
   meeting. Either way the reason is recorded.
-- **Hilde stays away.** Hilde is not at the town hall between 17:00 and 17:30 → the meeting is
+- **Hilde stays away.** Hilde has not come to the town hall by 18:30 → the meeting is
   called off; the votes cast are kept on record, and the next meeting is three days later.
 - **An empty catalogue.** Everything is built → the meeting is held without proposals and the
   chronicle says so.
@@ -249,8 +250,9 @@ building without loads, or at another place, is refused with the reason.
   a reason of at most 120 characters; projects not in the catalogue or already built are dropped.
 - **FR-005**: On a meeting day, every villager's plan and observations MUST mention the meeting at
   17:00 at the town hall and the proposals.
-- **FR-006**: At 17:00 every awake villager but Hilde at the town hall, or arriving there within
-  30 minutes, MUST get one vote run whose valid answer names one proposal and a reason; then Hilde's decision
+- **FR-006**: From 17:00 every awake villager but Hilde at the town hall, or arriving there before
+  Hilde decides (from 17:30, once she is there; called off without her by 18:30), MUST get one
+  vote run whose valid answer names one proposal and a reason; then Hilde's decision
   run MUST see the proposals and votes and name one proposal as the project built next, with a
   reason; it may differ from the vote, and then every villager is told that Hilde went against
   the vote and why, and the day record and the chronicle note it.

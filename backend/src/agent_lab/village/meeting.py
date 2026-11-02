@@ -20,8 +20,10 @@ from agent_lab.village.seasons import WEATHER_TEXT, date_text, festival_in, weat
 from agent_lab.village.trade import BUILDING_GOODS, carried_text, goods_named, trader_text
 from agent_lab.village.world import VILLAGERS, clock, hhmm, label, listed, villager_named
 
+MEETING_CALL = 16 * 60 + 30  # everyone away is called: the walk can take half an hour
 MEETING_OPENS = 17 * 60
-MEETING_CLOSES = 17 * 60 + 30  # who arrives by then still votes; then Hilde decides
+MEETING_CLOSES = 17 * 60 + 30  # Hilde decides from then on, once she is there
+HILDE_WAITED = 18 * 60 + 30  # without her by then, the meeting is called off
 REASON_TEXT = 120
 PROPOSALS = 3
 MEMORIES_SHOWN = 8

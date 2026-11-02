@@ -220,8 +220,11 @@
     load the project still needs is told "Take your load of wood to the building site (…) and
     set it down there" (or, at the site, "set down your load … now with {"action": "give"}"),
     and one at a site holding loads, not yet building, "build here with {"action": "work"}";
-    at 17:00 every villager up and away from the town hall gets a `meeting` event and trigger.
-    Without them only one load was set down in six days and two villagers came to the meeting.
+    at 16:30 every villager up and away from the town hall gets a `meeting` event and trigger
+    with the move to make (or the goodbye, when talking). Without them only one load was set
+    down in six days and two villagers came to the meeting. A second run showed Hilde held in a
+    talk at 17:00 and, another day, too far away to arrive by 17:30: the call moved to 16:30,
+    and the meeting waits for Hilde until 18:30 (`HILDE_WAITED`) before it is called off.
   - **Asking again**: an unusable proposal or work-plan answer (a run that failed, often JSON
     missing its last brace on the real model, or nothing usable in it) is asked for once more;
     the first run records the reason with "; asked again". A missed proposal would cost the
