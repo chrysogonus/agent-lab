@@ -273,7 +273,7 @@ the result with the health numbers, and leaves the owner's village untouched.
 - **SC-003**: The shipped turn checks (at least 12) run 10 times each on the real model in under
   15 minutes and report a pass rate per check (manual check).
 - **SC-004**: The shipped scenarios run 5 times each on the real model, and report pass rates and
-  every run's health (manual check). The owner's village is byte for byte the same before and
+  every run's health (manual check). The owner's village state is unchanged before and
   after.
 - **SC-005**: On the real model, running the turn checks twice without any change gives pass
   rates within 20 percentage points of each other for at least 80% of the checks. This shows
@@ -293,7 +293,7 @@ the result with the health numbers, and leaves the owner's village untouched.
   and the scenario's starting village; memories and learnings come from the starting village,
   not from the owner's village.
 - **Fixed conditions.** Conditions and expectations are fixed checks written with the scenario
-  or check. Judging free text (in character, coherent, faithful) with a stronger model is left
-  for later: the lab reaches only local and OpenAI models today.
+  or check. Judging free text (in character, coherent, faithful) with a stronger judge model
+  and a rubric is left for later.
 - **Where results show.** Results are shown on the command line and kept. Only village health
   appears in the village view in this milestone.
