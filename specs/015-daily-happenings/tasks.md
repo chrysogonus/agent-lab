@@ -31,7 +31,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 1: Setup — the mixin
 
-- [ ] T001 Create backend/src/agent_lab/village/happening_runs.py with an empty `class
+- [X] T001 Create backend/src/agent_lab/village/happening_runs.py with an empty `class
   HappeningRuns`, a mixin declaring what it uses from `Village`, and make `Village(MeetingRuns,
   HappeningRuns)` in backend/src/agent_lab/village/runner.py.
   - Attributes: `world`, `store`, `resetting`.
@@ -42,7 +42,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 2: Foundational — world version 8
 
-- [ ] T002 World version 8.
+- [X] T002 World version 8.
   - backend/src/agent_lab/village/world.py:
     - `VERSION = 8`;
     - `happenings: []`, `boat: None` and `harvest.lake: 0`;

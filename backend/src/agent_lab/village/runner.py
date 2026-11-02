@@ -35,6 +35,7 @@ from agent_lab.village.chronicle import (
     retry_prompt,
     weather_slips,
 )
+from agent_lab.village.happening_runs import HappeningRuns
 from agent_lab.village.health import trail_row
 from agent_lab.village.intention import described, ended_text, next_step, start, started_text
 from agent_lab.village.meeting import (
@@ -146,7 +147,7 @@ class StepConflict(Exception):
     """Step while the village runs or a step is in progress."""
 
 
-class Village(MeetingRuns):
+class Village(MeetingRuns, HappeningRuns):
     def __init__(
         self,
         *,
@@ -183,7 +184,7 @@ class Village(MeetingRuns):
         stored = self.store.load_village()
         if stored and stored.get("version") == VERSION:
             return stored
-        if stored and stored.get("version") in (2, 3, 4, 5, 6):  # an M7 to M13 world keeps going
+        if stored and stored.get("version") in (2, 3, 4, 5, 6, 7):  # an M7 to M14 world keeps going
             world = upgrade(stored)
             self.store.save_village(world)
             return world
@@ -322,7 +323,15 @@ class Village(MeetingRuns):
                     for m in reversed(v["memories"])
                 ],
             }
-            for internal in ("inbox", "triggers", "neighbours", "last_decided", "said", "requests"):
+            for internal in (
+                "inbox",
+                "triggers",
+                "neighbours",
+                "last_decided",
+                "said",
+                "requests",
+                "whispers",
+            ):
                 del v[internal]
         internals = ("conversations", "talked_out", "version", "reflection_agent_id")
         internals += ("tended", "day_record", "festival", "chronicler_agent_id")

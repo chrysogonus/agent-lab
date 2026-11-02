@@ -305,7 +305,7 @@ def villager_named(text: str) -> str | None:
     return named[0] if len(named) == 1 else None
 
 
-VERSION = 7  # the world's shape: 2 to 6 are upgraded in place, anything else starts fresh
+VERSION = 8  # the world's shape: 2 to 7 are upgraded in place, anything else starts fresh
 
 
 def new_world() -> dict[str, Any]:
@@ -339,6 +339,8 @@ def new_world() -> dict[str, Any]:
                 "said": [],
                 "intention": None,  # what it set out to do, until done, given up or replaced (M14)
                 "requests": [],  # goods asked of it in the last hour, so it may give them (M14)
+                "keepsakes": [],  # traded from the peddler, not carried (M15)
+                "whispers": [],  # the owner's lines to it, and when it heard them (M15)
             }
         )
     return {
@@ -360,13 +362,15 @@ def new_world() -> dict[str, Any]:
         "chronicle": [],
         "chronicler_agent_id": None,
         "stalls": {"fish": 0, "vegetables": 0, "flowers": 0},
-        "harvest": {"pier": 0, "fields": 0, "flower_garden": 0},
+        "harvest": {"pier": 0, "fields": 0, "flower_garden": 0, "lake": 0},
         "planner_agent_id": None,
         "trader": None,
         "meeting": None,
         "project": None,
         "built": [],
         "meeting_agent_id": None,
+        "happenings": [],  # today's (M15)
+        "boat": None,  # a boat trip under way (M15)
         "born": time.time(),  # M13: village health counts runs from here (none before a Reset)
     }
 
@@ -375,8 +379,9 @@ def upgrade(world: dict[str, Any]) -> dict[str, Any]:
     """An older world brought to the current shape, so the village keeps going: version 2 (M7)
     gets empty memory (M8), version 3 the seasons with places as the season finds them (M10),
     version 4 no plans, empty hands and empty stalls (M11), version 5 no trader, meeting or
-    project and nothing built (M12), with nobody left standing on the new building plots, and
-    version 6 no intentions and no requests (M14)."""
+    project and nothing built (M12), with nobody left standing on the new building plots,
+    version 6 no intentions and no requests (M14), and version 7 no happenings, boat trip,
+    keepsakes or whispers (M15)."""
     if world["version"] == 2:
         for v in world["villagers"]:
             v |= {"memories": [], "learnings": [], "views": {}}
@@ -416,6 +421,11 @@ def upgrade(world: dict[str, Any]) -> dict[str, Any]:
             "built": [],
             "meeting_agent_id": None,
         }
+    if world["version"] == 6:
+        for v in world["villagers"]:
+            v |= {"intention": None, "requests": []}
+        world["version"] = 7
     for v in world["villagers"]:
-        v |= {"intention": None, "requests": []}
-    return world | {"version": VERSION}
+        v |= {"keepsakes": [], "whispers": []}
+    world["harvest"]["lake"] = 0
+    return world | {"version": VERSION, "happenings": [], "boat": None}

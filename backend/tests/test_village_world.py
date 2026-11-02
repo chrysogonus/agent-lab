@@ -133,7 +133,7 @@ def test_sleeping_hours_and_routines() -> None:
 def test_new_world_has_everyone_asleep_at_home() -> None:
     world = new_world()
     assert (world["version"], world["tick"], world["running"]) == (VERSION, 0, False)
-    assert VERSION == 7
+    assert VERSION == 8
     assert world["interval"] == 5
     assert world["conversations"] == world["talked_out"] == world["log"] == []
     names = [v["name"] for v in world["villagers"]]
@@ -144,8 +144,11 @@ def test_new_world_has_everyone_asleep_at_home() -> None:
         assert v["memories"] == v["learnings"] == [] and v["views"] == {}
         assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
         assert v["intention"] is None and v["requests"] == []
+        assert v["keepsakes"] == v["whispers"] == []
+    assert world["happenings"] == [] and world["boat"] is None
+    assert world["harvest"]["lake"] == 0
     assert world["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
-    assert world["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
+    assert world["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0, "lake": 0}
     assert world["planner_agent_id"] is None
     assert world["trader"] is world["meeting"] is world["project"] is None
     assert world["built"] == [] and world["meeting_agent_id"] is None
@@ -168,7 +171,7 @@ def test_a_version_4_world_gets_plans_baskets_and_stalls() -> None:
     for v in upgraded["villagers"]:
         assert v["plan"] is v["basket"] is v["working"] is None and v["said"] == []
     assert upgraded["stalls"] == {"fish": 0, "vegetables": 0, "flowers": 0}
-    assert upgraded["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0}
+    assert upgraded["harvest"] == {"pier": 0, "fields": 0, "flower_garden": 0, "lake": 0}
     assert upgraded["planner_agent_id"] is None
 
 
@@ -228,3 +231,19 @@ def test_hilde_plans_the_festival_only_in_autumn() -> None:
     assert festival_lines(summer, "Hilde") == []
     assert OLD_PERSONAS["Hilde"][0].startswith("You are Hilde, the mayor.")
     assert "harvest festival" in OLD_PERSONAS["Hilde"][0]
+
+
+def test_a_version_7_world_gets_happenings_the_boat_and_whispers() -> None:
+    world = new_world()
+    for v in world["villagers"]:
+        del v["keepsakes"], v["whispers"]
+    del world["happenings"], world["boat"], world["harvest"]["lake"]
+    world |= {"version": 7, "tick": 144 * 66}
+    world["villagers"][2]["intention"] = {"kind": "go"}
+    upgraded = upgrade(world)
+    assert upgraded["version"] == VERSION
+    assert upgraded["happenings"] == [] and upgraded["boat"] is None
+    assert upgraded["harvest"]["lake"] == 0
+    for v in upgraded["villagers"]:
+        assert v["keepsakes"] == v["whispers"] == []
+    assert upgraded["villagers"][2]["intention"] == {"kind": "go"}  # M14 state is kept
