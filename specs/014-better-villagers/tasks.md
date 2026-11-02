@@ -33,7 +33,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 1: Setup — split the runner (behaviour unchanged)
 
-- [ ] T001 Move the meeting runs out of backend/src/agent_lab/village/runner.py into new
+- [X] T001 Move the meeting runs out of backend/src/agent_lab/village/runner.py into new
   backend/src/agent_lab/village/meeting_runs.py, as `class MeetingRuns`, a mixin that `Village`
   inherits.
   - Methods to move: `_meeting`, `_call_to_meeting`, `_open_meeting`, `_end_meeting`,
