@@ -51,6 +51,7 @@ def new_run(
     *,
     village_tick: int | None = None,
     villager: str | None = None,
+    eval_id: str | None = None,
 ) -> tuple[Run, BaseModel, AgentSpec, LLMClient]:
     spec, config, name, client = resolve(agent_id, store, models)
     run = Run(
@@ -66,6 +67,7 @@ def new_run(
         template_id=spec.id,
         village_tick=village_tick,
         villager=villager,
+        eval_id=eval_id,
     )
     return run, config, spec, client
 

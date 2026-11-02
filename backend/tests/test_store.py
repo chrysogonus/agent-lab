@@ -213,3 +213,73 @@ def test_village_state_round_trips(tmp_path: Path) -> None:
     store.save_village({"tick": 1})
     store.save_village({"tick": 2, "villagers": []})
     assert Store(tmp_path / "lab.db").load_village() == {"tick": 2, "villagers": []}
+
+
+def test_eval_runs_stay_out_of_the_lists(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_run(make_run("normal", 1.0))
+    store.create_run(make_run("check", 2.0).model_copy(update={"eval_id": "r1"}))
+    turn = make_run("turn", 3.0).model_copy(update={"village_tick": 7, "villager": "Jonas"})
+    store.create_run(turn)
+    check_turn = turn.model_copy(update={"run_id": "check-turn", "eval_id": "r1"})
+    store.create_run(check_turn)
+    assert [r.run_id for r in store.list_runs()] == ["normal"]
+    assert [r.run_id for r in store.list_turns("Jonas")] == ["turn"]
+    found = store.get_run("check-turn")
+    assert found is not None and found.eval_id == "r1"
+
+
+def test_the_day_trail(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    for tick in (10, 11, 12, 300):
+        store.add_trail(tick, {"v": [], "tick": tick})
+    store.add_trail(11, {"v": [], "tick": 11, "again": True})  # a restarted tick
+    assert [t for t, _ in store.trail(10, 12)] == [10, 11, 12]
+    assert store.trail(11, 11)[0][1]["again"] is True
+    store.prune_trail(before_tick=12)
+    assert [t for t, _ in store.trail(0, 1000)] == [12, 300]
+    store.clear_trail()
+    assert store.trail(0, 1000) == []
+
+
+def test_village_runs_reads_the_small_columns(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    for run_id, started, tick, villager, eval_id in [
+        ("old", 1.0, 5, "Jonas", None),
+        ("a", 10.0, 5, "Jonas", None),
+        ("b", 11.0, 9, "Lina", None),
+        ("late", 12.0, 50, "Lina", None),
+        ("check", 13.0, 6, "Greta", "r1"),
+    ]:
+        run = make_run(run_id, started).model_copy(
+            update={"village_tick": tick, "villager": villager, "eval_id": eval_id}
+        )
+        store.create_run(run)
+    store.set_village_action("a", {"action": "wait", "reason": "x"})
+    rows = store.village_runs(0, 10, since=5.0)
+    assert [r["run_id"] for r in rows] == ["a", "b"]
+    assert rows[0] == {
+        "run_id": "a",
+        "villager": "Jonas",
+        "village_tick": 5,
+        "status": "running",
+        "village_action": {"action": "wait", "reason": "x"},
+        "started_at": 10.0,
+    }
+
+
+def test_the_prompt_of_a_days_chronicle(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    for run_id, started, day, status in [
+        ("c1", 1.0, 3, "completed"),
+        ("c2", 2.0, 3, "completed"),
+        ("c3", 3.0, 4, "error"),
+    ]:
+        run = make_run(run_id, started).model_copy(
+            update={"prompt": f"prompt {run_id}", "status": status, "village_tick": 400}
+        )
+        store.create_run(run)
+        store.set_village_action(run_id, {"action": "chronicle", "day": day, "title": "t"})
+    assert store.chronicle_prompt_of(3, since=0) == "prompt c2"  # the newest one counts
+    assert store.chronicle_prompt_of(4, since=0) is None  # failed
+    assert store.chronicle_prompt_of(3, since=5.0) is None

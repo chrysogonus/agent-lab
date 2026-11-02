@@ -33,7 +33,7 @@ test first; runner tests pass `move_gap=0`.
 
 ## Phase 1: Foundational — store, trail, born, fixtures
 
-- [ ] T001 backend/src/agent_lab/store.py (data-model.md "Store"):
+- [X] T001 backend/src/agent_lab/store.py (data-model.md "Store"):
   - `runs.eval_id TEXT NULL`, added in place like `_RUN_COLUMNS_SINCE_M3`; `create_run` stores
     `run.eval_id` (new optional field on `Run`);
   - `list_runs` and `list_turns` add `AND runs.eval_id IS NULL`;
@@ -57,7 +57,7 @@ test first; runner tests pass `move_gap=0`.
   - `chronicle_prompt_of`.
 
   Requirements: FR-001, FR-013.
-- [ ] T002 Village changes:
+- [X] T002 Village changes:
   - backend/src/agent_lab/village/world.py: `new_world()` adds `born: time.time()`.
   - backend/src/agent_lab/village/health.py (new): `trail_row(world, states) -> dict`, which
     gives `{"v": [[name, x, y, place, state, carrying], …], "project": key | null, "used": int}`.
@@ -76,7 +76,7 @@ test first; runner tests pass `move_gap=0`.
   - a world without `born` still loads (no version bump).
 
   Requirement: FR-001.
-- [ ] T003 [P] New backend/src/agent_lab/village/evals/__init__.py and fixtures.py (research §4,
+- [X] T003 [P] New backend/src/agent_lab/village/evals/__init__.py and fixtures.py (research §4,
   data-model.md "Fixture"): `build_world(fixture) -> world` from `new_world()` with:
   - `day`, `time`;
   - per villager:

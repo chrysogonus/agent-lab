@@ -39,6 +39,7 @@ from agent_lab.village.chronicle import (
     retry_prompt,
     weather_slips,
 )
+from agent_lab.village.health import trail_row
 from agent_lab.village.meeting import (
     HILDE_WAITED,
     MEETING_CALL,
@@ -132,6 +133,7 @@ from agent_lab.village.world import (
 )
 
 CHANNEL = "village"  # bus channel of the village stream
+TRAIL_DAYS = 28  # village days of the day trail kept, as the chronicle
 EVENTS_KEPT = 10
 LOG_KEPT = 8
 FAILED_TICKS_PAUSE = 3
@@ -328,6 +330,7 @@ class Village:
         internals = ("conversations", "talked_out", "version", "reflection_agent_id")
         internals += ("tended", "day_record", "festival", "chronicler_agent_id")
         internals += ("harvest", "planner_agent_id", "meeting_agent_id")
+        world.pop("born", None)
         for internal in internals:
             del world[internal]
         year, season, day_of_season = date(day)
@@ -555,6 +558,7 @@ class Village:
                 v |= {"asleep": False, "beliefs": {}}  # a new day: yesterday's sightings are old
                 if self.world["day_record"] is None:  # the first to wake opens the day's record
                     day = clock(self.world["tick"])[0]
+                    self.store.prune_trail(self.world["tick"] - TRAIL_DAYS * 144)
                     self.world["day_record"] = {"day": day, "items": []}
                     for news in end_day(self.world, day - 1) if day > 1 else []:
                         self._note(f"Overnight: {news}")  # yesterday's work shows by morning
@@ -1442,6 +1446,7 @@ class Village:
             self._finish(finished)
         self._festival_guests()
         self._meeting()
+        self.store.add_trail(world["tick"], trail_row(world, self._state_of))
         if self.outcomes:
             all_failed = not any(self.outcomes)
             world["failed_ticks"] = world["failed_ticks"] + 1 if all_failed else 0
@@ -1508,6 +1513,7 @@ class Village:
             shared += ("meeting_agent_id",)
             agent_ids = {k: self.world[k] for k in shared}
             self.world = new_world() | agent_ids
+            self.store.clear_trail()
             self.outcomes = []
             for v in self.world["villagers"]:
                 v["agent_id"] = agents.get(v["name"])

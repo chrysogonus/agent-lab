@@ -66,6 +66,10 @@ CREATE TABLE IF NOT EXISTS village (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     state TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS village_trail (
+    tick INTEGER PRIMARY KEY,
+    row TEXT NOT NULL
+);
 """
 
 # Columns added after M2; older databases get them in place, their runs keep NULL.
@@ -75,6 +79,7 @@ _RUN_COLUMNS_SINCE_M3 = {
     "village_tick": "INTEGER",  # M6: a villager's turn belongs to this tick
     "villager": "TEXT",
     "village_action": "TEXT",  # JSON: the action applied for the turn, with any wait reason
+    "eval_id": "TEXT",  # M13: a run made by a turn check, kept out of the run and turn lists
 }
 
 _SPAN_JSON = ("input", "output", "attributes")
@@ -115,6 +120,7 @@ class Run(BaseModel):
     village_tick: int | None = None  # set on a villager's turn (M6)
     villager: str | None = None
     village_action: dict[str, Any] | None = None
+    eval_id: str | None = None  # M13: made by a turn check
 
 
 class NameInUse(Exception):
@@ -145,6 +151,7 @@ class Store:
         for column, kind in _RUN_COLUMNS_SINCE_M3.items():
             if column not in columns:
                 self._db.execute(f"ALTER TABLE runs ADD COLUMN {column} {kind}")
+        self._db.execute("CREATE INDEX IF NOT EXISTS runs_by_tick ON runs(village_tick)")
 
     def close(self) -> None:
         self._db.close()
@@ -153,8 +160,8 @@ class Store:
         with self._lock:
             self._db.execute(
                 "INSERT INTO runs (run_id, agent_id, config_version, prompt, status, answer, graph,"
-                " config, started_at, ended_at, agent_name, template_id, village_tick, villager)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " config, started_at, ended_at, agent_name, template_id, village_tick, villager,"
+                " eval_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.run_id,
                     run.agent_id,
@@ -170,6 +177,7 @@ class Store:
                     run.template_id,
                     run.village_tick,
                     run.villager,
+                    run.eval_id,
                 ),
             )
 
@@ -205,7 +213,7 @@ class Store:
         with self._lock:
             rows = self._db.execute(
                 _RUNS_WITH_TOTALS
-                + "WHERE runs.village_tick IS NULL"  # turns are listed per villager
+                + "WHERE runs.village_tick IS NULL AND runs.eval_id IS NULL"  # turns: per villager
                 " GROUP BY runs.run_id ORDER BY runs.started_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
@@ -216,7 +224,7 @@ class Store:
         with self._lock:
             rows = self._db.execute(
                 # Insertion order: the wall clock can step back (e.g. under WSL), rowid cannot.
-                _RUNS_WITH_TOTALS + "WHERE runs.villager=?"
+                _RUNS_WITH_TOTALS + "WHERE runs.villager=? AND runs.eval_id IS NULL"
                 " GROUP BY runs.run_id ORDER BY runs.rowid DESC LIMIT ?",
                 (villager, limit),
             ).fetchall()
@@ -240,6 +248,60 @@ class Store:
                 " ON CONFLICT(id) DO UPDATE SET state=excluded.state",
                 (json.dumps(state),),
             )
+
+    # --- village health (M13) ---
+
+    def add_trail(self, tick: int, row: dict[str, Any]) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO village_trail (tick, row) VALUES (?, ?)",
+                (tick, json.dumps(row)),
+            )
+
+    def trail(self, first_tick: int, last_tick: int) -> list[tuple[int, dict[str, Any]]]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT tick, row FROM village_trail WHERE tick BETWEEN ? AND ? ORDER BY tick",
+                (first_tick, last_tick),
+            ).fetchall()
+        return [(r["tick"], json.loads(r["row"])) for r in rows]
+
+    def prune_trail(self, before_tick: int) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM village_trail WHERE tick < ?", (before_tick,))
+
+    def clear_trail(self) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM village_trail")
+
+    def village_runs(self, first_tick: int, last_tick: int, since: float) -> list[dict[str, Any]]:
+        """The village's runs in a range of ticks, with only what village health needs."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT run_id, villager, village_tick, status, village_action, started_at"
+                " FROM runs WHERE village_tick BETWEEN ? AND ? AND started_at >= ?"
+                " AND eval_id IS NULL ORDER BY rowid",
+                (first_tick, last_tick, since),
+            ).fetchall()
+        found: list[dict[str, Any]] = []
+        for r in rows:
+            run = dict(r)
+            action = run["village_action"]
+            run["village_action"] = json.loads(action) if action is not None else None
+            found.append(run)
+        return found
+
+    def chronicle_prompt_of(self, day: int, since: float) -> str | None:
+        """The prompt of the newest completed chronicle run of a day: the day's happenings."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT prompt FROM runs WHERE status='completed' AND started_at >= ?"
+                " AND eval_id IS NULL AND village_tick IS NOT NULL"
+                " AND json_extract(village_action, '$.action')='chronicle'"
+                " AND json_extract(village_action, '$.day')=? ORDER BY rowid DESC LIMIT 1",
+                (since, day),
+            ).fetchone()
+        return row["prompt"] if row else None
 
     def get_spans(self, run_id: str) -> list[Span]:
         with self._lock:

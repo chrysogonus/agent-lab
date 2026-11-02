@@ -1,6 +1,7 @@
 """The village map, its clock and its four villagers (specs/007-village-life/data-model.md)."""
 
 import re
+import time
 from collections import deque
 from dataclasses import dataclass
 from functools import cache
@@ -343,6 +344,7 @@ def new_world() -> dict[str, Any]:
         "project": None,
         "built": [],
         "meeting_agent_id": None,
+        "born": time.time(),  # M13: village health counts runs from here (none before a Reset)
     }
 
 

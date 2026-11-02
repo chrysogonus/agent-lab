@@ -2638,3 +2638,40 @@ async def test_talking_does_not_hold_up_the_walk_to_the_meeting(tmp_path: Path) 
     ]
     await v.step()
     assert (hilde["x"], hilde["y"]) == (sx, sy)
+
+
+# --- M13: the day trail ---
+
+
+@pytest.mark.anyio
+async def test_every_step_leaves_a_trail_row(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_at(10, day=2))
+    v.world["project"] = new_project("market_stand", 1)
+    v.world["project"]["used"]["wood"] = 2
+    put(v, "Lina", *MARKET_CELLS[0], basket="wood", working={"place": "site", "steps": 0})
+    await v.step()
+    [(tick, row)] = v.store.trail(0, 10**6)
+    assert tick == v.world["tick"]
+    assert row["project"] == "market_stand" and row["used"] == 2
+    lina = next(r for r in row["v"] if r[0] == "Lina")
+    assert lina == ["Lina", *MARKET_CELLS[0], "market", "working", "wood"]
+    hilde = next(r for r in row["v"] if r[0] == "Hilde")
+    assert hilde[4] == "idle" and hilde[5] is None
+
+
+@pytest.mark.anyio
+async def test_the_trail_keeps_28_days_and_reset_clears_it(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.store.add_trail(5, {"v": []})
+    v.store.add_trail(30 * 144, {"v": []})
+    for x in v.world["villagers"]:
+        x["asleep"] = True
+    v.world["tick"] = tick_at(4, 50, day=31)
+    await v.step()  # 05:00: Jonas wakes, the day record opens
+    ticks = [t for t, _ in v.store.trail(0, 10**6)]
+    assert 5 not in ticks and 30 * 144 in ticks  # older than 28 days: pruned
+    born = v.world["born"]
+    await v.reset()
+    assert v.store.trail(0, 10**6) == [] and v.world["born"] > born
+    assert "born" not in v.state()
