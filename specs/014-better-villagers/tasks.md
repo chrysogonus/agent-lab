@@ -453,3 +453,28 @@ on vLLM), against the owner's days 43 to 66:
   two `time.time()` calls returning the same value.
 - Small models still answer `{"action": "walk"}`, `"go"` or `"home"` a few times a day.
 - A few answers give "until" equal to the current time, and these are refused.
+
+## After the cleanup (2026-11-02)
+
+The cleanup changed four things:
+- Hilde's persona no longer plans the festival all year; in autumn, her turns and plans say she
+  organises it.
+- "walk", "go" and "home" answers are read as a move.
+- An `"until"` equal to now means no end time.
+- New checks `load-at-site-m14` and `load-away-m14` use `"any_of"`, so M14's answers count too.
+
+Your village's stored agents got the new persona on load. Two runs of 20 repeats
+(`e33ccb2358cb`, `da6dc657e1a5`):
+
+| Check | Run 1 | Run 2 |
+|---|---|---|
+| load-at-site-m14 | 18/20 | 16/20 |
+| load-away-m14 | 15/20 | 16/20 |
+| leave-talk-for-intention | 8/20 | 14/20 |
+| stalls-in-autumn | 17/20 | 14/20 |
+| build-with-loads | 8/20 | 4/20 |
+| work-at-own-place | 16/20 | 19/20 |
+| meeting-call-talking | 16/20 | 14/20 |
+| overall | 70% | 69% |
+
+The M13 trail test's flaky `born` comparison now starts from a fixed old value.
