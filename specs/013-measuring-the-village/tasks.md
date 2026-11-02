@@ -301,7 +301,7 @@ test first; runner tests pass `move_gap=0`.
 
 ## Phase 5: Polish
 
-- [ ] T013 Docs:
+- [X] T013 Docs:
   - README.md: village health and evals; the roadmap with M13 Measuring the village done and
     M14 Better villagers next.
   - docs/village.md: a "Measuring the village" section covering the panel, checks, scenarios,

@@ -2,8 +2,8 @@
 
 Glasshouse: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
 builder, per-agent models) with a live trace view, plus a village of four villager agents
-(M6–M12). Rules for every change: `.specify/memory/constitution.md`. Current feature:
-`specs/012-building-together/`; earlier milestones in `specs/001-…` to `specs/011-…`. Human
+(M6–M13). Rules for every change: `.specify/memory/constitution.md`. Current feature:
+`specs/013-measuring-the-village/`; earlier milestones in `specs/001-…` to `specs/012-…`. Human
 documentation: `README.md` and `docs/` (keep both in step with user-visible changes).
 
 ## Commands
@@ -12,6 +12,8 @@ documentation: `README.md` and `docs/` (keep both in step with user-visible chan
 make install        # uv sync + pnpm install
 make check          # all gates; must pass before a task is marked done
 make dev-llm        # vLLM (Docker, detached) on 127.0.0.1:8001, model "qwen3.5-9b"; needs the GPU
+make eval-checks    # turn checks on the real model (not a gate); results in backend/data/evals.db
+make eval-scenarios # scenarios on fresh copies of the database (not a gate)
 make stop-llm       # remove the vLLM container (next dev-llm recreates it with current flags)
 make dev            # dev-backend and dev-frontend together; Ctrl-C stops both
 make dev-backend    # FastAPI on 127.0.0.1:8000 (reads ./.env if present)
@@ -36,8 +38,10 @@ report; keep every gate at its current strictness.
   building work; `meeting.py` the town hall meeting and the meeting agent; `memory.py`
   lasting memories, recall and reflection; `seasons.py` calendar, light, weather and growth;
   `chronicle.py` the nightly chronicle; `runner.py` the step loop, background decisions,
-  plans, meetings, reflections and the chronicle; specs/007-village-life/ to
-  specs/012-building-together/),
+  plans, meetings, reflections, the chronicle and the day trail; `health.py` and
+  `health_view.py` village health per day; `evals/` turn checks, scenarios and their results,
+  run with `python -m agent_lab.village.evals`; specs/007-village-life/ to
+  specs/013-measuring-the-village/), `backend/evals/` (the shipped checks and scenarios, JSON),
   `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
@@ -97,7 +101,12 @@ report; keep every gate at its current strictness.
 
 - Hand-write agent logic; agent frameworks and MCP SDKs stay out. Ask the owner before adding
   any dependency.
-- Tests use `FakeLLM` or `httpx.MockTransport`, never a real model or provider.
+- Tests use `FakeLLM` or `httpx.MockTransport`, never a real model or provider. The real-model
+  evals (`make eval-checks`, `make eval-scenarios`) never run in `make check`; they report and
+  never gate. They only read the owner's database and write under `backend/data/`.
+- Before editing the store or the runner while `make dev` runs, stop it or back up
+  `backend/data/agent_lab.db`: the reloading backend runs half-finished edits on the owner's
+  village.
 - Each milestone is one Spec Kit feature: `speckit-specify` → `clarify` → `plan` → `tasks` →
   `implement`. Map every requirement to a test in `tasks.md`. Commit after each phase and task
   group; push to `origin` only when the owner asks.

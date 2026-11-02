@@ -165,7 +165,46 @@ Plans, reflections, the chronicle and the town hall meeting run on the shared **
 planner**, **Village reflection**, **Village chronicler** and **Village meeting** agents,
 editable the same way.
 
+## Measuring the village
+
+Changing a prompt or a model changes how the villagers behave, and one run says little: the
+same village can finish a project or nothing at all. Three instruments show what a change does.
+
+- **Village health** (next to **Village projects**): numbers for every village day, from what
+  the village records anyway, so they cost no model call:
+  - decisions and how many were waits;
+  - refusals by reason, each opening its turns;
+  - conversation lengths and repeated lines;
+  - how well villagers kept their plans;
+  - meetings, trades, loads and how long a load took to reach the site;
+  - baskets given straight back, and weather the chronicle got wrong;
+  - hours a villager stood stuck, and model calls.
+
+  The day in progress is marked "so far". Days before M13 show "–" for what needs the day
+  trail (where everyone was each step).
+- **Turn checks** (`make eval-checks`): situations from `backend/evals/checks/`, each given to
+  the real model 10 times with the kind of answer wanted (for example "carrying a load the site
+  needs, at the site → set it down"). A check built from a fixture builds its prompt with
+  today's code, so prompt changes are tested; a frozen check asks a recorded prompt as it was.
+  Add one from any recorded turn:
+
+  ```bash
+  cd backend && uv run python -m agent_lab.village.evals add-check --run RUN_ID \
+      --name not-to-hilde --expect '{"not": [{"action": "give", "to": "Hilde"}]}'
+  ```
+- **Scenarios** (`make eval-scenarios`): a fixed starting village, a few village hours and a
+  condition (at least three at the meeting; a bought load at the site by noon; a talk that ends
+  and both go on), run 5 times on fresh copies in `backend/data/evals/`. Your village is only
+  read.
+
+Each result shows passes out of attempts with a 95% range: 7 of 10 means "somewhere between 40%
+and 89%". `python -m agent_lab.village.evals compare A B` marks a check better or worse only
+when the two ranges do not overlap, and says "no clear change" otherwise; run 20 repeats when a
+change has to be seen.
+
 ## What's next
 
-- **M13 Daily happenings**: something different every day: the postman, a visiting friend, boat
+- **M14 Better villagers**: intentions instead of hints, walking while talking, memory that
+  fades with age and season, measured against the M13 baseline.
+- **M15 Daily happenings**: something different every day: the postman, a visiting friend, boat
   trips on the lake in the boat the village built, and whispers to villagers.
