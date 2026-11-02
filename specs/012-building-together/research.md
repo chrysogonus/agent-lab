@@ -216,6 +216,11 @@
     Applied: `project["tasks"] = tasks`, event "Hilde asked you to …" for each named villager and
     a `task` trigger, and a note. On a review meeting it runs at 17:30 when Hilde came. Tasks stay
     until the project is done or a review replaces them.
+  - **Asking again**: an unusable proposal or work-plan answer (a run that failed, often JSON
+    missing its last brace on the real model, or nothing usable in it) is asked for once more;
+    the first run records the reason with "; asked again". A missed proposal would cost the
+    village three days. Votes are not asked again (an invalid vote is not counted) and the
+    decision falls back to the vote.
   - **Runs**: `self.meetings: dict[str, Task]`, keyed by `"propose"`, `"decide"`, `"tasks"` or
     `"vote:<name>"`. As with plans, these runs never count as decisions or toward the failure
     pause, `_settle` waits for them, and a result arriving during Reset or for an old meeting day

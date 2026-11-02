@@ -84,7 +84,8 @@ still ends the conversation, just without the words.
   decides.
   She usually follows the vote, but she may choose another proposal if she gives a reason, and
   everyone hears when she went against the vote. A meeting Hilde misses is called off; an
-  unusable decision lets the vote decide.
+  unusable decision lets the vote decide, and unusable proposals or work plans are asked for
+  once more.
 - **The work**: Hilde then hands out the work: who buys which goods, who brings them to the
   building site, who builds. Not everyone has to help. The tasks show in the villagers' plans
   and in what they are told until the project is done; while a project is under way, the
