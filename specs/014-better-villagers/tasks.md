@@ -215,7 +215,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 5: User Story 3 — Leaving a talk (P2)
 
-- [ ] T014 [US3] turn.py and runner.py (research §4):
+- [X] T014 [US3] turn.py and runner.py (research §4):
   - while talking, an answer that starts an intention elsewhere becomes a goodbye carrying that
     intention (`{"action": "goodbye", "text": null, "intention": …}`), and the runner ends the
     talk and takes the first step;
@@ -231,7 +231,7 @@ first. Runner tests pass `move_gap=0`.
   - two villagers going to the market keep talking as they walk.
 
   Requirements: FR-009, FR-010.
-- [ ] T015 [P] [US3] backend/evals/checks/leave-talk-for-intention.json: Lina talking with Jonas
+- [X] T015 [P] [US3] backend/evals/checks/leave-talk-for-intention.json: Lina talking with Jonas
   at 10:55, with the plan entry "11:00 flower garden" (she is at the market). The expectation is
   `{"not": [{"action": "wait"}, {"action": "say"}]}`. Requirement: FR-014.
 

@@ -345,9 +345,6 @@ def parse_action(
         return wait, "the answer is not JSON"
     except ValidationError as exc:
         return wait, f"not a valid action: {exc.errors()[0]['msg']}"
-    talking = partners(world, name)
-    if isinstance(action, Move | Find) and talking:
-        return wait, f"you are talking with {' and '.join(talking)}; say goodbye first"
     extra: dict[str, Any] = {}
     if isinstance(action, Work | Build) and action.until:
         until, why = _until(world, action.until)
@@ -359,31 +356,35 @@ def parse_action(
         extra |= {"purpose": purpose} if purpose else {}
     if isinstance(action, Move):
         place, why = _destination(world, name, action.place)
-        return ({"action": "move", "place": place, **extra}, None) if place else (wait, why)
+        if place is None:
+            return wait, why
+        return _leaving(world, name, {"action": "move", "place": place, **extra}), None
     if isinstance(action, Find):
         other, why = _seek(world, name, action.villager)
         say = (action.say or "").strip()[:SPEECH_SHOWN]
         extra |= {"say": say} if say else {}
-        return ({"action": "find", "villager": other, **extra}, None) if other else (wait, why)
+        if other is None:
+            return wait, why
+        return _leaving(world, name, {"action": "find", "villager": other, **extra}), None
     if isinstance(action, Work):
         place, why = _work_place(world, name, action.place)
         if place == "elsewhere-site":
             action = Build(action="build")
         else:
-            return (wait, why) if why else ({"action": "work", "place": place, **extra}, None)
+            if why:
+                return wait, why
+            return _leaving(world, name, {"action": "work", "place": place, **extra}), None
     if isinstance(action, Build):
         why = _build_refusal(world, name)
         if why:
             return wait, why
         at_site = site_at(world, cell(villager_of(world, name)))
-        return (
-            {"action": "work", "place": "site", **extra}
-            if at_site
-            else {"action": "build", **extra}
-        ), None
+        if at_site:
+            return {"action": "work", "place": "site", **extra}, None
+        return _leaving(world, name, {"action": "build", **extra}), None
     if isinstance(action, Bring):
         why = _bring_refusal(world, name)
-        return (wait, why) if why else ({"action": "bring", **extra}, None)
+        return (wait, why) if why else (_leaving(world, name, {"action": "bring", **extra}), None)
     if isinstance(action, Buy):
         why = buy_refusal(world, name, action.goods)
         if why:
@@ -423,9 +424,8 @@ def parse_action(
             them = villager_of(world, to)
             if them["asleep"] or not sees(cell(villager_of(world, name)), cell(them)):
                 return wait, f"{to} is not next to you"
-            if talking:
-                return wait, f"you are talking with {' and '.join(talking)}; say goodbye first"
-            return {"action": "find", "villager": to, "say": text[:SPEECH_SHOWN]}, None
+            seek = {"action": "find", "villager": to, "say": text[:SPEECH_SHOWN]}
+            return _leaving(world, name, seek), None
         if not next_to:
             return wait, "nobody is next to you"
         hearers = [to] if to else next_to
@@ -454,6 +454,33 @@ def _destination(world: dict[str, Any], name: str, text: str) -> tuple[str | Non
     if place != "home" and place_at(me["x"], me["y"]) == place:
         return None, f"already at the {label(place)}"
     return place, None
+
+
+def _leaving(world: dict[str, Any], name: str, action: dict[str, Any]) -> dict[str, Any]:
+    """Setting out elsewhere while talking: a goodbye that sets out, instead of the refusal
+    "say goodbye first" (M14). Work here goes on, and talkers going the same way walk on
+    together."""
+    talking = partners(world, name)
+    if not talking:
+        return action
+    me = villager_of(world, name)
+    here = "site" if site_at(world, cell(me)) else place_at(me["x"], me["y"])
+    kind = action["action"]
+    place = {"move": action.get("place"), "work": action.get("place")}.get(kind, "site")
+    if kind in ("work", "bring") and place == here:
+        return action
+    if kind != "find" and all(
+        (intention := villager_of(world, p)["intention"]) and intention["place"] == place
+        for p in talking
+    ):
+        return action
+    if kind in ("move", "find"):
+        return {
+            "action": "goodbye",
+            "text": None,
+            **{k: v for k, v in action.items() if k != "action"},
+        }
+    return {"action": "goodbye", "text": None, "then": action}
 
 
 def _until(world: dict[str, Any], text: str) -> tuple[int | None, str | None]:
@@ -686,11 +713,11 @@ RULES = (  # M14: intentions, and what you can do where you are
     '{"action": "buy", "goods": "wood"} at the market while the trader is there: trade the '
     "basket you carry for a load of wood, paint or saplings for building,\n"
     '{"action": "wait"} to go on with what you are doing.\n'
-    "Each turn lists what you can do where you are. While you talk with someone, you both stay "
-    "where you are: say goodbye before you walk off. You go home to sleep at your bedtime by "
-    "yourself. Trust what you see over what you hear; the weather you are told is the real "
-    "weather. Follow your plan for the day unless something more important comes up. Hilde "
-    "holds a town hall meeting every third day at 17:00 where the village chooses what to "
+    "Each turn lists what you can do where you are. If you set out elsewhere while you talk, you "
+    "say goodbye and go; if you both go the same way, you walk on together. You go home to sleep "
+    "at your bedtime by yourself. Trust what you see over what you hear; the weather you are told"
+    " is the real weather. Follow your plan for the day unless something more important comes up."
+    " Hilde holds a town hall meeting every third day at 17:00 where the village chooses what to "
     "build. Say short things, stay in character, answer people who talk to you, and say goodbye "
     "when you have said what you wanted."
 )

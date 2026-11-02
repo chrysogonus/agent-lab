@@ -38,7 +38,6 @@ from agent_lab.village.chronicle import (
 from agent_lab.village.health import trail_row
 from agent_lab.village.intention import described, ended_text, next_step, start, started_text
 from agent_lab.village.meeting import (
-    MEETING_CALL,
     meeting_agent,
     next_meeting,
 )
@@ -590,24 +589,15 @@ class Village(MeetingRuns):
             self._remember(v, "festival", text, others)
 
     def _walks(self, v: Villager) -> bool:
+        """Set on going somewhere, it walks on while talking, and the talk ends when they walk
+        apart (M14: one rule where the bedtime walk and the walk to the meeting were special)."""
         if v["asleep"] or not v["goal"]:
             return False
-        if v["bedtime"] or self._to_meeting(v):
+        if v["bedtime"]:
             return True
-        return v["name"] not in self.decisions and not partners(self.world, v["name"])
-
-    def _to_meeting(self, v: Villager) -> bool:
-        """Walking to today's town hall meeting: like going to bed, talk does not hold it up
-        (on the real model Hilde was held in talks on her way until the meeting was off)."""
-        meeting, tick = self.world["meeting"], self.world["tick"]
-        return bool(
-            v["goal"]
-            and v["goal"].get("place") == "town_hall"
-            and meeting
-            and meeting["day"] == clock(tick)[0]
-            and not meeting["outcome"]
-            and minute_of_day(tick) >= MEETING_CALL
-        )
+        if v["name"] in self.decisions:
+            return False
+        return v["intention"] is not None or not partners(self.world, v["name"])
 
     def _targets(self, v: Villager) -> list[tuple[int, int]]:
         goal = v["goal"]
@@ -942,9 +932,11 @@ class Village(MeetingRuns):
         name = v["name"]
         kind = action["action"]
         sets_out = kind in INTENDING or (
-            kind == "goodbye" and (action.get("place") or action.get("villager"))
+            kind == "goodbye"
+            and (action.get("place") or action.get("villager") or action.get("then"))
         )
-        intention = start(self.world, name, action) if sets_out else None
+        then: dict[str, Any] = action.get("then") or action  # a goodbye setting out to build, …
+        intention = start(self.world, name, then) if sets_out else None
         if intention:  # the turn shows what it set out to do
             action["intention"] = self._intention_state(intention)
         v["last_action"] = {**action, **({"reason": reason} if reason else {})}

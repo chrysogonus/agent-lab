@@ -227,21 +227,51 @@ def test_observation_lists_only_the_last_ten_events() -> None:
     assert text.count("Event ") == 10 and "Event 0." in text
 
 
-def test_moving_or_finding_while_talking_needs_a_goodbye_first() -> None:
+def test_setting_out_elsewhere_while_talking_says_goodbye_and_goes() -> None:
+    """M14 (FR-009): no more "say goodbye first"."""
+    hx, hy = door("Hilde")
+    world = with_project("trees_square", saplings=1)
+    world["villagers"][1] |= at(hx + 1, hy)
+    world["conversations"] = [{"a": "Jonas", "b": "Hilde", "lines": 1, "last_tick": 30}]
+    leaving = {"action": "goodbye", "text": None}
+    assert parsed({"action": "move", "place": "market"}, world, "Hilde") == (
+        leaving | {"place": "market"},
+        None,
+    )
+    assert parsed({"action": "find", "villager": "Lina", "say": "Hi"}, world, "Hilde") == (
+        leaving | {"villager": "Lina", "say": "Hi"},
+        None,
+    )
+    assert parsed({"action": "build", "until": "12:00"}, world, "Hilde") == (
+        leaving | {"then": {"action": "build", "until": 720}},
+        None,
+    )
+    assert parsed({"action": "work", "place": "fields"}, world, "Hilde") == (
+        leaving | {"then": {"action": "work", "place": "fields"}},
+        None,
+    )
+    world["villagers"][3] |= at(hx + 4, hy)  # Lina in sight
+    assert parsed({"action": "say", "text": "Lina!", "to": "Lina"}, world, "Hilde") == (
+        leaving | {"villager": "Lina", "say": "Lina!"},
+        None,
+    )
+    rules = villager_agent("Hilde")["config"]["blocks"][0]["system"]
+    assert '"place": "market"} to end a conversation and leave' in rules
+    assert "say goodbye before you walk off" not in rules
+    assert "If you set out elsewhere while you talk, you say goodbye and go" in rules
+
+
+def test_setting_out_where_the_other_talker_goes_keeps_the_talk() -> None:
     hx, hy = door("Hilde")
     world = world_with(Jonas=at(hx + 1, hy))
     world["conversations"] = [{"a": "Jonas", "b": "Hilde", "lines": 1, "last_tick": 30}]
-    for answer in (
-        '{"action": "move", "place": "market"}',
-        '{"action": "find", "villager": "Lina"}',
-    ):
-        assert parse_action(answer, world, "Hilde") == (
-            {"action": "wait"},
-            "you are talking with Jonas; say goodbye first",
-        )
-    rules = villager_agent("Hilde")["config"]["blocks"][0]["system"]
-    assert '"place": "market"} to end a conversation and leave' in rules
-    assert "say goodbye before you walk off" in rules
+    world["villagers"][1]["intention"] = start(
+        world, "Jonas", {"action": "move", "place": "market"}
+    )
+    assert parsed({"action": "move", "place": "market"}, world, "Hilde") == (
+        {"action": "move", "place": "market"},
+        None,
+    )
 
 
 @pytest.mark.parametrize("day", [3, 10, 17, 21, 24, 30])

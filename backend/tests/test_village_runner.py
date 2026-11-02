@@ -602,15 +602,10 @@ async def test_goodbye_and_walking_away_end_a_conversation(tmp_path: Path) -> No
     villager(v2, "Hilde")["triggers"] = ["met"]
     jonas = villager(v2, "Jonas")
     jonas_at = (jonas["x"], jonas["y"])
-    for _ in range(2):  # Hilde says hi; Jonas tries to walk off and may not
-        await v2.step()
-    assert jonas["last_action"] == {
-        "action": "wait",
-        "reason": "you are talking with Hilde; say goodbye first",
-    }
+    await v2.step()  # Hilde says hi
     assert (jonas["x"], jonas["y"]) == jonas_at and len(v2.world["conversations"]) == 1
-    jonas["triggers"] = ["spoken to"]
-    await v2.step()  # Jonas says goodbye and leaves for the pier
+    await v2.step()  # Jonas walks off: M14 turns it into a goodbye and leaving
+    assert jonas["last_action"]["action"] == "goodbye"
     assert v2.world["conversations"] == []
     assert any("Jonas said goodbye" in e["text"] for e in villager(v2, "Hilde")["events"])
     assert jonas["goal"] == {"kind": "place", "place": "pier"}
@@ -2642,14 +2637,12 @@ async def test_at_half_past_four_everyone_away_is_called_to_the_meeting_once(
     await steps(v, 2)  # 16:30 and 16:40
     called = (
         "The town hall meeting starts at 17:00: go to the town hall now to vote "
-        '({"action": "move", "place": "town hall"}; if you are talking, '
-        '{"action": "goodbye", "place": "town hall"}).'
+        '({"action": "move", "place": "town hall"}).'  # M14: talking, it says goodbye and goes
     )
     assert texts(v, "Jonas", "meeting") == [called] and texts(v, "Greta", "meeting") == [called]
     assert texts(v, "Hilde", "meeting") == [
         "Your town hall meeting starts at 17:00: go to the town hall now to chair it "
-        '({"action": "move", "place": "town hall"}; if you are talking, '
-        '{"action": "goodbye", "place": "town hall"}).'
+        '({"action": "move", "place": "town hall"}).'
     ]
     assert texts(v, "Lina", "meeting") == []  # already there
 
@@ -2689,11 +2682,14 @@ async def test_no_vote_starts_once_hilde_decides(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_talking_does_not_hold_up_the_walk_to_the_meeting(tmp_path: Path) -> None:
+    """M14: one rule instead of the meeting's special case. Set on going, she walks on while
+    talking; Lina, with a goal but set on nothing, stays."""
     v, _ = village_for(tmp_path)
     morning(v, tick_at(16, 40, day=3))
     proposed_meeting(v)
     sx, sy = place_cells("square")[0]
     hilde = put(v, "Hilde", sx, sy, goal={"kind": "place", "place": "town_hall"})
+    hilde["intention"] = start(v.world, "Hilde", {"action": "move", "place": "town_hall"})
     lina = put(v, "Lina", sx + 1, sy, goal={"kind": "place", "place": "market"})
     v.world["conversations"] = [
         {"a": "Hilde", "b": "Lina", "lines": 2, "last_tick": v.world["tick"], "transcript": []}
@@ -2701,15 +2697,8 @@ async def test_talking_does_not_hold_up_the_walk_to_the_meeting(tmp_path: Path) 
     before = steps_to(sx, sy, TOWN_HALL)
     await v.step()
     assert steps_to(hilde["x"], hilde["y"], TOWN_HALL) < before  # on her way
-    assert (lina["x"], lina["y"]) == (sx + 1, sy)  # Lina, not going to the meeting, stays
-    morning(v, tick_at(16, 40, day=2))  # no meeting today: talking holds her again
-    hilde |= {"x": sx, "y": sy, "goal": {"kind": "place", "place": "town_hall"}}
-    lina |= {"x": sx + 1, "y": sy}
-    v.world["conversations"] = [
-        {"a": "Hilde", "b": "Lina", "lines": 2, "last_tick": v.world["tick"], "transcript": []}
-    ]
-    await v.step()
-    assert (hilde["x"], hilde["y"]) == (sx, sy)
+    assert (lina["x"], lina["y"]) == (sx + 1, sy)  # Lina stays
+    assert v.world["conversations"] == []  # they walked apart
 
 
 # --- M13: the day trail ---
@@ -2937,3 +2926,39 @@ async def test_a_line_naming_goods_is_a_request_the_hearer_may_give_to(tmp_path:
     jonas = villager(v, "Jonas")
     assert jonas["requests"] == [{"from": "Hilde", "goods": "fish", "tick": MORNING + 1}]
     assert parse_action(give("Hilde"), v.world, "Jonas")[1] is None
+
+
+# --- M14 US3: leaving a talk (FR-009, FR-010) ---
+
+
+@pytest.mark.anyio
+async def test_a_move_while_talking_leaves_with_a_goodbye(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Jonas": [move("pier")]})
+    neighbours_at_market(v)
+    talk(v, "Hilde", "Jonas", 2)
+    villager(v, "Jonas")["triggers"] = ["spoken to"]
+    await v.step()
+    jonas = villager(v, "Jonas")
+    assert jonas["last_action"]["action"] == "goodbye" and "reason" not in jonas["last_action"]
+    assert jonas["intention"]["kind"] == "go" and jonas["intention"]["place"] == "pier"
+    assert v.world["conversations"] == []
+    [turn] = v.store.list_turns("Jonas")
+    assert turn.village_action is not None and turn.village_action["intention"]["place"] == "pier"
+
+
+@pytest.mark.anyio
+async def test_two_talkers_going_to_the_same_place_walk_on_together(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    sx, sy = label_cell("square")
+    for name, x in (("Hilde", sx), ("Lina", sx + 1)):
+        x_ = put(v, name, x, sy)
+        x_["intention"] = start(v.world, name, {"action": "move", "place": "market"})
+    c = talk(v, "Hilde", "Lina", 2)
+    for _ in range(2):
+        c["last_tick"] = v.world["tick"]  # they keep talking
+        await v.step()
+    hilde, lina = villager(v, "Hilde"), villager(v, "Lina")
+    assert (hilde["x"], hilde["y"]) != (sx, sy)  # walking
+    assert max(abs(hilde["x"] - lina["x"]), abs(hilde["y"] - lina["y"])) <= 1
+    assert len(v.world["conversations"]) == 1  # and still talking

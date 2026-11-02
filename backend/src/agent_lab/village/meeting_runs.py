@@ -123,10 +123,7 @@ class MeetingRuns:
         on the real model villagers stayed in their talks or came too late without it."""
         meeting["called"] = True
         why = "vote" if meeting["kind"] == "vote" else "hear how the building goes"
-        how = (
-            '({"action": "move", "place": "town hall"}; if you are talking, '
-            '{"action": "goodbye", "place": "town hall"}).'
-        )
+        how = '({"action": "move", "place": "town hall"}).'  # talking: a goodbye, then on (M14)
         for v in self.world["villagers"]:
             if v["asleep"] or v["bedtime"] or place_at(v["x"], v["y"]) == "town_hall":
                 continue
