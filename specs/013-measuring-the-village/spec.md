@@ -155,14 +155,17 @@ the result with the health numbers, and leaves the owner's village untouched.
 
 - **A day with no decisions.** The village was paused all day → the day shows no numbers rather
   than zeros that look like a result.
-- **Days before M13.** Village health covers every day whose runs are still stored. Earlier
-  versions recorded less (for example no meetings before M12), so those numbers are left out for
-  those days, not shown as zero.
+- **Days before M13.** The village keeps only its current state, villagers' last ten events and
+  the decision prompts, so where everyone was between decisions cannot be rebuilt for days before
+  M13. For those days village health shows what the stored runs and day records support
+  (decisions, waits, refusals, lines, trades, meetings, model calls) and marks the rest, plan
+  adherence and time stuck among them, as unavailable, never as zero.
 - **A failing model call.** A run that failed counts as a failed call, not as a wait or a
   refusal; a turn check whose run failed counts as a failure with the reason "the run failed".
-- **Turn checks after a prompt change.** A check from a recorded turn keeps the prompt as it was
-  recorded. It can be marked to rebuild its prompt from today's rules where the situation can be
-  rebuilt (for example from a stored world), so a rules change is tested too.
+- **Turn checks after a prompt change.** A check kept as a recorded prompt asks yesterday's
+  prompt again and cannot see a change to how prompts are built (such as the M12 hints). Checks
+  built from a world fixture build their prompt with today's code every time, so they test such
+  a change; every result records which kind each check was.
 - **A scenario that ends early.** The model server goes down, or the village pauses after failed
   steps → that run is marked as not finished and does not count towards the pass rate.
 - **Comparing different settings.** Results compared across different models or numbers of
@@ -176,8 +179,11 @@ the result with the health numbers, and leaves the owner's village untouched.
 
 **Village health**
 
-- **FR-001**: The system MUST compute, for every village day, a health record from the stored
-  runs and the village's state, for the owner's village and for every scenario copy.
+- **FR-001**: The village MUST, from M13 on, keep a compact day trail: for every step, each
+  villager's place (or cell), state and what it carries, kept for at least the days the chronicle
+  keeps. The system MUST compute, for every village day, a health record from the stored runs,
+  the day records and the day trail, for the owner's village and for every scenario copy; a
+  number whose source is missing for a day is marked unavailable.
 - **FR-002**: The health record MUST include:
   - decisions, and the share that were waits;
   - refusals per reason;
@@ -200,18 +206,25 @@ the result with the health numbers, and leaves the owner's village untouched.
 
 - **FR-004**: A turn check MUST consist of:
   - the agent asked (a villager, the planner or the meeting agent);
-  - the prompt, either from a recorded turn or written;
+  - its situation, in one of two kinds: a **world fixture** (a village state and whose turn it
+    is, from which the prompt is built with today's code on every run) or a **frozen prompt**
+    (the exact prompt of a recorded turn or a written one, asked as it is);
   - a name;
   - the wanted kind of answer. That is one of: an action, possibly with its target (for example
     give, goodbye with the town hall as its place, say to a named villager); a valid answer of
     the right shape for the planner and the meeting; or a list of answers that are not wanted.
-- **FR-005**: The owner MUST be able to create a turn check from a recorded turn, keeping its
-  exact prompt and agent, and to write one by hand.
+- **FR-005**: The owner MUST be able to create a frozen-prompt check from a recorded turn,
+  keeping its exact prompt and agent, and to write either kind by hand. The shipped checks that
+  guard prompt behaviour (FR-012) MUST be world fixtures, so a change to the prompts is tested.
 - **FR-006**: Running the checks MUST give each one to its agent on the real model a chosen
-  number of times. Each attempt is an ordinary traced run, marked as a check. The result reports
-  the pass rate per check and overall, and every failed answer with why it failed.
+  number of times. Each attempt is an ordinary traced run, marked as a check. The result reports,
+  per check and overall, the passes out of the attempts with the range a rate from that many
+  attempts can honestly claim (a 95% interval), every failed answer with why it failed, and
+  whether the check was a world fixture or a frozen prompt.
 - **FR-007**: Check results MUST be kept with the date, the model and its settings, and the
-  number of repeats, and the owner MUST be able to compare two results check by check.
+  number of repeats, and the owner MUST be able to compare two results check by check; the
+  comparison marks a check as changed only when the two rates differ by more than chance
+  explains for their numbers of attempts, and otherwise as "no clear change".
 
 **Scenarios**
 
@@ -243,6 +256,9 @@ the result with the health numbers, and leaves the owner's village untouched.
   - every health number on scripted days;
   - each kind of expectation passing and failing;
   - creating a check from a recorded turn;
+  - a world-fixture check building its prompt with today's code;
+  - the day trail kept each step, and numbers marked unavailable without it;
+  - the 95% range and a comparison that marks only changes beyond chance;
   - a scenario run on a copy that leaves the owner's village unchanged;
   - an unfinished run;
   - comparing two results;
@@ -255,8 +271,10 @@ the result with the health numbers, and leaves the owner's village untouched.
 
 - **Day health**: per village (the owner's or a scenario copy) per day. Holds the numbers of
   FR-002 and whether the day is final.
-- **Turn check**: a name, the agent, the prompt, where it came from (a recorded turn or written)
-  and the expectation.
+- **Turn check**: a name, the agent, its situation (a world fixture or a frozen prompt, and
+  where that came from) and the expectation.
+- **Day trail**: per village per step, each villager's place or cell, state and what it
+  carries; the source for plan adherence and time stuck.
 - **Check result**: when the checks ran, the model and settings, the repeats, and per check the
   passes, the failures and their answers.
 - **Scenario**: a name, the starting village, the horizon and the condition.
@@ -275,9 +293,10 @@ the result with the health numbers, and leaves the owner's village untouched.
 - **SC-004**: The shipped scenarios run 5 times each on the real model, and report pass rates and
   every run's health (manual check). The owner's village state is unchanged before and
   after.
-- **SC-005**: On the real model, running the turn checks twice without any change gives pass
-  rates within 20 percentage points of each other for at least 80% of the checks. This shows
-  the checks are steady enough to compare a change against (manual check).
+- **SC-005**: Every check result shows passes out of attempts with its 95% range, and a
+  comparison of two results marks a check as changed only beyond chance. Comparing two runs of
+  the unchanged checks on the real model, at 20 attempts each, marks at most 2 of the shipped
+  checks as changed (manual check; the expected number by chance alone is under 1).
 - **SC-006**: Using the health of the owner's recent days and the shipped checks and scenarios,
   the owner can name the three weakest behaviours with numbers. This is the baseline M14
   improves on (manual check, recorded in `tasks.md`).
@@ -288,7 +307,7 @@ the result with the health numbers, and leaves the owner's village untouched.
   already stored; it adds no model calls.
 - **Repeats are the owner's choice.** Turn checks and scenarios run on whichever model the
   agents use. The number of repeats is chosen per run, defaulting to 10 for checks and 5 for
-  scenarios.
+  scenarios; with so few attempts only large differences are clear, which the result says.
 - **Scenario copies.** A scenario copy holds the owner's agents (with their current prompts)
   and the scenario's starting village; memories and learnings come from the starting village,
   not from the owner's village.
