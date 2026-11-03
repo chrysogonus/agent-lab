@@ -3493,3 +3493,30 @@ async def test_a_full_day_record_still_takes_what_happened_but_not_intentions(
     await v.step()
     assert "The peddler left the square; nobody traded for a kite." in notes(v)
     assert not any("set out to" in n for n in notes(v))
+
+
+@pytest.mark.anyio
+async def test_at_the_most_an_event_takes_the_place_of_an_intention_note(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_of(1, 14, 50))
+    minor = [{"tick": 0, "text": f"set out {i}", "minor": True} for i in range(runner.RECORD_ITEMS)]
+    rest = [
+        {"tick": 0, "text": f"talk {i}"} for i in range(runner.RECORD_MOST - runner.RECORD_ITEMS)
+    ]
+    record: dict[str, Any] = {"day": 1, "items": minor + rest}
+    v.world["day_record"] = record
+    sx, sy = label_cell("square")
+    stall = happening(
+        "peddler",
+        place="square",
+        cell=[sx + 1, sy],
+        start=600,
+        end=900,
+        details={"text": "a peddler with a kite", "goods": "a kite"},
+    )
+    v.world["happenings"] = [stall]
+    await v.step()
+    items: list[dict[str, Any]] = v.world["day_record"]["items"]
+    assert len(items) == runner.RECORD_MOST
+    assert items[-1]["text"] == "The peddler left the square; nobody traded for a kite."
+    assert items[0]["text"] == "set out 1"  # the earliest intention note made room

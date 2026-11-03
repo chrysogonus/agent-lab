@@ -526,9 +526,16 @@ class Village(MeetingRuns, HappeningRuns):
         """A happening for tonight's chronicle, while the villagers' day is on. Minor notes
         (intentions starting and ending) stop earlier, so they never crowd out the rest."""
         record = self.world["day_record"]
-        most = RECORD_ITEMS if minor else RECORD_MOST
-        if record is not None and len(record["items"]) < most:
-            record["items"].append({"tick": self.world["tick"], "text": text[:RECORD_TEXT]})
+        if record is None:
+            return
+        items: list[dict[str, Any]] = record["items"]
+        if not minor and len(items) >= RECORD_MOST:  # an event takes an intention note's place
+            earliest = next((i for i in items if i.get("minor")), None)
+            if earliest is not None:
+                items.remove(earliest)
+        if len(items) < (RECORD_ITEMS if minor else RECORD_MOST):
+            item = {"tick": self.world["tick"], "text": text[:RECORD_TEXT]}
+            items.append(item | ({"minor": True} if minor else {}))
 
     def _trigger(self, v: Villager, reason: str) -> None:
         if reason not in v["triggers"]:
