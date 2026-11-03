@@ -131,6 +131,37 @@ still ends the conversation, just without the words.
   tasks, the latest meeting with every proposal, vote and the decision (each opens its run), and
   what has been built.
 
+## Daily happenings, the boat and whispers
+
+- **Daily happenings** (M15): every village day brings one or two of five kinds, the same each
+  time that day comes:
+  - a **letter**: the postman brings it to a villager's door in the morning, and the villager
+    reads it at home;
+  - a **visitor**: a sister, an uncle or a friend waits at a villager's door in the afternoon
+    and keeps the host company;
+  - a **lost animal**: it wanders to a place, and anyone next to it can take it home
+    (`{"action": "lead"}`);
+  - a **repair**: the fence, the pier's boards or the garden gate breaks, and the place gives
+    its goods half as fast until an hour of work there mends it;
+  - a **peddler**: at the square from 10:00 to 15:00, with one curiosity to trade for a basket
+    (`{"action": "buy", "goods": "lantern"}`). The villager keeps it; it does not fill its hands.
+
+  Villagers learn of a happening by seeing it, by being the one it concerns, or by being told.
+  Their **What you can do here** offers the answer when there is one. Happenings are drawn on
+  the map: the postman, the visitor, the animal, the peddler, a red mark on a broken thing. The
+  chronicle opens each day with "Today: …" and how each happening ended.
+- **Boat trips**: once the village has built its rowing boat, a villager at the pier can take
+  it out (`{"action": "row", "with": "Greta"}`) for about an hour, or until a time.
+  - The one asked along comes with its own `row`.
+  - Fishing from the boat fills a basket twice as fast.
+  - A talk in the boat lasts the trip.
+  - The boat moves round the lake on the map.
+  - There are no trips in a storm, and the boat is back by bedtime.
+- **Whispers**: from a villager's panel you can whisper it a line of up to 200 characters, three
+  a day. It hears it as a claim from "a voice", like anything else it is told, and decides what
+  to do. A sleeping villager hears it on waking. The turn that answered is marked "after a
+  whisper".
+
 ## A day in the village
 
 ```mermaid
@@ -230,6 +261,11 @@ must not name the check's `"excludes"` words). The M13 checks stay as they were,
 baseline; `load-at-site-m14` and `load-away-m14` ask the same with `"any_of"`, which also
 accepts M14's answers (`bring`, or building at the site).
 
+M15 added a check for each happening (`animal-lead`, `repair-mend`, `peddler-curiosity`,
+`letter-pass-on`, `visitor-host`) and for taking the boat (`take-the-boat`), and a `boat-trip`
+scenario. Village health counts each day's happenings and how many were dealt with, boat trips,
+and whispers and how many were followed by an action.
+
 Each result shows passes out of attempts with a 95% range: 7 of 10 means "somewhere between 40%
 and 89%". `python -m agent_lab.village.evals compare A B` marks a check better or worse only
 when the two ranges do not overlap, and says "no clear change" otherwise; run 20 repeats when a
@@ -237,5 +273,5 @@ change has to be seen.
 
 ## What's next
 
-- **M15 Daily happenings**: something different every day: the postman, a visiting friend, boat
-  trips on the lake in the boat the village built, and whispers to villagers.
+- **M16 MCP**: the lab's agents get tools over a hand-written Model Context Protocol layer; then
+  the evaluation harness for the lab's other agents, agent memory and RAG.

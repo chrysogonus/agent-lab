@@ -32,11 +32,12 @@ curl -s "http://127.0.0.1:8000/runs/$RUN_ID"
 
 | Endpoint | What it does |
 |---|---|
-| `GET /village` | the whole village state: clock, calendar, weather, villagers (with plans, what they carry and what they are set on: `intention` with `kind`, `place`, `villager`, `until`, `purpose`, `since`), festival stalls, the trader, the latest town hall meeting, the project being built and what stands, log, chronicle, map (with the building catalogue) |
+| `GET /village` | the whole village state: clock, calendar, weather, villagers (with plans, what they carry and what they are set on: `intention` with `kind`, `place`, `villager`, `until`, `purpose`, `since`, and their `keepsakes`), today's `happenings` (kind, label, cell, state, by, concerns, start, end and the `figure` to draw), the `boat` (null until built; state, rowers, cell), festival stalls, the trader, the latest town hall meeting, the project being built and what stands, log, chronicle, map (with the building catalogue) |
 | `POST /village/start`, `/pause`, `/step`, `/reset` | the controls |
 | `PUT /village/interval` | seconds per step, 1–30 (the UI sends 15, 5 or 2) |
 | `GET /village/villagers/{name}/turns` | a villager's turns (decisions, plans, reflections, meeting runs), newest first |
 | `GET /village/health?days=14` | village health of the recent days (at most 28), newest first; the day in progress has `final: false`, numbers without a source are `null` |
+| `POST /village/villagers/{name}/whisper` | `{"text"}` (1–200 characters, 3 a day per villager): heard now (`{"heard": true}`) or on waking (`false`); 404 unknown villager, 422 bad length, 409 the day's limit. Heard as a claim from "a voice"; the decision answering it has `"after_whisper": true` (M15) |
 | `GET /village/health/{day}/turns?reason=` | the decisions of that day that waited for one kind of reason (names and goods taken out: `<villager> is not next to you`) |
 | `WS /village/stream` | the state after every move, step and decision |
 

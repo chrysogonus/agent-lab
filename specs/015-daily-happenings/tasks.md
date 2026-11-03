@@ -267,7 +267,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 7: Polish
 
-- [ ] T019 Docs:
+- [X] T019 Docs:
   - README.md: M15 done in the roadmap; happenings, boat trips and whispers in the village line;
   - docs/village.md: happenings, the boat, whispers, the new checks; What's next: M16 MCP;
   - docs/api.md: the whisper endpoint and the new state fields;

@@ -19,7 +19,7 @@ Status: a personal learning project that runs on your own machine (both servers 
 |---|---|
 | **Run and trace agents**<br>Pick one of six agents (ReAct plus five workflow patterns), ask something and watch the graph light up node by node. Click a span to see its prompt, answer, tokens and latency. → [docs/agents.md](docs/agents.md) | <img src="docs/images/run-view.png" alt="run view" width="420"> |
 | **Build your own**<br>Customize any template by clicking its nodes, or snap together a block agent (model calls, tools, checks, routers, parallel groups, loops). Saved agents run like the built-in ones. → [docs/builder.md](docs/builder.md) | <img src="docs/images/builder.png" alt="builder" width="420"> |
-| **Watch a village live**<br>Four villagers plan their day, set out to do things and keep at them, work, talk face to face, remember, reflect at night and live through seasons and weather. Their work fills baskets for the harvest festival's stalls, or buys wood and paint from a daily trader; every third day they vote at the town hall on what to build next, and what they build stays on the map. A chronicler writes a diary entry every night, and **Village health** counts how they behaved each day; turn checks and scenarios measure the villagers on the real model. → [docs/village.md](docs/village.md) | <img src="docs/images/chronicle.png" alt="the village chronicle" width="420"> |
+| **Watch a village live**<br>Four villagers plan their day, set out to do things and keep at them, deal with the day's happenings (a letter, a visitor, a lost goat, a broken fence, a peddler), row the boat they built, hear your whispers, work, talk face to face, remember, reflect at night and live through seasons and weather. Their work fills baskets for the harvest festival's stalls, or buys wood and paint from a daily trader; every third day they vote at the town hall on what to build next, and what they build stays on the map. A chronicler writes a diary entry every night, and **Village health** counts how they behaved each day; turn checks and scenarios measure the villagers on the real model. → [docs/village.md](docs/village.md) | <img src="docs/images/chronicle.png" alt="the village chronicle" width="420"> |
 
 ## How it works
 
@@ -95,7 +95,7 @@ specs/                   one folder per milestone: spec, plan, tasks (Spec Kit)
 | | | ✅ M12 | Building together: a daily trader, town hall votes, building |
 | | | ✅ M13 | Measuring the village: village health, turn checks, scenarios |
 | | | ✅ M14 | Better villagers: intentions, what you can do here, memory by season |
-| | | ⏳ M15 | Daily happenings, boat trips |
+| | | ✅ M15 | Daily happenings, boat trips, whispers |
 
 After M15 come MCP, an evaluation harness for the lab's other agents, memory for the lab's
 other agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.

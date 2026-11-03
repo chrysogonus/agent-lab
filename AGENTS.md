@@ -2,8 +2,8 @@
 
 Glasshouse: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
 builder, per-agent models) with a live trace view, plus a village of four villager agents
-(M6–M14). Rules for every change: `.specify/memory/constitution.md`. Current feature:
-`specs/014-better-villagers/`; earlier milestones in `specs/001-…` to `specs/013-…`. Human
+(M6–M15). Rules for every change: `.specify/memory/constitution.md`. Current feature:
+`specs/015-daily-happenings/`; earlier milestones in `specs/001-…` to `specs/014-…`. Human
 documentation: `README.md` and `docs/` (keep both in step with user-visible changes).
 
 ## Commands
@@ -38,13 +38,14 @@ report; keep every gate at its current strictness.
   and the planner agent; `work.py` work, baskets, giving and the festival stalls; `trade.py`
   the daily trader and what villagers carry; `build.py` the catalogue, the building site and
   building work; `meeting.py` the town hall meeting and the meeting agent; `meeting_runs.py`
-  the meeting's runs (a mixin of the runner); `memory.py`
+  the meeting's runs (a mixin of the runner); `happenings.py` the day's happenings; `boat.py`
+  boat trips; `happening_runs.py` their runner part and whispers (a mixin); `memory.py`
   lasting memories, recall and reflection; `seasons.py` calendar, light, weather and growth;
   `chronicle.py` the nightly chronicle; `runner.py` the step loop, background decisions,
   plans, meetings, reflections, the chronicle and the day trail; `health.py` and
   `health_view.py` village health per day; `evals/` turn checks, scenarios and their results,
   run with `python -m agent_lab.village.evals`; specs/007-village-life/ to
-  specs/014-better-villagers/), `backend/evals/` (the shipped checks and scenarios, JSON),
+  specs/015-daily-happenings/), `backend/evals/` (the shipped checks and scenarios, JSON),
   `tools/` (`catalog.py`:
   every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
