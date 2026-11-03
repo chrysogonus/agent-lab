@@ -846,3 +846,95 @@ def test_until_now_means_no_end_time() -> None:
 def test_common_slips_for_move_are_moves(answer: dict[str, Any], place: str) -> None:
     world = world_with(Hilde=at(*MARKET))
     assert parsed(answer, world, "Hilde") == ({"action": "move", "place": place}, None)
+
+
+# --- M15: happenings in a villager's turn (FR-002, FR-003, FR-014) ---
+
+
+def goat_next_to_jonas(world: dict[str, Any]) -> dict[str, Any]:
+    jonas = world["villagers"][1]
+    goat = {
+        "kind": "animal",
+        "place": "market",
+        "cell": [jonas["x"] + 1, jonas["y"]],
+        "start": 540,
+        "end": 1140,
+        "concerns": "Greta",
+        "details": {"text": "Greta's goat", "own": "your goat"},
+        "state": "here",
+        "by": None,
+        "seen_by": ["Jonas"],
+        "leader": None,
+        "work": 0,
+        "with_host": 0,
+    }
+    world["happenings"] = [goat]
+    return goat
+
+
+def test_lead_an_animal_next_to_you() -> None:
+    world = world_with(Jonas=at(*MARKET))
+    assert parsed({"action": "lead"}, world, "Jonas") == (
+        {"action": "wait"},
+        "there is no lost animal next to you",
+    )
+    goat_next_to_jonas(world)
+    assert parsed({"action": "lead", "purpose": "home to Greta"}, world, "Jonas") == (
+        {"action": "lead", "purpose": "home to Greta"},
+        None,
+    )
+
+
+def test_buying_the_peddlers_curiosity_names_it_in_full() -> None:
+    sx, sy = label_cell("square")
+    world = world_with(Lina={**at(sx, sy), "basket": "flowers"})
+    world["happenings"] = [
+        {
+            "kind": "peddler",
+            "place": "square",
+            "cell": [sx + 1, sy],
+            "state": "here",
+            "details": {"text": "a peddler with a fiddle", "goods": "a fiddle"},
+            "by": None,
+            "seen_by": [],
+            "concerns": None,
+            "leader": None,
+        }
+    ]
+    assert parsed({"action": "buy", "goods": "Fiddle"}, world, "Lina") == (
+        {"action": "buy", "goods": "a fiddle", "paid": "flowers"},
+        None,
+    )
+
+
+def test_the_observation_names_happenings_seen_or_concerning_and_keepsakes() -> None:
+    world = world_with(Jonas=at(*MARKET))
+    goat_next_to_jonas(world)
+    world["villagers"][1]["keepsakes"] = [{"name": "a lantern", "day": 1}]
+    text = observation(world, "Jonas")
+    assert "\nHappening: Greta's goat wandered to the market.\n" in text
+    assert "You keep: a lantern." in text
+    assert "Happening:" not in observation(world, "Lina")  # not seen
+    greta = observation(world, "Greta")
+    assert "Happening: Your goat got out and wandered off." in greta
+    world["happenings"].append(
+        {
+            "kind": "letter",
+            "place": None,
+            "cell": list(door("Lina")),
+            "concerns": "Lina",
+            "details": {"text": "Roses sell well in town."},
+            "state": "here",
+            "seen_by": [],
+            "leader": None,
+        }
+    )
+    assert "Happening: A letter waits for you at home." in observation(world, "Lina")
+
+
+def test_the_rules_describe_leading_and_the_peddler() -> None:
+    from agent_lab.village.turn import OLD_RULES, RULES
+
+    assert '{"action": "lead"} to take a lost animal next to you home' in RULES
+    assert "the peddler's curiosity" in RULES
+    assert '{"action": "lead"}' not in OLD_RULES[-1] and "Each turn lists" in OLD_RULES[-1]

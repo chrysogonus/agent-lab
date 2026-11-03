@@ -1,0 +1,44 @@
+{
+  "name": "peddler-curiosity",
+  "agent": "villager",
+  "as": "Lina",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "11:00",
+      "villagers": {
+        "Lina": {
+          "at": "square",
+          "carrying": "flowers",
+          "triggers": [
+            "happening"
+          ],
+          "events": [
+            "You see: A peddler stands at the square with a lantern to trade for a basket."
+          ]
+        }
+      },
+      "happenings": [
+        {
+          "kind": "peddler",
+          "place": "square",
+          "details": {
+            "text": "a peddler with a lantern",
+            "goods": "a lantern"
+          }
+        }
+      ]
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "any_of": [
+      {
+        "action": {
+          "action": "buy",
+          "goods": "a lantern"
+        }
+      }
+    ]
+  }
+}

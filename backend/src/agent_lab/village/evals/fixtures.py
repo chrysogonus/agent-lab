@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from agent_lab.village.build import CATALOGUE, entry, new_project
+from agent_lab.village.happenings import ANIMALS, KINDS, new_happening
 from agent_lab.village.intention import start
 from agent_lab.village.memory import IMPORTANCE, remember
 from agent_lab.village.seasons import date, new_growth
@@ -23,7 +24,7 @@ from agent_lab.village.world import (
 
 KEYS = {
     *("day", "time", "villagers", "conversations", "trader", "project", "built", "meeting"),
-    *("stalls", "growth"),
+    *("stalls", "growth", "happenings"),
 }
 VILLAGER_KEYS = {
     *("at", "asleep", "carrying", "working", "goal", "memories", "learnings", "inbox"),
@@ -147,6 +148,38 @@ def _villager(world: dict[str, Any], name: str, spec: dict[str, Any], day: int) 
         v["plan"] = {"day": day, "entries": entries, "revisions": 0}
 
 
+def _happening(spec: dict[str, Any], named: list[str]) -> dict[str, Any]:
+    """A happening here now, known to the fixture's villagers (M15)."""
+    _unknown(set(spec), {"kind", "place", "concerns", "details", "leader"}, "a happening")
+    kind = spec.get("kind")
+    if kind not in KINDS:
+        raise FixtureError(f"unknown happening {kind!r}")
+    place = _place(spec["place"]) if "place" in spec else None
+    concerns: str | None = spec.get("concerns")
+    if place and place not in ("home", "site"):
+        cell = place_cells(place)[0]
+    elif concerns in VILLAGERS:
+        cell = door(concerns)
+    else:
+        raise FixtureError(f"a {kind} needs a place or a villager it concerns")
+    details: dict[str, Any] = dict(spec.get("details", {}))
+    if kind == "animal" and not details:
+        animal = next(a for a, owner in ANIMALS if owner == concerns)
+        details = {"text": f"{concerns}'s {animal}", "own": f"your {animal}"}
+    return new_happening(
+        kind,
+        cell,
+        0,
+        1440,
+        place=place,
+        concerns=concerns,
+        details=details,
+        state="here",
+        seen_by=list(named),
+        leader=spec.get("leader"),
+    )
+
+
 def build_world(fixture: Fixture) -> dict[str, Any]:
     """`new_world()` at the fixture's day and time, with what it sets; the villagers it does not
     name are asleep at home."""
@@ -202,6 +235,8 @@ def build_world(fixture: Fixture) -> dict[str, Any]:
         }
     for goods, n in fixture.get("stalls", {}).items():
         world["stalls"][_goods(goods)] = n
+    for spec in fixture.get("happenings", []):
+        world["happenings"].append(_happening(spec, list(named)))
     if awake:
         world["day_record"] = {"day": day, "items": []}  # notes are kept from the start
     return world

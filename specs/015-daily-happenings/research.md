@@ -27,7 +27,7 @@ for its own runner glue.
   | peddler | the square, 10:00 to 15:00 | nobody | one curiosity (a lantern, a fiddle, a book of songs, a kite) | someone trades a basket for it |
 
 - **Clashes**: on a meeting day nothing runs past 16:30, apart from the visitor, who stays with
-  the host. On the festival day there is no peddler.
+  the host, and a letter, which only waits at home. On the festival day there is no peddler.
 - **Why**: the same village day gives the same happenings, so checks, scenarios and replays agree.
   Happenings need no model calls: they are moved by fixed rules, like the trader.
 - **Alternatives**:

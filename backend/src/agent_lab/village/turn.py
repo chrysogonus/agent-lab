@@ -8,12 +8,19 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.affordances import can_do_lines
 from agent_lab.village.build import needs_left, project_text, site_at, site_cells
+from agent_lab.village.happenings import known_lines, lead_refusal
 from agent_lab.village.intention import intention_text
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
 from agent_lab.village.plan import plan_lines
 from agent_lab.village.seasons import WEATHER_TEXT, date, date_text, growth_text, weather
-from agent_lab.village.trade import buy_refusal, carried_text, goods_named, trader_text
+from agent_lab.village.trade import (
+    buy_refusal,
+    carried_text,
+    curiosity_named,
+    goods_named,
+    trader_text,
+)
 from agent_lab.village.work import give_refusal, stalls_text, work_refusal
 from agent_lab.village.world import (
     PLACES,
@@ -24,6 +31,7 @@ from agent_lab.village.world import (
     festival_lines,
     hhmm,
     label,
+    listed,
     minute_of_day,
     place_at,
     place_cells,
@@ -82,6 +90,11 @@ class Bring(BaseModel):
     purpose: str | None = None
 
 
+class Lead(BaseModel):
+    action: Literal["lead"]  # M15: take the lost animal next to you home
+    purpose: str | None = None
+
+
 class Give(BaseModel):
     action: Literal["give"]
     to: str | None = None  # without a name: onto the festival stalls
@@ -96,7 +109,7 @@ class Wait(BaseModel):
     action: Literal["wait"]
 
 
-type Action = Move | Find | Say | Goodbye | Work | Build | Bring | Give | Buy | Wait
+type Action = Move | Find | Say | Goodbye | Work | Build | Bring | Lead | Give | Buy | Wait
 ACTION = TypeAdapter[Action](Annotated[Action, Field(discriminator="action")])
 
 Villager = dict[str, Any]
@@ -281,6 +294,12 @@ def observation(world: dict[str, Any], name: str) -> str:
         trader_text(world),
         meeting_text(world, name),
         *project_text(world, name),
+        *known_lines(world, name),
+        *(
+            [f"You keep: {listed([k['name'] for k in me['keepsakes']])}."]
+            if me["keepsakes"]
+            else []
+        ),
         *([stalls_text(world["stalls"])] if date(day)[1] == "autumn" else []),
         *[growth_text(p, world["growth"]) for p in GROWING if _knows(world, name, p)],
         f"You get up at {hhmm(character.wake)} and go to bed at {hhmm(character.bed)}."
@@ -353,7 +372,7 @@ def parse_action(
         if why:
             return wait, why
         extra |= {} if until is None else {"until": until}
-    if isinstance(action, Move | Find | Work | Build | Bring):
+    if isinstance(action, Move | Find | Work | Build | Bring | Lead):
         purpose = (action.purpose or "").strip()
         extra |= {"purpose": purpose} if purpose else {}
     if isinstance(action, Move):
@@ -384,6 +403,9 @@ def parse_action(
         if at_site:
             return {"action": "work", "place": "site", **extra}, None
         return _leaving(world, name, {"action": "build", **extra}), None
+    if isinstance(action, Lead):
+        why = lead_refusal(world, name)
+        return (wait, why) if why else (_leaving(world, name, {"action": "lead", **extra}), None)
     if isinstance(action, Bring):
         why = _bring_refusal(world, name)
         return (wait, why) if why else (_leaving(world, name, {"action": "bring", **extra}), None)
@@ -392,7 +414,8 @@ def parse_action(
         if why:
             return wait, why
         paid = villager_of(world, name)["basket"]
-        return {"action": "buy", "goods": goods_named(action.goods), "paid": paid}, None
+        goods = curiosity_named(world, action.goods) or goods_named(action.goods)
+        return {"action": "buy", "goods": goods, "paid": paid}, None
     if isinstance(action, Give):
         to = action.to or None
         if to and re.search(r"\bstalls?\b|\bsite\b", to.lower()):
@@ -473,6 +496,8 @@ def _leaving(world: dict[str, Any], name: str, action: dict[str, Any]) -> dict[s
     place = {"move": action.get("place"), "work": action.get("place")}.get(kind, "site")
     if kind in ("work", "bring") and place == here:
         return action
+    if kind == "lead":
+        return {"action": "goodbye", "text": None, "then": action}
     if kind != "find" and all(
         (intention := villager_of(world, p)["intention"]) and intention["place"] == place
         for p in talking
@@ -701,7 +726,7 @@ _M12_SITE_RULES = _M12_MEETING_RULES.replace(
     '{"action": "work"} there to build with the loads lying there,\n'
     '{"action": "wait"} to go on',
 )
-RULES = (  # M14: intentions, and what you can do where you are
+_M14_RULES = (  # intentions, and what you can do where you are
     "You live in a small village with Hilde (the mayor), Jonas (the fisher), Greta (the farmer) "
     "and Lina (the flower girl). Places: town hall, square, market, pier, fields, flower garden, "
     "and everyone's own home. Time passes in steps of 10 minutes. Reply with only one JSON "
@@ -740,6 +765,18 @@ RULES = (  # M14: intentions, and what you can do where you are
     "build. Say short things, stay in character, answer people who talk to you, and say goodbye "
     "when you have said what you wanted."
 )
+RULES = (  # M15: the day's happenings
+    _M14_RULES.replace(
+        '{"action": "give", "to": "Hilde"}',
+        '{"action": "lead"} to take a lost animal next to you home to its owner,\n'
+        '{"action": "give", "to": "Hilde"}',
+    ).replace(
+        "basket you carry for a load of wood, paint or saplings for building,",
+        "basket you carry for a load of wood, paint or saplings for building; at the square, "
+        'also for the peddler\'s curiosity while it is there ({"action": "buy", "goods": '
+        '"lantern"}),',
+    )
+)
 OLD_RULES = (
     _M7_RULES,
     _M9_RULES,
@@ -748,6 +785,7 @@ OLD_RULES = (
     _M12_BUY_RULES,
     _M12_MEETING_RULES,
     _M12_SITE_RULES,
+    _M14_RULES,
 )
 
 

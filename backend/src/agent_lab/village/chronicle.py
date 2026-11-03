@@ -36,7 +36,7 @@ def chronicle_prompt(world: dict[str, Any], record: dict[str, Any]) -> str:
         f"Day {day} ({date_text(day)}). {WEATHER_TEXT[weather(day)]}.",
         *[growth_text(place, world["growth"]) for place in ("fields", "flower_garden")],
         *([stalls_text(world["stalls"])] if festival_in(day) == 0 else []),
-        *filter(None, [built_text(world)]),
+        *filter(None, [built_text(world), _today(world["happenings"])]),
         HAPPENED,
         *(
             [f"- {clock(i['tick'])[1]} {_marked(i['text'], day)}" for i in record["items"]]
@@ -45,6 +45,26 @@ def chronicle_prompt(world: dict[str, Any], record: dict[str, Any]) -> str:
         "Write the chronicle entry for this day. Answer with one JSON object.",
     ]
     return "\n".join(lines)
+
+
+def _today(happenings: list[dict[str, Any]]) -> str | None:
+    """The day's happenings and how they ended (M15)."""
+    told: list[str] = []
+    for h in happenings:
+        text, by, dealt = h["details"]["text"], h["by"], h["state"] == "dealt"
+        if h["kind"] == "letter":
+            told.append(f"a letter came for {h['concerns']}" + (" and was read" if dealt else ""))
+        elif h["kind"] == "visitor":
+            told.append(f"{text} came to visit {h['concerns']}")
+        elif h["kind"] == "animal":
+            told.append(f"{text} got lost" + (f", and {by} led it home" if dealt else ""))
+        elif h["kind"] == "repair":
+            told.append(f"{text} broke" + (f", and {by} mended it" if dealt else ""))
+        else:
+            goods = h["details"]["goods"]
+            how = f"{by} traded for it" if dealt else "nobody traded for it"
+            told.append(f"a peddler came with {goods}, and {how}")
+    return f"Today: {'; '.join(told)}." if told else None
 
 
 def _marked(note: str, day: int) -> str:

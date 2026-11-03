@@ -4,11 +4,13 @@ import re
 from typing import Any
 
 from agent_lab.village.build import site_at, site_refusal
+from agent_lab.village.happenings import repair_at
 from agent_lab.village.trade import BASKET_GOODS
 from agent_lab.village.world import adjacent, listed, place_at, villager_named
 
 GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers"}
 BASKET_STEPS = 6  # one village hour of work, added up over everyone working a place
+MEND_STEPS = 6  # an hour of work, added up, mends a broken thing (M15)
 NO_GIVING = (
     "nobody to give it to: name someone next to you, stand on the square to set it out for the "
     "festival, or stand at the building site to set down a load"
@@ -161,9 +163,10 @@ def work_step(world: dict[str, Any]) -> list[tuple[str, str]]:
         for v in here:
             v["working"]["steps"] += 1
         goods = goods_at(world, place)
-        harvest = min(world["harvest"][place] + len(here), BASKET_STEPS) if goods else 0
+        steps = BASKET_STEPS * (2 if repair_at(world, place) else 1)  # broken: half as fast
+        harvest = min(world["harvest"][place] + len(here), steps) if goods else 0
         empty = [v for v in here if v["basket"] is None]
-        if goods and harvest == BASKET_STEPS and empty:
+        if goods and harvest == steps and empty:
             v = max(empty, key=lambda v: v["working"]["steps"])  # ties: villager order
             v["basket"] = goods
             v["working"]["steps"] = 0
@@ -171,6 +174,28 @@ def work_step(world: dict[str, Any]) -> list[tuple[str, str]]:
             baskets.append((v["name"], goods))
         world["harvest"][place] = harvest
     return baskets
+
+
+def mend_step(world: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """One step of mending: work at a place with a broken thing adds up, and an hour of it
+    mends it, by the longest worker there (M15)."""
+    mended: list[tuple[str, dict[str, Any]]] = []
+    for h in world["happenings"]:
+        if h["kind"] != "repair" or h["state"] != "here":
+            continue
+        here = [
+            v
+            for v in world["villagers"]
+            if v["working"] and v["working"]["place"] == h["place"] and not v["asleep"]
+        ]
+        if not here:
+            continue
+        h["work"] += len(here)
+        if h["work"] >= MEND_STEPS:
+            v = max(here, key=lambda v: v["working"]["steps"])  # ties: villager order
+            h |= {"state": "dealt", "by": v["name"]}
+            mended.append((v["name"], h))
+    return mended
 
 
 def delivery_text(world: dict[str, Any], name: str) -> str | None:

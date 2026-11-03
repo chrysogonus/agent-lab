@@ -1,0 +1,50 @@
+{
+  "name": "visitor-host",
+  "agent": "villager",
+  "as": "Greta",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "13:10",
+      "villagers": {
+        "Greta": {
+          "at": "fields",
+          "working": "fields",
+          "triggers": [
+            "happening"
+          ],
+          "events": [
+            "Anna, your sister, comes to visit this afternoon and waits at your door from 13:00."
+          ]
+        }
+      },
+      "happenings": [
+        {
+          "kind": "visitor",
+          "concerns": "Greta",
+          "details": {
+            "text": "Anna, Greta's sister",
+            "name": "Anna, your sister"
+          }
+        }
+      ]
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "any_of": [
+      {
+        "action": {
+          "action": "move",
+          "place": "home"
+        }
+      },
+      {
+        "action": {
+          "action": "goodbye",
+          "place": "home"
+        }
+      }
+    ]
+  }
+}

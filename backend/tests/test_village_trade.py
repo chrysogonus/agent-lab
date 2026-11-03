@@ -7,6 +7,7 @@ import pytest
 from agent_lab.village.trade import (
     buy_refusal,
     carried_text,
+    curiosity_named,
     trader_due,
     trader_stock,
     trader_text,
@@ -101,3 +102,34 @@ def test_trader_text() -> None:
     assert trader_text(world_at(15 * 60)) == (
         "The trader has left; the next one comes tomorrow at 09:00."
     )
+
+
+# --- M15: the peddler's curiosity (FR-003, FR-005) ---
+
+
+def peddler(state: str = "here", goods: str = "a lantern") -> dict[str, Any]:
+    return {
+        "kind": "peddler",
+        "place": "square",
+        "cell": list(place_cells("square")[0]),
+        "state": state,
+        "details": {"text": f"a peddler with {goods}", "goods": goods},
+        "by": None,
+    }
+
+
+def test_the_peddler_trades_its_curiosity_for_a_basket() -> None:
+    world = world_at(11 * 60)
+    world["happenings"] = [peddler()]
+    lina = world["villagers"][3]
+    assert buy_refusal(world, "Lina", "lantern") == "the peddler is at the square"
+    lina |= {"x": place_cells("square")[1][0], "y": place_cells("square")[1][1]}
+    assert buy_refusal(world, "Lina", "a lantern") is None
+    assert curiosity_named(world, "The Lantern") == "a lantern"
+    lina["basket"] = "wood"
+    assert buy_refusal(world, "Lina", "lantern") == "the peddler takes a basket, not a load of wood"
+    lina["basket"] = None
+    assert buy_refusal(world, "Lina", "lantern") == "you have nothing to trade: bring a basket"
+    world["happenings"] = [peddler("dealt")]
+    assert curiosity_named(world, "lantern") is None
+    assert buy_refusal(world, "Lina", "lantern") == "the trader sells wood, paint and saplings"

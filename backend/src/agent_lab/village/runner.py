@@ -75,7 +75,13 @@ from agent_lab.village.seasons import (
     snow_cover,
     weather,
 )
-from agent_lab.village.trade import TRADER_LEAVES, carried_text, trader_due, trader_stock
+from agent_lab.village.trade import (
+    BUILDING_GOODS,
+    TRADER_LEAVES,
+    carried_text,
+    trader_due,
+    trader_stock,
+)
 from agent_lab.village.turn import (
     OLD_RULES,
     RULES,
@@ -120,7 +126,7 @@ from agent_lab.village.world import (
     usual_place,
 )
 
-INTENDING = ("move", "find", "work", "build", "bring")  # answers that start an intention
+INTENDING = ("move", "find", "work", "build", "bring", "lead")  # answers that start an intention
 CHANNEL = "village"  # bus channel of the village stream
 TRAIL_DAYS = 28  # village days of the day trail kept, as the chronicle
 EVENTS_KEPT = 10
@@ -557,6 +563,7 @@ class Village(MeetingRuns, HappeningRuns):
                     day = clock(self.world["tick"])[0]
                     self.store.prune_trail(self.world["tick"] - TRAIL_DAYS * 144)
                     self.world["day_record"] = {"day": day, "items": []}
+                    self._open_happenings(day)
                     for news in end_day(self.world, day - 1) if day > 1 else []:
                         self._note(f"Overnight: {news}")  # yesterday's work shows by morning
                 self._event(v, "woke", "You woke up at home.")
@@ -640,7 +647,13 @@ class Village(MeetingRuns, HappeningRuns):
             self._fall_asleep(v)
             return
         v["goal"] = None
-        where = f"the {label(goal['place'])}" if goal["kind"] == "place" else "your home"
+        where = (
+            f"the {label(goal['place'])}"
+            if goal["kind"] == "place"
+            else f"{goal['villager']}'s home"
+            if goal["kind"] == "door"
+            else "your home"
+        )
         self._event(v, "arrived", f"You arrived at {where}.")
         if v["intention"] is None:  # with one, it goes on, or ends and asks then
             self._trigger(v, "arrived")
@@ -972,8 +985,12 @@ class Village(MeetingRuns, HappeningRuns):
             self._say(v, action["text"], action["to"])
         elif kind == "give":
             self._give(v, action["to"], action["goods"])
+        elif kind == "buy" and action["goods"] not in BUILDING_GOODS:
+            self._trade_curiosity(v, action["goods"], action["paid"])
         elif kind == "buy":
             self._buy(v, action["goods"], action["paid"])
+        elif kind == "lead":
+            self._lead(v)
         elif kind == "goodbye":  # then perhaps on its way
             if action["text"] and awake_neighbours(self.world, name):
                 self._say(v, action["text"], None)
@@ -1247,6 +1264,7 @@ class Village(MeetingRuns, HappeningRuns):
         self._upkeep()
         for v in world["villagers"]:
             self._pursue(v)
+        self._happenings()
         for name, goods in work_step(world):
             v = self._villager(name)
             self._event(v, "basket", f"You filled a basket of {goods}.")

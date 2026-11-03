@@ -21,7 +21,7 @@ from agent_lab.village.world import (
     sees,
 )
 
-KINDS = ("go", "work", "build", "bring", "see")
+KINDS = ("go", "work", "build", "bring", "see", "lead")
 PURPOSE_KEPT = 120
 
 Intention = dict[str, Any]
@@ -42,6 +42,19 @@ def start(world: dict[str, Any], name: str, action: dict[str, Any]) -> Intention
     kind = {"move": "go", "find": "see", "goodbye": "go"}.get(action["action"], action["action"])
     if action.get("villager"):
         kind = "see"
+    if kind == "lead":  # take the animal next to it (or already led) home to its owner (M15)
+        me = _villager(world, name)
+        animal = next(
+            h
+            for h in world["happenings"]
+            if h["kind"] == "animal"
+            and h["state"] == "here"
+            and (
+                h["leader"] == name
+                or (h["leader"] is None and adjacent(_cell(me), tuple(h["cell"])))
+            )
+        )
+        action = {**action, "villager": animal["concerns"]}
     place = "site" if kind in ("build", "bring") else action.get("place")
     if kind == "work" and place is None:  # work where it stands
         me = _villager(world, name)
@@ -52,7 +65,7 @@ def start(world: dict[str, Any], name: str, action: dict[str, Any]) -> Intention
     return {
         "kind": kind,
         "place": None if kind == "see" else place,
-        "villager": action.get("villager") if kind == "see" else None,
+        "villager": action.get("villager") if kind in ("see", "lead") else None,
         "until": action.get("until"),
         "purpose": purpose,
         "since": world["tick"],
@@ -87,6 +100,8 @@ def next_step(world: dict[str, Any], v: Villager) -> Step:
         return {"kind": "done", "why": f"it is {hhmm(until)}"}
     if kind == "see":
         return _see(world, v, intention)
+    if kind == "lead":
+        return _lead(world, v, intention)
     project = world["project"]
     if place == "site" and project is None:
         return {"kind": "given_up", "why": "nothing is being built any more"}
@@ -110,6 +125,22 @@ def next_step(world: dict[str, Any], v: Villager) -> Step:
         return {"kind": "none"}
     why = work_refusal(world, v["name"])
     return {"kind": "given_up", "why": why} if why else {"kind": "start_work", "place": place}
+
+
+def _lead(world: dict[str, Any], v: Villager, intention: Intention) -> Step:
+    owner = intention["villager"]
+    animal = next(
+        (h for h in world["happenings"] if h["kind"] == "animal" and h["concerns"] == owner),
+        None,
+    )
+    if animal and animal["state"] == "dealt":
+        return {"kind": "done", "why": f"{animal['details']['text']} is home"}
+    if animal is None or animal["state"] != "here" or animal["leader"] != v["name"]:
+        return {"kind": "given_up", "why": "the animal is gone"}
+    return {
+        "kind": "walk",
+        "goal": {"kind": "door", "villager": owner, "target": [list(door(owner))]},
+    }
 
 
 def _see(world: dict[str, Any], v: Villager, intention: Intention) -> Step:
@@ -139,6 +170,8 @@ def _phrase(intention: Intention, basket: str | None = None) -> str:
         return f"see {intention['villager']}" + (f' and say "{say}"' if say else "")
     if kind == "go":
         return "go home" if place == "home" else f"go to the {label(place)}"
+    if kind == "lead":
+        return f"take the lost animal home to {intention['villager']}"
     if kind == "build":
         return "build at the building site"
     if kind == "bring":

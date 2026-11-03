@@ -215,3 +215,57 @@ def test_a_plan_to_see_someone_offers_to_find_them() -> None:
         {"action": "goodbye", "villager": "Greta"},
         "your plan has you see Greta at 11:00",
     ) in can_do(world, "Lina")
+
+
+# --- M15: happenings (FR-003) ---
+
+
+def test_lead_mend_and_the_peddlers_curiosity() -> None:
+    world = world_of(
+        villagers={"Jonas": {"at": "pier"}, "Lina": {"at": "square", "carrying": "flowers"}}
+    )
+    jonas, lina = world["villagers"][1], world["villagers"][3]
+    world["happenings"] = [
+        {
+            "kind": "repair",
+            "place": "pier",
+            "state": "here",
+            "details": {"text": "the boards of the pier"},
+            "work": 0,
+            "cell": [jonas["x"], jonas["y"]],
+            "concerns": None,
+            "leader": None,
+        },
+        {
+            "kind": "animal",
+            "place": "pier",
+            "state": "here",
+            "details": {"text": "Greta's goat"},
+            "cell": [jonas["x"] + 1, jonas["y"]],
+            "concerns": "Greta",
+            "leader": None,
+        },
+        {
+            "kind": "peddler",
+            "place": "square",
+            "state": "here",
+            "details": {"text": "a peddler with a kite", "goods": "a kite"},
+            "cell": [lina["x"] + 1, lina["y"]],
+            "concerns": None,
+            "leader": None,
+        },
+    ]
+    assert can_do(world, "Jonas")[:2] == [
+        ({"action": "work"}, "mend the boards of the pier: an hour of work there"),
+        ({"action": "lead"}, "Greta's goat is next to you; take it home to Greta"),
+    ]
+    assert (
+        {"action": "buy", "goods": "a kite"},
+        "the peddler trades a kite for your basket",
+    ) in can_do(world, "Lina")
+    for name in ("Jonas", "Lina"):
+        for action in actions(world, name):
+            answer = action | (
+                {"text": "Hello there"} if action["action"] in ("say", "goodbye") else {}
+            )
+            assert parse_action(json.dumps(answer), world, name)[1] is None, action

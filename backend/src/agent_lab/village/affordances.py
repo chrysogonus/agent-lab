@@ -9,6 +9,7 @@ import json
 from typing import Any
 
 from agent_lab.village.build import needs_left, site_at
+from agent_lab.village.happenings import animal_next_to, repair_at
 from agent_lab.village.trade import BUILDING_GOODS, buy_refusal, carried_text
 from agent_lab.village.work import give_refusal, goods_at, work_refusal
 from agent_lab.village.world import (
@@ -45,11 +46,19 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
     needed = bool(goods) and bool(needs_left(world).get(goods or ""))
     found: list[Entry] = []
     if here and not at_site and work_refusal(world, name) is None:
+        broken = repair_at(world, here)
         fills = goods_at(world, here)
         hour = f"fills a basket of {fills}" if fills else "tends them"
-        found.append(
-            ({"action": "work"}, f"you can work the {label(here)} here; an hour of work {hour}")
+        why = (
+            f"mend {broken['details']['text']}: an hour of work there"
+            if broken
+            else f"you can work the {label(here)} here; an hour of work {hour}"
         )
+        found.append(({"action": "work"}, why))
+    animal = animal_next_to(world, name)
+    if animal:
+        text, owner = animal["details"]["text"], animal["concerns"]
+        found.append(({"action": "lead"}, f"{text} is next to you; take it home to {owner}"))
     if project and any(project["site"].values()):
         found.append(({"action": "build"}, f"the building site holds {_loads(project['site'])}"))
     elif needed and at_site:
@@ -62,6 +71,17 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
             left = trader["stock"][wanted]
             why = f"trade your basket for a load; the trader has {left} left"
             found.append(({"action": "buy", "goods": wanted}, why))
+    peddler = next(
+        (h for h in world["happenings"] if h["kind"] == "peddler" and h["state"] == "here"), None
+    )
+    if peddler and buy_refusal(world, name, peddler["details"]["goods"]) is None:
+        curiosity = peddler["details"]["goods"]
+        found.append(
+            (
+                {"action": "buy", "goods": curiosity},
+                f"the peddler trades {curiosity} for your basket",
+            )
+        )
     if goods and give_refusal(world, name, None) is None:
         if at_site:
             why = f"set down your {carried_text(goods)} at the building site"

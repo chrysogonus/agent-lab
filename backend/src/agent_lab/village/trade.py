@@ -42,8 +42,33 @@ def _villager(world: dict[str, Any], name: str) -> dict[str, Any]:
     return next(v for v in world["villagers"] if v["name"] == name)
 
 
+def _plain(text: str) -> str:
+    words = text.strip().lower().split()
+    return " ".join(words[1:] if words and words[0] in ("a", "an", "the") else words)
+
+
+def curiosity_named(world: dict[str, Any], text: str) -> str | None:
+    """The peddler's curiosity ("a lantern") when `text` names it and the peddler is here (M15)."""
+    peddler = next(
+        (h for h in world["happenings"] if h["kind"] == "peddler" and h["state"] == "here"),
+        None,
+    )
+    goods: str | None = peddler and peddler["details"]["goods"]
+    return goods if goods and _plain(goods) == _plain(text) else None
+
+
 def buy_refusal(world: dict[str, Any], name: str, goods: str) -> str | None:
-    """Why a villager cannot trade its basket for a load of `goods` now, or None."""
+    """Why a villager cannot trade its basket for a load of `goods` (or the peddler's curiosity)
+    now, or None."""
+    if curiosity_named(world, goods):
+        me = _villager(world, name)
+        if place_at(me["x"], me["y"]) != "square":
+            return "the peddler is at the square"
+        if me["basket"] is None:
+            return "you have nothing to trade: bring a basket"
+        if me["basket"] not in BASKET_GOODS:
+            return f"the peddler takes a basket, not a {carried_text(me['basket'])}"
+        return None
     goods, me, trader = goods_named(goods), _villager(world, name), world["trader"]
     if goods not in BUILDING_GOODS:
         return f"the trader sells {listed(list(BUILDING_GOODS))}"

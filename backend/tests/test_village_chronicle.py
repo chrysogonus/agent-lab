@@ -118,3 +118,30 @@ def test_notes_naming_other_weather_are_marked_as_talk() -> None:
     prompt = chronicle_prompt(world, record)
     assert "Greta: A storm comes! (talk, not the day's weather)" in prompt
     assert "Lina set out to go to the market.\n" in prompt
+
+
+def test_the_prompt_opens_the_day_with_its_happenings() -> None:
+    """M15 (FR-004): the day's happenings are events, and how they ended."""
+    world = new_world()
+    world["happenings"] = [
+        {
+            "kind": "animal",
+            "state": "dealt",
+            "by": "Jonas",
+            "concerns": "Greta",
+            "details": {"text": "Greta's goat"},
+        },
+        {
+            "kind": "peddler",
+            "state": "passed",
+            "by": None,
+            "concerns": None,
+            "details": {"text": "a peddler with a kite", "goods": "a kite"},
+        },
+    ]
+    prompt = chronicle_prompt(world, {"day": 1, "items": []})
+    assert (
+        "Today: Greta's goat got lost, and Jonas led it home; a peddler came with a kite, "
+        "and nobody traded for it."
+    ) in prompt
+    assert "Today:" not in chronicle_prompt(new_world(), {"day": 1, "items": []})

@@ -1,0 +1,41 @@
+{
+  "name": "animal-lead",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "10:00",
+      "villagers": {
+        "Jonas": {
+          "at": [
+            22,
+            8
+          ],
+          "triggers": [
+            "happening"
+          ],
+          "events": [
+            "You see: Greta's goat wandered to the market."
+          ]
+        },
+        "Greta": {
+          "at": "fields"
+        }
+      },
+      "happenings": [
+        {
+          "kind": "animal",
+          "place": "market",
+          "concerns": "Greta"
+        }
+      ]
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "lead"
+    }
+  }
+}

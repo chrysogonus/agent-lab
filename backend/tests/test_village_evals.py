@@ -260,6 +260,29 @@ def test_any_of_several_answers(answer: str, passed: bool) -> None:
     assert ok is passed and (why is None) is passed
 
 
+def test_a_fixture_may_have_happenings() -> None:
+    world = build_world(
+        {
+            "day": 30,
+            "time": "10:00",
+            "villagers": {"Jonas": {"at": "market"}, "Greta": {"at": "fields"}},
+            "happenings": [
+                {"kind": "animal", "place": "market", "concerns": "Greta"},
+                {"kind": "letter", "concerns": "Lina", "details": {"text": "News."}},
+                {"kind": "repair", "place": "pier", "details": {"text": "the boards of the pier"}},
+            ],
+        }
+    )
+    goat, letter, boards = world["happenings"]
+    assert goat["state"] == "here" and goat["cell"] in [list(c) for c in place_cells("market")]
+    assert goat["details"] == {"text": "Greta's goat", "own": "your goat"}
+    assert goat["seen_by"] == ["Jonas", "Greta"]  # the fixture's villagers know of it
+    assert letter["cell"] == list(door("Lina")) and letter["details"]["text"] == "News."
+    assert boards["place"] == "pier"
+    with pytest.raises(FixtureError, match="unknown happening 'fair'"):
+        build_world({"day": 3, "time": "10:00", "happenings": [{"kind": "fair"}]})
+
+
 def test_a_cell_fixture_and_a_place_fixture_agree() -> None:
     cell = place_cells("pier")[0]
     world = build_world({"day": 2, "time": "06:00", "villagers": {"Jonas": {"at": list(cell)}}})
@@ -587,6 +610,11 @@ def test_results_and_compare_on_the_command_line(
 
 SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
 IDEAL = {  # an answer each shipped check must accept: the checks can be passed
+    "animal-lead": '{"action": "lead"}',
+    "repair-mend": '{"action": "work"}',
+    "peddler-curiosity": '{"action": "buy", "goods": "lantern"}',
+    "letter-pass-on": '{"action": "say", "text": "Roses sell for double in town!"}',
+    "visitor-host": '{"action": "move", "place": "home"}',
     "load-at-site-m14": '{"action": "bring"}',
     "load-away-m14": '{"action": "bring"}',
     "summer-plan-without-festival": A_PLAN_ANSWER,
@@ -627,6 +655,12 @@ def test_the_shipped_checks_load_and_can_be_passed() -> None:
         in by_name["intention-keeps-building"]
     )
     assert "In sight: Greta (3 steps away)." in by_name["say-to-someone-in-sight"]
+    assert "Happening: Greta's goat wandered to the market." in by_name["animal-lead"]
+    assert '{"action": "lead"}' in by_name["animal-lead"]
+    assert "mend the boards of the pier" in by_name["repair-mend"]
+    assert '"goods": "a lantern"' in by_name["peddler-curiosity"]
+    assert "roses sell for twice the price" in by_name["letter-pass-on"]
+    assert "Anna, your sister, is visiting you." in by_name["visitor-host"]
     assert "You are talking with Jonas (4 lines so far)." in by_name["leave-talk-for-intention"]
     assert "festival" not in by_name["summer-plan-without-festival"].lower()  # out of season
     assert "A trader is at the market until 14:00" in by_name["buy-saplings"]

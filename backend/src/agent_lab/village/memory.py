@@ -18,6 +18,8 @@ IMPORTANCE = {
     "meeting": 4,  # M12
     "built": 5,
     "summary": 4,  # M14: older reflections folded into one
+    "happening": 3,  # M15
+    "keepsake": 3,
 }
 MEMORIES_KEPT = 60
 LEARNINGS_KEPT = 12

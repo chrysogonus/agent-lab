@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from helpers import answer, fake_models
+from test_village_happenings import happening
 
 from agent_lab.bus import Bus
 from agent_lab.llm.base import ChatResponse, Message
@@ -1135,7 +1136,7 @@ def system_of(v: Village, name: str) -> str:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("old", range(7))
+@pytest.mark.parametrize("old", range(8))
 async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old: int) -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
@@ -1152,7 +1153,7 @@ async def test_stored_agents_get_the_new_rules_unless_edited(tmp_path: Path, old
 def test_the_rules_history() -> None:
     from agent_lab.village.turn import OLD_RULES, RULES
 
-    _m7, _m9, m11_plans, m11, m12_buy, m12_meeting, m12_site = OLD_RULES
+    _m7, _m9, m11_plans, m11, m12_buy, m12_meeting, m12_site, m14 = OLD_RULES
     assert "Trust what you see over what you hear" in RULES and "Trust what you see" in m11_plans
     assert "Follow your plan for the day" in RULES
     assert '{"action": "work", "place": "fields", "until": "12:00"}' in RULES
@@ -1166,7 +1167,8 @@ def test_the_rules_history() -> None:
     assert '"say": "Any flowers?"' in RULES and '{"action": "build"' not in m12_site
     assert "you keep doing it until it is done" in RULES
     assert "Each turn lists what you can do where you are" in RULES
-    assert len(set(OLD_RULES)) == 7 and RULES not in OLD_RULES
+    assert '{"action": "build", "until": "15:00"}' in m14 and '{"action": "lead"}' not in m14
+    assert len(set(OLD_RULES)) == 8 and RULES not in OLD_RULES
 
 
 @pytest.mark.anyio
@@ -3084,3 +3086,177 @@ def test_the_state_gives_keepsakes_and_leaves_out_whispers() -> None:
     assert state["Lina"]["keepsakes"] == [{"name": "a lantern", "day": 1}]
     assert all("whispers" not in x for x in state.values())
     assert v.state()["boat"] is None and v.state()["happenings"] == []
+
+
+# --- M15 US1: daily happenings (FR-001 to FR-005) ---
+
+
+def tick_of(day: int, hour: int, minute: int = 0) -> int:
+    return ((day - 1) * 1440 + hour * 60 + minute - 270) // 10
+
+
+@pytest.mark.anyio
+async def test_the_day_opens_with_its_happenings(tmp_path: Path) -> None:
+    from agent_lab.village.happenings import day_happenings
+
+    v, _ = village_for(tmp_path)
+    v.world["tick"] = tick_of(5, 4, 50)  # day 5, 04:50: Jonas wakes at 05:00
+    v.world["happenings"] = [happening("peddler", state="passed")]  # yesterday's
+    await v.step()
+    expected = [(h["kind"], h["concerns"]) for h in day_happenings(5)]
+    assert [(h["kind"], h["concerns"]) for h in v.world["happenings"]] == expected
+
+
+@pytest.mark.anyio
+async def test_one_lead_answer_takes_the_goat_home(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, {"Jonas": [json.dumps({"action": "lead"})]})
+    morning(v)
+    v.world["day_record"] = {"day": 1, "items": []}
+    mx, my = label_cell("market")
+    put(v, "Jonas", mx, my, triggers=["met"])
+    goat = happening(
+        "animal",
+        place="market",
+        concerns="Greta",
+        cell=[mx + 1, my],
+        details={"text": "Greta's goat", "own": "your goat"},
+        seen_by=["Jonas"],
+    )
+    v.world["happenings"] = [goat]
+    for _ in range(12):
+        await v.step()
+        if goat["state"] == "dealt":
+            break
+    assert goat["state"] == "dealt" and goat["by"] == "Jonas"
+    assert "Jonas led Greta's goat home." in notes(v)
+    asked = calls_of(llm, "Jonas")
+    assert len(asked) <= 2 and all("Greta the farmer is next to you" in p for p in asked[1:])
+    assert any(m["text"] == "You led Greta's goat home." for m in villager(v, "Jonas")["memories"])
+
+
+@pytest.mark.anyio
+async def test_working_at_a_broken_fence_mends_it(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    v.world["day_record"] = {"day": 1, "items": []}
+    put(v, "Greta", *place_cells("fields")[0], working={"place": "fields", "steps": 0})
+    fence = happening("repair", place="fields", details={"text": "the fence at the fields"})
+    v.world["happenings"] = [fence]
+    for _ in range(6):
+        await v.step()
+    assert fence["state"] == "dealt" and fence["by"] == "Greta"
+    assert "Greta mended the fence at the fields." in notes(v)
+
+
+@pytest.mark.anyio
+async def test_trading_for_the_peddlers_curiosity_keeps_it(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Lina": [json.dumps({"action": "buy", "goods": "lantern"})]})
+    morning(v, tick_of(1, 11))
+    v.world["day_record"] = {"day": 1, "items": []}
+    sx, sy = label_cell("square")
+    put(v, "Lina", sx, sy, basket="flowers", triggers=["met"])
+    stall = happening(
+        "peddler",
+        place="square",
+        cell=[sx + 1, sy],
+        details={"text": "a peddler with a lantern", "goods": "a lantern"},
+    )
+    v.world["happenings"] = [stall]
+    await v.step()
+    lina = villager(v, "Lina")
+    assert lina["basket"] is None and lina["keepsakes"] == [{"name": "a lantern", "day": 1}]
+    assert stall["state"] == "dealt" and stall["by"] == "Lina"
+    assert "Lina traded a basket of flowers for a lantern from the peddler." in notes(v)
+    assert any(m["kind"] == "keepsake" for m in lina["memories"])
+
+
+@pytest.mark.anyio
+async def test_a_letter_is_read_at_home_and_its_news_is_known(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v, tick_of(1, 7, 50))
+    v.world["day_record"] = {"day": 1, "items": []}
+    put(v, "Lina", *door("Lina"))
+    news = "Roses sell for twice the price in town."
+    letter = happening(
+        "letter",
+        state="coming",
+        concerns="Lina",
+        cell=list(door("Lina")),
+        start=480,
+        end=1260,
+        details={"text": news},
+    )
+    v.world["happenings"] = [letter]
+    await v.step()  # 08:00: the postman came, and Lina is at home
+    lina = villager(v, "Lina")
+    assert letter["state"] == "dealt"
+    assert f"You read your letter: {news}" in texts(v, "Lina", "happening")
+    assert any(news in m["text"] for m in lina["memories"])
+    assert f"Lina got a letter: {news}" in notes(v)
+    assert news in calls_of(llm, "Lina")[-1]  # what she remembers, in her next turn
+
+
+@pytest.mark.anyio
+async def test_a_visitor_keeps_the_host_company(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_of(1, 12, 50))
+    v.world["day_record"] = {"day": 1, "items": []}
+    put(v, "Greta", *door("Greta"))
+    anna = happening(
+        "visitor",
+        state="coming",
+        concerns="Greta",
+        cell=list(door("Greta")),
+        start=780,
+        end=1140,
+        details={"text": "Anna, Greta's sister", "name": "Anna, your sister"},
+    )
+    v.world["happenings"] = [anna]
+    for _ in range(7):
+        await v.step()
+    assert anna["state"] == "dealt"
+    assert "Greta spent time with Anna, Greta's sister." in notes(v)
+    assert texts(v, "Greta", "happening")[0] == (
+        "Anna, your sister, comes to visit this afternoon and waits at your door from 13:00."
+    )
+
+
+@pytest.mark.anyio
+async def test_an_unhandled_happening_passes(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v, tick_of(1, 14, 50))
+    v.world["day_record"] = {"day": 1, "items": []}
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy)
+    stall = happening(
+        "peddler",
+        place="square",
+        cell=[sx + 1, sy],
+        start=600,
+        end=900,
+        details={"text": "a peddler with a kite", "goods": "a kite"},
+    )
+    v.world["happenings"] = [stall]
+    await v.step()  # 15:00
+    assert stall["state"] == "passed"
+    assert "The peddler left the square; nobody traded for a kite." in notes(v)
+
+
+@pytest.mark.anyio
+async def test_villagers_see_a_happening_and_are_asked(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    morning(v)
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy)
+    stall = happening(
+        "peddler",
+        place="square",
+        cell=[sx + 3, sy],
+        details={"text": "a peddler with a kite", "goods": "a kite"},
+    )
+    v.world["happenings"] = [stall]
+    await v.step()
+    assert "Hilde" in stall["seen_by"]
+    assert texts(v, "Hilde", "happening") == [
+        "You see: A peddler stands at the square with a kite to trade for a basket."
+    ]

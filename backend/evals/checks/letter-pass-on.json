@@ -1,0 +1,53 @@
+{
+  "name": "letter-pass-on",
+  "agent": "villager",
+  "as": "Lina",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "09:00",
+      "villagers": {
+        "Lina": {
+          "at": [
+            22,
+            7
+          ],
+          "triggers": [
+            "spoken to"
+          ],
+          "memories": [
+            "A letter came for you: A friend from town writes that roses sell for twice the price there."
+          ],
+          "events": [
+            "You read your letter: A friend from town writes that roses sell for twice the price there."
+          ],
+          "inbox": [
+            {
+              "from": "Hilde",
+              "text": "Good morning, Lina! Any news?"
+            }
+          ]
+        },
+        "Hilde": {
+          "at": [
+            23,
+            7
+          ]
+        }
+      },
+      "conversations": [
+        [
+          "Hilde",
+          "Lina",
+          1
+        ]
+      ]
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "say"
+    }
+  }
+}

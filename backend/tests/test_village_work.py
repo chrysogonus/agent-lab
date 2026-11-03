@@ -10,6 +10,7 @@ from agent_lab.village.work import (
     give_refusal,
     goods_asked,
     goods_at,
+    mend_step,
     stalls_text,
     work_refusal,
     work_step,
@@ -335,3 +336,33 @@ def test_a_load_handed_straight_back_belongs_at_the_building_site() -> None:
         "Greta just gave you this load; set it down at the building site, or give it to someone "
         "else"
     )
+
+
+# --- M15: repairs (FR-005) ---
+
+
+def broken(place: str = "pier") -> dict[str, Any]:
+    return {"kind": "repair", "place": place, "state": "here", "work": 0, "by": None}
+
+
+def test_work_at_a_broken_place_mends_it_in_an_hour() -> None:
+    world = world_with(
+        Jonas=at(PIER[0], **working("pier", 3)), Hilde=at(PIER[1], **working("pier"))
+    )
+    boards = broken()
+    world["happenings"] = [boards]
+    assert mend_step(world) == []
+    assert boards["work"] == 2
+    assert mend_step(world) == []
+    assert mend_step(world) == [("Jonas", boards)]  # the longest worker mends it
+    assert boards["state"] == "dealt" and boards["by"] == "Jonas"
+    assert mend_step(world) == []
+
+
+def test_a_broken_place_fills_baskets_half_as_fast() -> None:
+    world = world_with(Jonas=at(PIER[0], **working("pier")))
+    world["happenings"] = [broken()]
+    assert steps_until_basket(world) == (12, [("Jonas", "fish")])
+    world = world_with(Jonas=at(PIER[0], **working("pier")))
+    world["happenings"] = [broken("fields")]  # elsewhere: no matter
+    assert steps_until_basket(world)[0] == 6

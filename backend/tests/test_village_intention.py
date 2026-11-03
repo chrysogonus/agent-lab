@@ -12,7 +12,7 @@ from agent_lab.village.intention import (
     start,
     started_text,
 )
-from agent_lab.village.world import place_cells
+from agent_lab.village.world import door, place_cells
 
 
 def world_of(**villagers: Any) -> dict[str, Any]:
@@ -40,7 +40,7 @@ def set_on(world: dict[str, Any], name: str, action: dict[str, Any]) -> dict[str
 
 
 def test_the_kinds() -> None:
-    assert KINDS == ("go", "work", "build", "bring", "see")
+    assert KINDS == ("go", "work", "build", "bring", "see", "lead")
 
 
 def test_start_turns_each_answer_into_an_intention() -> None:
@@ -206,3 +206,20 @@ def test_the_texts() -> None:
     assert described(bring, "saplings") == "take your load of saplings to the building site"
     see = start(world, "Greta", {"action": "find", "villager": "Lina", "say": "Hi"})
     assert described(see) == 'see Lina and say "Hi"'
+
+
+def test_lead_walks_to_the_owners_door_and_is_done_when_the_animal_is_home() -> None:
+    world = world_of(Jonas={"at": "market"}, Greta={"at": "fields"})
+    goat = {"kind": "animal", "state": "here", "leader": "Jonas", "concerns": "Greta"}
+    goat |= {"details": {"text": "Greta's goat"}, "cell": [0, 0]}
+    world["happenings"] = [goat]
+    v = set_on(world, "Jonas", {"action": "lead"})
+    assert (v["intention"]["kind"], v["intention"]["villager"]) == ("lead", "Greta")
+    step = next_step(world, v)
+    assert step["kind"] == "walk" and step["goal"]["kind"] == "door"
+    assert step["goal"]["target"] == [list(door("Greta"))]
+    goat["state"] = "dealt"
+    assert next_step(world, v) == {"kind": "done", "why": "Greta's goat is home"}
+    goat |= {"state": "passed", "leader": None}
+    assert next_step(world, v)["kind"] == "given_up"
+    assert described(v["intention"]) == "take the lost animal home to Greta"

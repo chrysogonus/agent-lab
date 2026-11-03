@@ -1,0 +1,38 @@
+{
+  "name": "repair-mend",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 67,
+      "time": "06:00",
+      "villagers": {
+        "Jonas": {
+          "at": "pier",
+          "triggers": [
+            "happening"
+          ],
+          "events": [
+            "You see: The boards of the pier broke; an hour of work there mends it."
+          ]
+        }
+      },
+      "happenings": [
+        {
+          "kind": "repair",
+          "place": "pier",
+          "details": {
+            "text": "the boards of the pier"
+          }
+        }
+      ]
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "work",
+      "place": "pier"
+    }
+  }
+}

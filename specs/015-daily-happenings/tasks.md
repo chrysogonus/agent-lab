@@ -59,7 +59,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 3: User Story 1 — Daily happenings (P1) 🎯 MVP
 
-- [ ] T003 [P] [US1] New backend/src/agent_lab/village/happenings.py (research §1–§3,
+- [X] T003 [P] [US1] New backend/src/agent_lab/village/happenings.py (research §1–§3,
   data-model.md "Happening").
   - `CATALOGUE`: per kind, short fixed lists written for the four villagers:
     - letters' news, 2–3 per villager;
@@ -93,7 +93,7 @@ first. Runner tests pass `move_gap=0`.
   - noticing within sight only, once each.
 
   Requirements: FR-001, FR-002, FR-004.
-- [ ] T004 [US1] work.py and trade.py.
+- [X] T004 [US1] work.py and trade.py.
   - Work at a place with an open repair goes into its `work` first; 6 steps mend it (dealt by
     the longest worker).
   - While it is open, a basket there takes `2 * BASKET_STEPS`.
@@ -101,7 +101,7 @@ first. Runner tests pass `move_gap=0`.
     villager gains a keepsake `{name, day}` and loses the basket; the hands stay empty.
 
   Tests in test_village_work.py and test_village_trade.py. Requirements: FR-003, FR-005.
-- [ ] T005 [US1] turn.py and intention.py.
+- [X] T005 [US1] turn.py and intention.py.
   - New `Lead` answer, `{"action": "lead"}`, refused unless an animal is next to the villager
     and nobody leads it yet ("nobody leads it" / "Jonas already leads it").
   - The intention kind `lead` goes to the owner's door. It is done when there, or when the
@@ -114,14 +114,14 @@ first. Runner tests pass `move_gap=0`.
 
   Tests in test_village_turn.py and test_village_intention.py. Requirements: FR-002, FR-003,
   FR-014.
-- [ ] T006 [US1] affordances.py:
+- [X] T006 [US1] affordances.py:
   - `{"action": "lead"}`: "Greta's goat is next to you; take it home";
   - `{"action": "work"}` at a broken place: "mend the boards of the pier";
   - `{"action": "buy", "goods": "lantern"}`: "the peddler trades it for your basket".
 
   Tests in test_village_affordances.py; every listed answer passes `parse_action`. Requirement:
   FR-003.
-- [ ] T007 [US1] happening_runs.py and runner.py:
+- [X] T007 [US1] happening_runs.py and runner.py:
   - `_open_happenings(day)` sets the day's list when the day record opens (yesterday's goes);
   - `_happenings()` in `_advance`, after the moves and before work, applies `step` and
     `noticed`:
@@ -143,7 +143,7 @@ first. Runner tests pass `move_gap=0`.
   - a happening passing unhandled.
 
   Requirements: FR-001–FR-005.
-- [ ] T008 [P] [US1] chronicle.py: `chronicle_prompt` opens the events with "Today: …", naming the
+- [X] T008 [P] [US1] chronicle.py: `chronicle_prompt` opens the events with "Today: …", naming the
   day's happenings and how they ended. Test in test_village_chronicle.py. Requirement: FR-004.
 - [ ] T009 [US1] Frontend:
   - lib/api.ts: `Happening`, `keepsakes`, event kinds `happening`, the `lead` action;
@@ -155,7 +155,7 @@ first. Runner tests pass `move_gap=0`.
 
   Tests in village.test.ts and pixels.test.ts (figure positions as pure functions). Requirement:
   FR-002.
-- [ ] T010 [P] [US1] Five checks in backend/evals/checks/:
+- [X] T010 [P] [US1] Five checks in backend/evals/checks/:
   - `animal-lead`;
   - `repair-mend`;
   - `peddler-curiosity`;
