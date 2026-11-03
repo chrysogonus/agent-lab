@@ -76,7 +76,8 @@ export type VillageAction =
   | { action: "build"; until?: number; purpose?: string; intention?: Intention; reason?: string } // M14
   | { action: "bring"; purpose?: string; intention?: Intention; reason?: string }
   | { action: "give"; to: string | null; goods: Goods; reason?: string }
-  | { action: "buy"; goods: BuildingGoods; paid: BasketGoods; reason?: string } // M12
+  | { action: "buy"; goods: BuildingGoods | string; paid: BasketGoods; reason?: string } // M12; M15: or the peddler's curiosity
+  | { action: "lead"; purpose?: string; intention?: Intention; reason?: string } // M15
   | { action: "propose"; proposals?: string[]; reason?: string }
   | { action: "vote"; project?: string; reason?: string }
   | { action: "decide"; project?: string; reason?: string; against?: boolean; by?: "hilde" | "vote" }
@@ -88,7 +89,8 @@ export type VillageEvent = {
     | "woke" | "bedtime" | "slept" | "set_off" | "arrived" | "met" | "found" | "missed" | "heard" | "said" | "ended" | "waited" | "reflected" | "festival"
     | "planned" | "worked" | "basket" | "gave" | "received" // M11
     | "traded" | "proposed" | "meeting" | "task" | "built" // M12
-    | "intended" | "intention_ended"; // M14
+    | "intended" | "intention_ended" // M14
+    | "happening"; // M15
   text: string;
   from?: string;
   to?: string | null;
@@ -118,11 +120,25 @@ export type Villager = {
   beliefs: { villager: string; text: string; view: string | null }[];
   learnings: { day: number; text: string }[]; // oldest first (M8)
   views: { villager: string; text: string; day: number }[];
-  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival" | "meeting" | "built" | "summary"; text: string }[]; // newest first (summary: M14)
+  memories: { day: number; time: string; kind: "conversation" | "found" | "missed" | "met" | "reflection" | "festival" | "meeting" | "built" | "summary" | "happening" | "keepsake"; text: string }[]; // newest first (summary: M14; happening, keepsake: M15)
   plan: Plan | null; // today's plan (M11)
   basket: Goods | null; // one thing at a time, kept overnight: a basket (M11) or a load (M12)
   working: "fields" | "flower_garden" | "pier" | "site" | null; // where it works until it walks off (site: M12)
   intention: Intention | null; // what it set out to do (M14)
+  keepsakes: { name: string; day: number }[]; // traded from the peddler, not carried (M15)
+};
+
+// M15: daily happenings. See specs/015-daily-happenings/contracts/interfaces.md.
+export type Happening = {
+  kind: "letter" | "visitor" | "animal" | "repair" | "peddler";
+  label: string; // "Greta's goat wandered to the market."
+  cell: [number, number];
+  state: "coming" | "here" | "dealt" | "passed";
+  by: string | null;
+  concerns: string | null;
+  start: string;
+  end: string;
+  figure: "postman" | "visitor" | "animal" | "repair" | "peddler" | null; // what to draw now
 };
 
 // M14: better villagers. See specs/014-better-villagers/contracts/villager-answers.md.
@@ -211,6 +227,7 @@ export type VillageState = {
   next_meeting: number; // the day of the next one
   project: Project | null; // what the village is building
   built: Built[]; // what stands, in order
+  happenings: Happening[]; // today's (M15)
   running: boolean;
   ticking: boolean;
   interval: number;

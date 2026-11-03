@@ -35,7 +35,7 @@ from agent_lab.village.chronicle import (
     retry_prompt,
     weather_slips,
 )
-from agent_lab.village.happening_runs import HappeningRuns
+from agent_lab.village.happening_runs import HappeningRuns, happening_state
 from agent_lab.village.health import trail_row
 from agent_lab.village.intention import described, ended_text, next_step, start, started_text
 from agent_lab.village.meeting import (
@@ -376,6 +376,7 @@ class Village(MeetingRuns, HappeningRuns):
                 for b in world["built"]
             ],
             "project": self._project_state(world["project"]),
+            "happenings": [happening_state(h, minute) for h in world["happenings"]],
             "next_meeting": next_meeting(day),
             "ticking": self.ticking,
             "log": [{**line, "time": clock(line["tick"])[1]} for line in world["log"]],

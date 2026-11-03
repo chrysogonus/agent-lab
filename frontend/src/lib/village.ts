@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Intention, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Happening, Intention, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place" | "plot";
 
@@ -245,12 +245,26 @@ export function turnLabel(turn: Run): string {
     if (action.to) return `${time}gives a ${carriedText(action.goods)} to ${action.to}`;
     return isBasket(action.goods) ? `${time}sets out ${action.goods} on the festival stalls` : `${time}sets down a ${carriedText(action.goods)} at the building site`;
   }
-  if (action.action === "buy") return `${time}trades a ${carriedText(action.paid)} for a ${carriedText(action.goods)}`;
+  if (action.action === "lead") return `${time}takes a lost animal home`;
+  if (action.action === "buy") {
+    const goods = action.goods;
+    if ((BUILDING_GOODS as string[]).includes(goods)) return `${time}trades a ${carriedText(action.paid)} for a ${carriedText(goods as BuildingGoods)}`;
+    return `${time}trades a ${carriedText(action.paid)} for ${goods} from the peddler`;
+  }
   return `${time}waits`;
 }
 
 function untilOf(intention: Intention | undefined): string {
   return intention?.until ? ` until ${intention.until}` : "";
+}
+
+export type HappeningMark = { key: string; figure: NonNullable<Happening["figure"]>; cx: number; cy: number; label: string };
+
+/** The happenings to draw now, centred in their cells (M15). */
+export function happeningMarks(state: Pick<VillageState, "happenings">): HappeningMark[] {
+  return state.happenings.flatMap((h) =>
+    h.figure ? [{ key: `${h.kind}-${h.cell[0]}-${h.cell[1]}`, figure: h.figure, cx: h.cell[0] + 0.5, cy: h.cell[1] + 0.5, label: h.label }] : [],
+  );
 }
 
 /** "07:30 town hall: Go through the list", "11:00 see Jonas: Ask for fish" */

@@ -3260,3 +3260,43 @@ async def test_villagers_see_a_happening_and_are_asked(tmp_path: Path) -> None:
     assert texts(v, "Hilde", "happening") == [
         "You see: A peddler stands at the square with a kite to trade for a basket."
     ]
+
+
+def test_the_state_gives_happenings_with_what_to_draw() -> None:
+    v, _ = village_for(":memory:")
+    morning(v, tick_of(1, 7, 40))
+    letter = happening(
+        "letter",
+        state="coming",
+        concerns="Lina",
+        cell=list(door("Lina")),
+        start=480,
+        end=1260,
+        details={"text": "News."},
+    )
+    goat = happening(
+        "animal",
+        place="market",
+        concerns="Greta",
+        cell=[22, 8],
+        details={"text": "Greta's goat", "own": "your goat"},
+        state="passed",
+    )
+    v.world["happenings"] = [letter, goat]
+    shown = v.state()["happenings"]
+    assert shown[0] == {
+        "kind": "letter",
+        "label": "A letter came for Lina.",
+        "cell": list(door("Lina")),
+        "state": "coming",
+        "by": None,
+        "concerns": "Lina",
+        "start": "08:00",
+        "end": "21:00",
+        "figure": "postman",  # walking to the door in the half hour before
+    }
+    assert shown[1]["figure"] is None  # passed: gone
+    goat["state"] = "here"
+    assert v.state()["happenings"][1]["figure"] == "animal"
+    letter["state"] = "here"
+    assert v.state()["happenings"][0]["figure"] is None  # delivered

@@ -705,3 +705,89 @@ export function Fireflies({ map }: { map: string }) {
     </g>
   );
 }
+
+// --- the day's happenings (M15) ---
+
+export const HAPPENING_SPRITES: Record<string, { rows: string[]; palette: Palette }> = {
+  postman: {
+    rows: [
+      "...bbbb...",
+      "..bbbbbb..",
+      "...ssss...",
+      "...sees...",
+      "..bbbbbb..",
+      ".bbbbbbyy.",
+      ".sbbbbbyy.",
+      "..bbbbbb..",
+      "..bb..bb..",
+      "..oo..oo..",
+    ],
+    palette: { ...SKIN, b: "#3d5fae", y: "#e8c06a" },
+  },
+  visitor: {
+    rows: [
+      "...hhhh...",
+      "..hhhhhh..",
+      "...ssss...",
+      "...sees...",
+      "..gggggg..",
+      ".gggggggg.",
+      ".sggggggs.",
+      "..gggggg..",
+      "..gg..gg..",
+      "..oo..oo..",
+    ],
+    palette: { ...SKIN, h: "#9a8a7a", g: "#7b8796" },
+  },
+  animal: {
+    rows: [
+      "..........",
+      "........hh",
+      ".......wwe",
+      "wwwwwwwwww",
+      "wwwwwwwww.",
+      "wwwwwwwww.",
+      ".w.w..w.w.",
+      ".w.w..w.w.",
+      ".o.o..o.o.",
+      "..........",
+    ],
+    palette: { o: INK, e: INK, w: "#f2efe6", h: "#b8a68a" },
+  },
+  peddler: {
+    rows: [
+      ".rrrrrrrr.",
+      "rrwwrrwwrr",
+      ".pppppppp.",
+      ".p......p.",
+      ".pcccccc.p",
+      ".pcyccmcp.",
+      ".pppppppp.",
+      "..p....p..",
+      ".ooo..ooo.",
+      ".ooo..ooo.",
+    ],
+    palette: { o: INK, r: "#c0392b", w: "#fffaf0", p: "#8a5a32", c: "#d9b98c", y: "#f2c94c", m: "#6aa0d8" },
+  },
+  repair: {
+    rows: [
+      "r........r",
+      ".r......r.",
+      "..r....r..",
+      "...r..r...",
+      "....rr....",
+      "....rr....",
+      "...r..r...",
+      "..r....r..",
+      ".r......r.",
+      "r........r",
+    ],
+    palette: { r: "#d6584b" },
+  },
+};
+
+/** A happening on the map: the postman, a visitor, a lost animal, a peddler or a broken thing. */
+export function HappeningFigure({ figure }: { figure: string }) {
+  const sprite = HAPPENING_SPRITES[figure];
+  return sprite ? <Pixels rows={sprite.rows} palette={sprite.palette} x={-5} y={-8} /> : null;
+}

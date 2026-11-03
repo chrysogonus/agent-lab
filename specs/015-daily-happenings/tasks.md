@@ -145,7 +145,7 @@ first. Runner tests pass `move_gap=0`.
   Requirements: FR-001–FR-005.
 - [X] T008 [P] [US1] chronicle.py: `chronicle_prompt` opens the events with "Today: …", naming the
   day's happenings and how they ended. Test in test_village_chronicle.py. Requirement: FR-004.
-- [ ] T009 [US1] Frontend:
+- [X] T009 [US1] Frontend:
   - lib/api.ts: `Happening`, `keepsakes`, event kinds `happening`, the `lead` action;
   - lib/village.ts: `happeningText`, `turnLabel` for lead;
   - components/village/pixels.tsx: figures for the postman (during the letter's half hour), the

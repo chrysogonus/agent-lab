@@ -73,6 +73,9 @@ export function VillagerPanel({
             ? `${intentionText(villager.intention)}${villager.intention.purpose ? ` (${villager.intention.purpose})` : ""}, since ${villager.intention.since}`
             : "Nothing at the moment."}
         </p>
+        {villager.keepsakes.length > 0 && (
+          <p className="mt-1 font-sans text-sm text-dusk-muted">Keeps {villager.keepsakes.map((k) => `${k.name} (day ${k.day})`).join(", ")}</p>
+        )}
       </div>
       {villager.agent_id && (
         <button type="button" onClick={() => onEditAgent(villager.agent_id!)} className="village-button self-start">

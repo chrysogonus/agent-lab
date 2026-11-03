@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChronicleEntry, Intention, Meeting, Project, Run, VillageState, Villager } from "./api";
+import type { ChronicleEntry, Happening, Intention, Meeting, Project, Run, VillageState, Villager } from "./api";
 import {
   activity,
   cellKind,
@@ -31,6 +31,7 @@ import {
   boxOf,
   builtLines,
   intentionText,
+  happeningMarks,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -62,6 +63,7 @@ const villager = (fields: Partial<Villager>): Villager => ({
   basket: null,
   working: null,
   intention: null,
+  keepsakes: [],
   ...fields,
 });
 
@@ -90,6 +92,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   next_meeting: 3,
   project: null,
   built: [],
+  happenings: [],
   ...fields,
 });
 
@@ -482,5 +485,34 @@ describe("intentions (M14)", () => {
     expect(turnLabel(turn({ action: "bring" }))).toBe("05:00 takes a load to the building site");
     expect(turnLabel(turn({ action: "find", villager: "Lina", say: "Flowers?" }))).toBe("05:00 goes looking for Lina to say: Flowers?");
     expect(turnLabel(turn({ action: "build", reason: "nothing is being built" }))).toBe("05:00 waited: nothing is being built");
+  });
+});
+
+describe("happenings (M15)", () => {
+  const happening = (fields: Partial<Happening>): Happening => ({
+    kind: "animal",
+    label: "Greta's goat wandered to the market.",
+    cell: [22, 8],
+    state: "here",
+    by: null,
+    concerns: "Greta",
+    start: "09:00",
+    end: "19:00",
+    figure: "animal",
+    ...fields,
+  });
+
+  it("marks what to draw on the map, centred in its cell", () => {
+    const marks = happeningMarks(
+      state({ happenings: [happening({}), happening({ kind: "peddler", figure: null, cell: [12, 7] })] }),
+    );
+    expect(marks).toEqual([{ key: "animal-22-8", figure: "animal", cx: 22.5, cy: 8.5, label: "Greta's goat wandered to the market." }]);
+  });
+
+  it("labels leading an animal home and trading with the peddler", () => {
+    const turn = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(turn({ action: "lead" }))).toBe("05:00 takes a lost animal home");
+    expect(turnLabel(turn({ action: "buy", goods: "a lantern", paid: "flowers" }))).toBe("05:00 trades a basket of flowers for a lantern from the peddler");
+    expect(turnLabel(turn({ action: "buy", goods: "wood", paid: "fish" }))).toBe("05:00 trades a basket of fish for a load of wood");
   });
 });

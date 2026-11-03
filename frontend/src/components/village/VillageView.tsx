@@ -13,9 +13,9 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { GOODS, PACES, PERIOD_SKY, activity, boxOf, calendarText, clockText, glideMs, figures, isBasket, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine, traderText } from "@/lib/village";
+import { GOODS, PACES, PERIOD_SKY, activity, boxOf, calendarText, clockText, glideMs, figures, happeningMarks, isBasket, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine, traderText } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
-import { Building, Butterflies, Fireflies, Ground, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
+import { Building, Butterflies, Fireflies, Ground, HappeningFigure, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
 import { HealthPanel } from "./HealthPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
@@ -172,6 +172,12 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
         const area = areas[h.letter];
         return area && <NamePlate key={h.letter} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={area.y0 * TILE + 16} text={h.villager} small />;
       })}
+      {happeningMarks(state).map((m) => (
+        <g key={m.key} role="img" aria-label={m.label} transform={`translate(${m.cx * TILE} ${m.cy * TILE})`}>
+          <title>{m.label}</title>
+          <HappeningFigure figure={m.figure} />
+        </g>
+      ))}
       {placed.map(({ villager, cx, cy }) => {
         const isSelected = selected === villager.name;
         const nameWidth = villager.name.length * 4.6 + 6;

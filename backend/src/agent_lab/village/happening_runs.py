@@ -15,7 +15,7 @@ from agent_lab.village.happenings import (
 )
 from agent_lab.village.trade import carried_text
 from agent_lab.village.work import mend_step
-from agent_lab.village.world import clock, label
+from agent_lab.village.world import clock, hhmm, label
 
 Villager = dict[str, Any]
 Happening = dict[str, Any]
@@ -47,6 +47,31 @@ def _passed(h: Happening) -> str:
     if h["kind"] == "repair":
         return f"{text.capitalize()} stayed broken."
     return f"The peddler left the square; nobody traded for {h['details']['goods']}."
+
+
+POSTMAN = 30  # minutes the postman is seen walking to the door before the letter is there
+
+
+def happening_state(h: Happening, minute: int) -> dict[str, Any]:
+    """A happening for the view: its words, where it is and what figure to draw, if any."""
+    figure: str | None = None
+    if h["kind"] == "letter":
+        figure = "postman" if h["state"] == "coming" and h["start"] - POSTMAN <= minute else None
+    elif h["kind"] == "visitor":
+        figure = "visitor" if h["state"] in ("here", "dealt") and minute < h["end"] else None
+    elif h["state"] == "here":
+        figure = h["kind"]
+    return {
+        "kind": h["kind"],
+        "label": happening_text(h),
+        "cell": h["cell"],
+        "state": h["state"],
+        "by": h["by"],
+        "concerns": h["concerns"],
+        "start": hhmm(h["start"]),
+        "end": hhmm(h["end"]),
+        "figure": figure,
+    }
 
 
 class HappeningRuns:
