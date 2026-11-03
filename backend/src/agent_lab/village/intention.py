@@ -184,7 +184,7 @@ def _phrase(intention: Intention, basket: str | None = None) -> str:
     if kind == "build":
         return "build at the building site"
     if kind == "bring":
-        return f"take your {carried_text(basket) if basket else 'load'} to the building site"
+        return f"take the {carried_text(basket) if basket else 'load'} to the building site"
     return f"work at the {label(place)}"
 
 

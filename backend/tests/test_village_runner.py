@@ -3468,3 +3468,28 @@ def test_whispers_are_short_and_at_most_three_a_day() -> None:
     assert (many.value.status, str(many.value)) == (409, "Lina already heard 3 whispers today")
     v.world["tick"] += 144  # the next day
     v.whisper("Lina", "A new day")
+
+
+@pytest.mark.anyio
+async def test_a_full_day_record_still_takes_what_happened_but_not_intentions(
+    tmp_path: Path,
+) -> None:
+    """Intention notes filled the record by midday on the real model (M15 seven days)."""
+    v, _ = village_for(tmp_path, {"Hilde": [move("market")]})
+    morning(v, tick_of(1, 14, 50))
+    items = [{"tick": 0, "text": f"note {i}"} for i in range(runner.RECORD_ITEMS)]
+    v.world["day_record"] = {"day": 1, "items": items}
+    sx, sy = label_cell("square")
+    put(v, "Hilde", sx, sy, triggers=["met"])
+    stall = happening(
+        "peddler",
+        place="square",
+        cell=[sx + 1, sy],
+        start=600,
+        end=900,
+        details={"text": "a peddler with a kite", "goods": "a kite"},
+    )
+    v.world["happenings"] = [stall]
+    await v.step()
+    assert "The peddler left the square; nobody traded for a kite." in notes(v)
+    assert not any("set out to" in n for n in notes(v))

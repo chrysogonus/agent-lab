@@ -203,7 +203,7 @@ def test_the_texts() -> None:
         "it is 15:00."
     )
     bring = start(world, "Greta", {"action": "bring"})
-    assert described(bring, "saplings") == "take your load of saplings to the building site"
+    assert described(bring, "saplings") == "take the load of saplings to the building site"
     see = start(world, "Greta", {"action": "find", "villager": "Lina", "say": "Hi"})
     assert described(see) == 'see Lina and say "Hi"'
 

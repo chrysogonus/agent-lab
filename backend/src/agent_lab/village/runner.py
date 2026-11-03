@@ -148,7 +148,8 @@ PLAN_TALK_LINES = 4  # a conversation this long ends with both revising their pl
 NIGHT_STEP = 0.2  # seconds per step while everyone sleeps
 STEP_GAP = 0.1  # seconds between moves in a Step
 CELLS_PER_STEP = 3  # how far a villager walks in 10 village minutes
-RECORD_ITEMS = 120  # happenings kept for the chronicle of one day
+RECORD_ITEMS = 120  # notes kept for the chronicle of one day; intentions only up to here
+RECORD_MOST = 200  # the rest (what happened, talks, trades) up to here (M15)
 RECORD_TEXT = 300
 FRESH_START = "the village moved to a bigger map and started fresh"
 FESTIVAL_BEGINS = (
@@ -521,10 +522,12 @@ class Village(MeetingRuns, HappeningRuns):
         entry = {"tick": self.world["tick"], "kind": kind, "text": text, **extra}
         v["events"] = [*v["events"], entry][-EVENTS_KEPT:]
 
-    def _note(self, text: str) -> None:
-        """A happening for tonight's chronicle, while the villagers' day is on."""
+    def _note(self, text: str, *, minor: bool = False) -> None:
+        """A happening for tonight's chronicle, while the villagers' day is on. Minor notes
+        (intentions starting and ending) stop earlier, so they never crowd out the rest."""
         record = self.world["day_record"]
-        if record is not None and len(record["items"]) < RECORD_ITEMS:
+        most = RECORD_ITEMS if minor else RECORD_MOST
+        if record is not None and len(record["items"]) < most:
             record["items"].append({"tick": self.world["tick"], "text": text[:RECORD_TEXT]})
 
     def _trigger(self, v: Villager, reason: str) -> None:
@@ -1037,7 +1040,7 @@ class Village(MeetingRuns, HappeningRuns):
             self._end_intention(v, f"you chose to {described(intention)}", ask=False)
         v["intention"] = intention
         self._event(v, "intended", f"You set out to {described(intention, v['basket'])}.")
-        self._note(started_text(v["name"], intention, v["basket"]))
+        self._note(started_text(v["name"], intention, v["basket"]), minor=True)
         self._pursue(v)
 
     def _end_intention(self, v: Villager, why: str, *, ask: bool = True) -> None:
@@ -1048,7 +1051,7 @@ class Village(MeetingRuns, HappeningRuns):
         v["intention"] = None
         text = described(intention, v["basket"])
         self._event(v, "intention_ended", f"You are done with: {text}: {why}.")
-        self._note(ended_text(v["name"], intention, why, v["basket"]))
+        self._note(ended_text(v["name"], intention, why, v["basket"]), minor=True)
         if ask:  # otherwise what follows (the next intention, bedtime) sets work and walking
             v |= {"goal": None, "working": None}
             self._trigger(v, "intention ended")
