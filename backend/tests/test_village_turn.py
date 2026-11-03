@@ -965,8 +965,8 @@ def test_row_the_boat_alone_with_someone_or_until_a_time() -> None:
         None,
     )
     assert parsed({"action": "row", "with": "Lina"}, world, "Jonas") == (
-        {"action": "wait"},
-        "Lina is not next to you",
+        {"action": "row", "ignored": "Lina is not next to you"},
+        None,
     )
     assert parsed({"action": "row"}, world_with(), "Jonas") == (
         {"action": "wait"},
@@ -1012,3 +1012,70 @@ def test_someone_seen_on_the_lake_is_on_the_lake() -> None:
         "source": "seen",
     }
     assert belief_text(world, "Hilde", "Jonas") == "on the lake (seen 09:30)"
+
+
+# --- M15: answers the real model gave (checks of 2026-11-03) ---
+
+
+def visitor_for(world: dict[str, Any], host: str = "Greta") -> None:
+    world["happenings"] = [
+        {
+            "kind": "visitor",
+            "place": None,
+            "cell": list(door(host)),
+            "concerns": host,
+            "details": {"text": "Anna, Greta's sister", "name": "Anna, your sister"},
+            "state": "here",
+            "seen_by": [],
+            "leader": None,
+        }
+    ]
+
+
+def test_naming_the_visitor_goes_to_where_the_visitor_is() -> None:
+    world = world_with(Greta=at(*place_cells("fields")[0]))
+    visitor_for(world)
+    assert parsed({"action": "find", "villager": "Anna"}, world, "Greta") == (
+        {"action": "move", "place": "home"},
+        None,
+    )
+    assert parsed({"action": "say", "text": "Anna!", "to": "Anna"}, world, "Greta") == (
+        {"action": "move", "place": "home"},
+        None,
+    )
+    assert parsed({"action": "find", "villager": "Anna"}, world, "Lina") == (
+        {"action": "find", "villager": "Greta"},
+        None,
+    )
+
+
+def test_asking_someone_not_there_along_takes_the_boat_out_alone() -> None:
+    world = boat_world(Jonas={"at": "pier"})
+    for with_ in ("Greta", "nobody", ""):
+        action, why = parsed({"action": "row", "with": with_}, world, "Jonas")
+        assert why is None and action["action"] == "row" and "with" not in action
+    assert parsed({"action": "row", "with": "Greta"}, world, "Jonas")[0]["ignored"] == (
+        "Greta is not next to you"
+    )
+
+
+def test_selling_or_giving_to_the_peddler_is_trading_with_it() -> None:
+    sx, sy = label_cell("square")
+    world = world_with(Lina={**at(sx, sy), "basket": "flowers"})
+    world["happenings"] = [
+        {
+            "kind": "peddler",
+            "place": "square",
+            "cell": [sx + 1, sy],
+            "state": "here",
+            "details": {"text": "a peddler with a lantern", "goods": "a lantern"},
+            "by": None,
+            "seen_by": [],
+            "concerns": None,
+            "leader": None,
+        }
+    ]
+    trade = ({"action": "buy", "goods": "a lantern", "paid": "flowers"}, None)
+    assert parsed({"action": "sell", "goods": "lantern"}, world, "Lina") == trade
+    assert parsed({"action": "trade", "goods": "the lantern"}, world, "Lina") == trade
+    assert parsed({"action": "give", "to": "the peddler"}, world, "Lina") == trade

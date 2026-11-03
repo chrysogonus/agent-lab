@@ -7,6 +7,7 @@ the changes `step` returns.
 """
 
 import random
+import re
 from typing import Any
 
 from agent_lab.village.meeting import meeting_day
@@ -291,3 +292,19 @@ def known_lines(world: dict[str, Any], name: str) -> list[str]:
         elif name in h["seen_by"]:
             lines.append(happening_text(h))
     return [f"Happening: {line}" for line in lines]
+
+
+def visitor_named(world: dict[str, Any], text: str) -> Happening | None:
+    """The visitor here today when `text` names it ("Anna", "Old Tomas")."""
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    return next(
+        (
+            h
+            for h in world["happenings"]
+            if h["kind"] == "visitor"
+            and h["state"] in ("here", "dealt")
+            and set(re.findall(r"[a-z]+", h["details"]["text"].split(",")[0].lower()))
+            & words - {"old", "councillor"}
+        ),
+        None,
+    )

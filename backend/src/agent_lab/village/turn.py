@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from agent_lab.village.affordances import can_do_lines
 from agent_lab.village.boat import boat_text, in_boat, row_refusal
 from agent_lab.village.build import needs_left, project_text, site_at, site_cells
-from agent_lab.village.happenings import known_lines, lead_refusal
+from agent_lab.village.happenings import known_lines, lead_refusal, visitor_named
 from agent_lab.village.intention import intention_text
 from agent_lab.village.meeting import meeting_text
 from agent_lab.village.memory import recall, when
@@ -380,6 +380,7 @@ def parse_action(
         return wait, "the answer is not JSON"
     except ValidationError as exc:
         return wait, f"not a valid action: {exc.errors()[0]['msg']}"
+    action = _to_visitor(world, name, action)
     extra: dict[str, Any] = {}
     if isinstance(action, Work | Build | Row) and action.until:
         until, why = _until(world, action.until)
@@ -418,10 +419,13 @@ def parse_action(
             return {"action": "work", "place": "site", **extra}, None
         return _leaving(world, name, {"action": "build", **extra}), None
     if isinstance(action, Row):
-        why = row_refusal(world, name, action.with_)
+        asked = (action.with_ or "").strip() or None
+        why = row_refusal(world, name, asked)
+        if why and asked and row_refusal(world, name, None) is None:
+            return {"action": "row", **extra, "ignored": why}, None  # the boat goes, alone
         if why:
             return wait, why
-        with_ = {"with": villager_named(action.with_)} if action.with_ else {}
+        with_ = {"with": villager_named(asked)} if asked else {}
         return {"action": "row", **with_, **extra}, None
     if isinstance(action, Lead):
         why = lead_refusal(world, name)
@@ -436,6 +440,17 @@ def parse_action(
         paid = villager_of(world, name)["basket"]
         goods = curiosity_named(world, action.goods) or goods_named(action.goods)
         return {"action": "buy", "goods": goods, "paid": paid}, None
+    if isinstance(action, Give) and action.to and "peddler" in action.to.lower():
+        curiosity = next(
+            (
+                h["details"]["goods"]
+                for h in world["happenings"]
+                if h["kind"] == "peddler" and h["state"] == "here"
+            ),
+            None,
+        )
+        if curiosity:  # handing a basket to the peddler is trading with it (M15)
+            return parse_action(json.dumps({"action": "buy", "goods": curiosity}), world, name)
     if isinstance(action, Give):
         to = action.to or None
         if to and re.search(r"\bstalls?\b|\bsite\b", to.lower()):
@@ -532,6 +547,22 @@ def _leaving(world: dict[str, Any], name: str, action: dict[str, Any]) -> dict[s
     return {"action": "goodbye", "text": None, "then": action}
 
 
+def _to_visitor(world: dict[str, Any], name: str, action: Action) -> Action:
+    """Finding or talking to the day's visitor, who is no villager: the host goes home, where
+    the visitor waits, and others go to the host (M15)."""
+    named = action.villager if isinstance(action, Find) else None
+    if isinstance(action, Say) and action.to:
+        named = action.to
+    if not named or villager_named(named):
+        return action
+    visitor = visitor_named(world, named)
+    if visitor is None:
+        return action
+    if visitor["concerns"] == name:
+        return Move(action="move", place="home")
+    return Find(action="find", villager=visitor["concerns"])
+
+
 def _slips(data: object) -> object:
     """Answers small models give a few times a day for a move: "walk", "go", "home"."""
     if not isinstance(data, dict):
@@ -544,6 +575,8 @@ def _slips(data: object) -> object:
         return {**found, "action": "move"}
     if action in ("home", "go home"):
         return {"action": "move", "place": "home"}
+    if action in ("sell", "trade"):  # with the peddler or the trader (M15)
+        return {**found, "action": "buy"}
     return found
 
 
