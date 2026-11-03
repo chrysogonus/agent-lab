@@ -379,7 +379,7 @@ it in a run and the result reaches the model.
 **Independent test**: the notes server started as a subprocess through the host writes, lists
 and reads a note, and refuses a name reaching outside its folder.
 
-- [ ] T021 [US3] The notes server in backend/src/agent_lab/mcp/notes.py, tests in
+- [X] T021 [US3] The notes server in backend/src/agent_lab/mcp/notes.py, tests in
   backend/tests/test_mcp_notes.py over `Server.handle` (data-model "Note", research §10).
   - `python -m agent_lab.mcp.notes --folder PATH`; server name `glasshouse-notes`; the folder
     is created if missing; `run_stdio`.
@@ -394,7 +394,7 @@ and reads a note, and refuses a name reaching outside its folder.
     and nothing outside is touched (US3 scenario 2); 20,001 characters refused (scenario 3); the
     201st note refused.
 
-- [ ] T022 [US3] The default servers file and the notes server over stdio.
+- [X] T022 [US3] The default servers file and the notes server over stdio.
   - New backend/mcp.json: `{"mcpServers": {"notes": {"command": "uv", "args": ["run",
     "--no-sync", "python", "-m", "agent_lab.mcp.notes", "--folder", "data/notes"]}}}`.
   - Tests in backend/tests/test_mcp_stdio.py: a host whose file lists the notes server as

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "notes": {
+      "command": "uv",
+      "args": ["run", "--no-sync", "python", "-m", "agent_lab.mcp.notes", "--folder", "data/notes"]
+    }
+  }
+}
