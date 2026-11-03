@@ -32,7 +32,7 @@ phase. Read `frontend/AGENTS.md` before frontend work.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the package backend/src/agent_lab/mcp/__init__.py with a module docstring
+- [X] T001 Create the package backend/src/agent_lab/mcp/__init__.py with a module docstring
   naming its modules (jsonrpc, server, transports, client, servers_file, host, lab_server,
   notes) and that it is the hand-written MCP layer for both ends.
   - No behaviour change; `make check` passes unchanged.
@@ -41,7 +41,7 @@ phase. Read `frontend/AGENTS.md` before frontend work.
 
 Every story needs these. Nothing is wired into agents yet.
 
-- [ ] T002 [P] JSON-RPC in backend/src/agent_lab/mcp/jsonrpc.py, tests in
+- [X] T002 [P] JSON-RPC in backend/src/agent_lab/mcp/jsonrpc.py, tests in
   backend/tests/test_mcp_jsonrpc.py.
   - Builders `request(id, method, params)`, `notification(method, params)`,
     `result(id, value)` and `error(id, code, message, data=None)`.
@@ -55,7 +55,7 @@ Every story needs these. Nothing is wired into agents yet.
     "2024-11-05")` and the `_meta` keys `io.modelcontextprotocol/protocolVersion`,
     `…/clientCapabilities`, `…/clientInfo`, `…/serverInfo`.
 
-- [ ] T003 The server core in backend/src/agent_lab/mcp/server.py, tests in
+- [X] T003 The server core in backend/src/agent_lab/mcp/server.py, tests in
   backend/tests/test_mcp_server.py (contracts "MCP messages the lab answers").
   - `Server(name, version, tools: list[Tool])` and `async handle(message) -> dict | None`
     (None for notifications).
@@ -79,7 +79,7 @@ Every story needs these. Nothing is wired into agents yet.
     a line that is not JSON gets `-32700`; logs go to stderr only.
   - Tests: both eras, each error, the argument errors with the calculator, a tool that raises.
 
-- [ ] T004 The transport shape and the in-process transport in
+- [X] T004 The transport shape and the in-process transport in
   backend/src/agent_lab/mcp/transports.py.
   - The shape every transport has: `async send(message) -> response`, `async notify(message)`,
     `on_notice(callback)` and `async close()`. A transport that loses its peer raises
@@ -87,7 +87,7 @@ Every story needs these. Nothing is wired into agents yet.
   - `InProcess(server)`: hands the message dict (a deep copy) to `server.handle`.
   - Tested through T005.
 
-- [ ] T005 The client connection in backend/src/agent_lab/mcp/client.py, tests in
+- [X] T005 The client connection in backend/src/agent_lab/mcp/client.py, tests in
   backend/tests/test_mcp_client.py over `InProcess` (research §1, §6; contracts "Tool result
   text for the model").
   - `Connection(name, transport, *, connect_timeout=10, call_timeout=30, discover_timeout=3)`.
