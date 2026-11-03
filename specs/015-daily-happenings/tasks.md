@@ -273,7 +273,7 @@ first. Runner tests pass `move_gap=0`.
   - docs/api.md: the whisper endpoint and the new state fields;
   - AGENTS.md: `happenings.py`, `boat.py` and `happening_runs.py` in the layout; the current
     feature.
-- [ ] T020 `make check`, then quickstart.md on the real model:
+- [X] T020 `make check`, then quickstart.md on the real model:
   - the checks at 20 repeats, compared with the M14 run of record `58ee35f159d7`;
   - the scenarios;
   - seven village days on a copy, with `evals health`;
@@ -350,3 +350,89 @@ The user stories depend on each other only through the shared files:
 | SC-002, SC-005 | quickstart step 1 (checks, compare with M14) and step 3 (waits, calls) |
 | SC-003 | quickstart step 2 |
 | SC-004 | quickstart step 4 |
+
+## Manual check results (2026-11-03, vLLM `qwen3.5-9b`, thinking off)
+
+The owner's village was backed up (`agent_lab.db.bak-before-m15`, at day 72), then upgraded to
+world version 8 by restarting `make dev`. It is paused at day 72, 05:30. That day began before the
+upgrade, so it has no happenings; they start from day 73.
+
+**Turn checks** (SC-002, SC-005), 20 repeats each.
+- The run of record is `d7972795885d`; the new checks were rerun after the parser fixes below.
+- Compared with M14's run of record `58ee35f159d7`, **no M14 check is marked better or worse**
+  (SC-005).
+
+| New check | First run | After the fixes |
+|---|---|---|
+| animal-lead | 19/20 | |
+| repair-mend | 19/20 | |
+| take-the-boat | 12/20 | 20/20 |
+| letter-pass-on | 12/20 | 17/20 |
+| visitor-host | 4/20 | 12/20 |
+| peddler-curiosity | 9/20 | 9/20 |
+
+The first run's failures were mostly reasonable answers the parser refused. These are now
+understood:
+- finding or talking to "Anna" (the visitor, who is no villager) goes to where she waits;
+- asking someone who is not there along on a trip takes the boat out alone;
+- `"sell"` / `"trade"`, or a `give` to "the peddler", trades for the curiosity.
+
+Still below 14/20:
+- `visitor-host`: the host often waits or works on;
+- `peddler-curiosity`: Lina often sets her flowers out on the stalls, or waits. Trading is a
+  choice, so this check measures a preference more than a mistake.
+
+**SC-002** is met for four of the six new checks.
+
+**Scenarios** (SC-003), 5 repeats each; the owner's village row checksum was the same before
+and after (`d5341a65`):
+
+| Scenario | Result |
+|---|---|
+| boat-trip | 5/5, every time a trip together (Jonas and Greta rowed out at 14:30) |
+| load-reaches-site | 5/5 |
+| meeting-attendance | 5/5 |
+| talk-then-go | 4/5 |
+
+**Seven village days** (SC-001, SC-005, SC-006) on a copy of the owner's village, days 72–78:
+- one whisper to Greta at 09:00 on day 72;
+- about 15 minutes on vLLM;
+- one model call lost to a dropped connection, recorded as a failed turn.
+
+| Measure | M14 | M15 |
+|---|---|---|
+| waits | 28.4% | 30.9% (≤ 35%) |
+| "there is no work for you here" per 100 decisions | 1.5 | 0.7 |
+| "<villager> is not next to you" per 100 decisions | 3.7 | 5.0 |
+| "say goodbye first" per 100 decisions | 0 | 0 |
+| model calls per day | 162–172 | 121–191 |
+
+- **SC-001**:
+  - every day from 73 on had a happening (8 in 6 days: four visitors, two peddlers, a cat and
+    a hen);
+  - 6 of 8 were dealt with or talked about (75%): every visitor was met, and the lost animals
+    were talked about but not led home;
+  - all 6 chronicles name their day's happening ("Councillor Brandt's Visit", "Winter's Rest
+    and the Lost Cluck").
+- **SC-004**: the whisper was heard at once and followed by an action, and its turn is marked
+  "after a whisper".
+- **SC-005**:
+  - Waits stay under 35%.
+  - Calls per day stay within 20% of M14's, apart from one quiet day at 121 (fewer, not more).
+  - "Not next to you" is higher than in M14's three days. It is still under the M13 baseline of
+    7.0 per 100.
+- **SC-006**: no two chronicle titles repeat. Every entry tells of something other than work,
+  trade and weather. One of seven names other weather (day 72's storm).
+- **The boat** is not built in the owner's village (it is building the bakehouse), so the seven
+  days had no trips. The boat is measured by `take-the-boat` and the `boat-trip` scenario.
+- **The map** (quickstart step 5) was not looked at in a browser: the copy cannot be served
+  next to the running village. The figures, the boat's place and the marks are covered by
+  `pixels.test.ts` and `village.test.ts`.
+
+**Found and fixed while measuring**:
+- The day record filled by midday on the first seven-day run (120 notes, on day 76 by 11:40):
+  M14's intention notes crowded it, so the chronicle and village health missed the afternoon and
+  evening. Intention notes now stop at 120. Everything else goes on to 200, and at 200 an event
+  takes the place of the earliest intention note.
+- A bring note read "Jonas set out to take your load of wood"; it now says "the load".
+- Village health no longer counts a talk that mentions a happening as the happening itself.
