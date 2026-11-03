@@ -63,7 +63,7 @@ export type Run = {
 };
 
 // The village (M6, M7). See specs/007-village-life/contracts/http-api.md.
-export type VillageAction =
+export type VillageAction = (
   | { action: "move"; place: string; purpose?: string; intention?: Intention; reason?: string }
   | { action: "find"; villager: string; say?: string; purpose?: string; intention?: Intention; reason?: string }
   | { action: "say"; text: string; to: string | null; reason?: string }
@@ -82,7 +82,8 @@ export type VillageAction =
   | { action: "propose"; proposals?: string[]; reason?: string }
   | { action: "vote"; project?: string; reason?: string }
   | { action: "decide"; project?: string; reason?: string; against?: boolean; by?: "hilde" | "vote" }
-  | { action: "assign"; tasks?: string[]; reason?: string };
+  | { action: "assign"; tasks?: string[]; reason?: string }
+) & { after_whisper?: boolean }; // M15: a decision answering a whisper
 
 export type VillageEvent = {
   tick: number;
@@ -91,7 +92,7 @@ export type VillageEvent = {
     | "planned" | "worked" | "basket" | "gave" | "received" // M11
     | "traded" | "proposed" | "meeting" | "task" | "built" // M12
     | "intended" | "intention_ended" // M14
-    | "happening" | "rowed" | "invited"; // M15
+    | "happening" | "rowed" | "invited" | "whispered"; // M15
   text: string;
   from?: string;
   to?: string | null;
@@ -355,6 +356,20 @@ export const stepVillage = (): Promise<VillageState> => send("POST", "/village/s
 export const resetVillage = (): Promise<VillageState> => send("POST", "/village/reset");
 export const setVillageInterval = (seconds: number): Promise<VillageState> =>
   send("PUT", "/village/interval", { seconds });
+export type WhisperResult = { heard: boolean } | { refused: string };
+
+/** The owner's line to one villager (M15): heard now, on waking, or refused with the reason. */
+export async function whisper(name: string, text: string): Promise<WhisperResult> {
+  const response = await fetch(`${API_URL}/village/villagers/${encodeURIComponent(name)}/whisper`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const body = await response.json();
+  if (response.ok) return body as { heard: boolean };
+  return { refused: typeof body.detail === "string" ? body.detail : "the whisper was not accepted" };
+}
+
 export const villagerTurns = (name: string): Promise<Run[]> =>
   send("GET", `/village/villagers/${encodeURIComponent(name)}/turns`);
 

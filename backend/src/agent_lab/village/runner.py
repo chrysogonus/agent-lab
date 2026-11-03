@@ -588,6 +588,7 @@ class Village(MeetingRuns, HappeningRuns):
                         self._note(f"Overnight: {news}")  # yesterday's work shows by morning
                 self._event(v, "woke", "You woke up at home.")
                 self._trigger(v, "woke")
+                self._hear_waiting(v)  # whispers while it slept (M15)
                 if not self.resetting:
                     self._start_plan(name)
             return
@@ -960,6 +961,7 @@ class Village(MeetingRuns, HappeningRuns):
         v = self._villager(name)
         tick = self.world["tick"]
         carried = v["basket"]
+        after_whisper = "whispered" in v["triggers"]  # the turn shows it answered one (M15)
         try:
             prompt = observation(self.world, name)
             v |= {"triggers": [], "inbox": [], "last_decided": tick}  # all of it is in the prompt
@@ -984,8 +986,9 @@ class Village(MeetingRuns, HappeningRuns):
             reason = "what you carry changed while you decided; decide again"
         self._apply(v, action, reason)
         if run_id:
+            whispered = {"after_whisper": True} if after_whisper else {}
             self.store.set_village_action(
-                run_id, {**action, **({"reason": reason} if reason else {})}
+                run_id, {**action, **({"reason": reason} if reason else {}), **whispered}
             )
         self._start_decisions()  # e.g. whoever was just spoken to
         self._publish()

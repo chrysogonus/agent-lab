@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { villagerTurns, type Run, type Villager } from "@/lib/api";
-import { eventLines, intentionText, planEntryText, sleepText, stateText, turnLabel } from "@/lib/village";
+import { villagerTurns, whisper, type Run, type Villager } from "@/lib/api";
+import { eventLines, intentionText, planEntryText, sleepText, stateText, turnLabel, whisperReply } from "@/lib/village";
 import { VillagerSprite } from "./pixels";
 
 const MEMORIES_SHOWN = 10;
@@ -77,6 +77,7 @@ export function VillagerPanel({
           <p className="mt-1 font-sans text-sm text-dusk-muted">Keeps {villager.keepsakes.map((k) => `${k.name} (day ${k.day})`).join(", ")}</p>
         )}
       </div>
+      <WhisperBox name={villager.name} />
       {villager.agent_id && (
         <button type="button" onClick={() => onEditAgent(villager.agent_id!)} className="village-button self-start">
           Edit its agent
@@ -167,5 +168,54 @@ export function VillagerPanel({
         )}
       </div>
     </section>
+  );
+}
+
+const WHISPER_TEXT = 200;
+
+/** The owner's line to this villager (M15): it hears it as a claim from "a voice". */
+function WhisperBox({ name }: { name: string }) {
+  const [text, setText] = useState("");
+  const [reply, setReply] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  async function send() {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    try {
+      const result = await whisper(name, text);
+      setReply(whisperReply(result));
+      if (!("refused" in result)) setText("");
+    } catch {
+      setReply("Not heard: the village could not be reached.");
+    } finally {
+      setSending(false);
+    }
+  }
+  return (
+    <div>
+      <h3 className="mb-1.5 text-lg">Whisper</h3>
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={WHISPER_TEXT}
+          placeholder={`Something for ${name} to hear…`}
+          aria-label={`Whisper to ${name}`}
+          className="min-w-0 flex-1 rounded border-2 border-dusk bg-[#fffaf0] px-2 py-1 font-sans text-sm text-dusk"
+        />
+        <button type="submit" disabled={!text.trim() || sending} className="village-button village-button--small">
+          Whisper
+        </button>
+      </form>
+      <p className="mt-1 font-sans text-xs text-dusk-muted" aria-live="polite">
+        {reply ?? `${text.length}/${WHISPER_TEXT} · heard as a voice's claim, 3 a day`}
+      </p>
+    </div>
   );
 }

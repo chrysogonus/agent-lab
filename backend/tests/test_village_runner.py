@@ -3416,3 +3416,55 @@ def test_the_state_gives_the_boat_where_it_is() -> None:
     start_trip(v.world, "Jonas", None, None)
     v.world["boat"] |= {"state": "out", "at": 2}
     assert v.state()["boat"] == {"state": "out", "rowers": ["Jonas"], "cell": [23, 20]}
+
+
+# --- M15 US3: whispers (FR-010 to FR-012) ---
+
+
+@pytest.mark.anyio
+async def test_a_whisper_reaches_the_villager_as_a_claim_and_asks_it(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path)
+    morning(v)
+    v.world["day_record"] = {"day": 1, "items": []}
+    assert v.whisper("Greta", "  Lina wants to see you.  ") is True
+    greta = villager(v, "Greta")
+    assert greta["triggers"] == ["whispered"]
+    assert texts(v, "Greta", "whispered") == ['A voice whispered to you: "Lina wants to see you."']
+    assert "A voice whispered to Greta." in notes(v)
+    await v.step()
+    prompt = calls_of(llm, "Greta")[-1]
+    assert '- a voice: "Lina wants to see you."' in prompt.split("What others told you")[1]
+    [turn] = v.store.list_turns("Greta")
+    assert turn.village_action is not None and turn.village_action["after_whisper"] is True
+
+
+@pytest.mark.anyio
+async def test_a_sleeping_villager_hears_the_whisper_on_waking(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    v.world["tick"] = JONAS_WAKES - 1
+    assert v.whisper("Jonas", "The herring are back.") is False
+    assert villager(v, "Jonas")["whispers"][0]["heard"] is None
+    await v.step()  # he wakes
+    assert villager(v, "Jonas")["whispers"][0]["heard"] == JONAS_WAKES
+    assert texts(v, "Jonas", "whispered") == ['A voice whispered to you: "The herring are back."']
+
+
+def test_whispers_are_short_and_at_most_three_a_day() -> None:
+    from agent_lab.village.happening_runs import WhisperError
+
+    v, _ = village_for(":memory:")
+    morning(v)
+    for bad, status in (("", 422), ("x" * 201, 422)):
+        with pytest.raises(WhisperError) as refused:
+            v.whisper("Lina", bad)
+        assert refused.value.status == status
+    with pytest.raises(WhisperError) as unknown:
+        v.whisper("Tom", "hi")
+    assert unknown.value.status == 404
+    for i in range(3):
+        v.whisper("Lina", f"Line {i}")
+    with pytest.raises(WhisperError) as many:
+        v.whisper("Lina", "One more")
+    assert (many.value.status, str(many.value)) == (409, "Lina already heard 3 whispers today")
+    v.world["tick"] += 144  # the next day
+    v.whisper("Lina", "A new day")

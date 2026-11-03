@@ -236,3 +236,18 @@ def test_village_health_and_the_turns_behind_a_reason(store: Store) -> None:
     assert client.get("/village/health/1/turns", params={"reason": "nothing"}).json() == []
     assert client.get("/village/health/9/turns", params={"reason": "x"}).status_code == 422
     assert client.get("/village/health", params={"days": 99}).status_code == 422
+
+
+def test_whisper_to_a_villager(store: Store) -> None:
+    """M15 (FR-010): POST /village/villagers/{name}/whisper."""
+    client = client_for(store)
+    asleep = client.post("/village/villagers/Greta/whisper", json={"text": "Rain tomorrow."})
+    assert asleep.status_code == 200 and asleep.json() == {"heard": False}
+    assert client.post("/village/villagers/Tom/whisper", json={"text": "hi"}).status_code == 404
+    too_long = client.post("/village/villagers/Greta/whisper", json={"text": "x" * 201})
+    assert too_long.status_code == 422
+    for _ in range(2):
+        client.post("/village/villagers/Greta/whisper", json={"text": "Again."})
+    limit = client.post("/village/villagers/Greta/whisper", json={"text": "Once more."})
+    assert limit.status_code == 409 and "3 whispers today" in limit.json()["detail"]
+    assert all("whispers" not in v for v in client.get("/village").json()["villagers"])

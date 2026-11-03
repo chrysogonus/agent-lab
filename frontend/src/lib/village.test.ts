@@ -33,6 +33,7 @@ import {
   intentionText,
   happeningMarks,
   boatPlace,
+  whisperReply,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -529,5 +530,19 @@ describe("the boat (M15)", () => {
     const turn = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
     expect(turnLabel(turn({ action: "row" }))).toBe("05:00 takes the boat out on the lake");
     expect(turnLabel(turn({ action: "row", with: "Greta" }))).toBe("05:00 takes the boat out on the lake with Greta");
+  });
+});
+
+describe("whispers (M15)", () => {
+  it("marks a turn that answered a whisper", () => {
+    const turn = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(turn({ action: "move", place: "market", after_whisper: true }))).toBe("05:00 walks to the market (after a whisper)");
+    expect(turnLabel(turn({ action: "wait", after_whisper: true }))).toBe("05:00 waits (after a whisper)");
+  });
+
+  it("says what became of a whisper", () => {
+    expect(whisperReply({ heard: true })).toBe("Heard.");
+    expect(whisperReply({ heard: false })).toBe("Asleep: it will hear it on waking.");
+    expect(whisperReply({ refused: "Lina already heard 3 whispers today" })).toBe("Not heard: Lina already heard 3 whispers today.");
   });
 });

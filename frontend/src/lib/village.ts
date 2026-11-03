@@ -1,5 +1,5 @@
 // Village view logic: map tiles, figures, speech and panel lines. Pure; components stay thin.
-import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Happening, Intention, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager } from "./api";
+import type { BasketGoods, Built, BuildingGoods, ChronicleEntry, Goods, Happening, Intention, Meeting, PlanEntry, Project, Run, Stalls, Task, VillageEvent, VillageState, Villager, WhisperResult } from "./api";
 
 export type CellKind = "grass" | "path" | "water" | "tree" | "lamp" | "building" | "place" | "plot";
 
@@ -216,8 +216,20 @@ export function intentionText(intention: Intention): string {
   }
 }
 
-/** One line for a turn: its time and what it did (or why it waited). */
+/** One line for a turn: its time and what it did (or why it waited); a turn answering a
+ * whisper says so (M15). */
 export function turnLabel(turn: Run): string {
+  const label = actionLabel(turn);
+  return turn.village_action?.after_whisper ? `${label} (after a whisper)` : label;
+}
+
+/** What a whisper came to, for the panel (M15). */
+export function whisperReply(result: WhisperResult): string {
+  if ("refused" in result) return `Not heard: ${result.refused}.`;
+  return result.heard ? "Heard." : "Asleep: it will hear it on waking.";
+}
+
+function actionLabel(turn: Run): string {
   const time = turn.village_tick == null ? "" : `${tickTime(turn.village_tick)} `;
   const action = turn.village_action;
   if (!action) return `${time}${turn.status === "running" ? "thinking…" : "no action recorded"}`;

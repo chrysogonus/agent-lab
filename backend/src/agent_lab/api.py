@@ -27,6 +27,7 @@ from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import Span
+from agent_lab.village.happening_runs import WhisperError
 from agent_lab.village.health import reason_template
 from agent_lab.village.health_view import day_ticks, days_health
 from agent_lab.village.runner import CHANNEL, StepConflict, Village
@@ -86,6 +87,10 @@ class NewAgent(AgentFields):
 class GraphRequest(BaseModel):
     template_id: str
     config: dict[str, Any]
+
+
+class WhisperRequest(BaseModel):
+    text: str
 
 
 class IntervalRequest(BaseModel):
@@ -442,6 +447,14 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         if name not in VILLAGERS:
             raise HTTPException(status_code=404, detail="unknown villager")
         return store.list_turns(name)
+
+    @app.post("/village/villagers/{name}/whisper")
+    async def whisper_to_villager(name: str, body: WhisperRequest) -> dict[str, bool]:
+        """The owner's line to one villager, heard as a claim from "a voice" (M15)."""
+        try:
+            return {"heard": village.whisper(name, body.text)}
+        except WhisperError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc)) from None
 
     @app.get("/village/health")
     async def village_health(days: int = Query(14, ge=1, le=28)) -> dict[str, Any]:

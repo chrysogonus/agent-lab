@@ -231,7 +231,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 5: User Story 3 — Whispers (P3)
 
-- [ ] T016 [US3] happening_runs.py, runner.py and api.py.
+- [X] T016 [US3] happening_runs.py, runner.py and api.py.
   - `whisper(name, text)`:
     - stripped text, 1–200 characters ("a whisper is at most 200 characters");
     - at most 3 per villager per village day ("Greta already heard 3 whispers today");
@@ -246,7 +246,7 @@ first. Runner tests pass `move_gap=0`.
 
   Tests in test_village_runner.py, test_village_turn.py and test_village_api.py.
   Requirements: FR-010, FR-011.
-- [ ] T017 [US3] Frontend:
+- [X] T017 [US3] Frontend:
   - lib/api.ts: `whisper(name, text)`, the `whispered` event, `after_whisper`;
   - lib/village.ts: `turnLabel` adds " (after a whisper)";
   - VillagerPanel.tsx: a whisper box with a 200-character limit and a counter, sending on

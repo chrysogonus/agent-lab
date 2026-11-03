@@ -16,7 +16,7 @@ from agent_lab.village.happenings import (
 )
 from agent_lab.village.trade import carried_text
 from agent_lab.village.work import mend_step
-from agent_lab.village.world import clock, hhmm, label, listed
+from agent_lab.village.world import VILLAGERS, clock, hhmm, label, listed
 
 Villager = dict[str, Any]
 Happening = dict[str, Any]
@@ -50,7 +50,18 @@ def _passed(h: Happening) -> str:
     return f"The peddler left the square; nobody traded for {h['details']['goods']}."
 
 
+WHISPER_TEXT = 200  # characters of a whisper
+WHISPERS_A_DAY = 3  # per villager
+WHISPERS_KEPT = 10
 POSTMAN = 30  # minutes the postman is seen walking to the door before the letter is there
+
+
+class WhisperError(Exception):
+    """A whisper refused, with the HTTP status that says why."""
+
+    def __init__(self, status: int, text: str) -> None:
+        super().__init__(text)
+        self.status = status
 
 
 def happening_state(h: Happening, minute: int) -> dict[str, Any]:
@@ -90,6 +101,7 @@ class HappeningRuns:
     def _aim(self, v: Villager, goal: dict[str, Any]) -> None: ...
     def _end_intention(self, v: Villager, why: str, *, ask: bool = True) -> None: ...
     def _say(self, v: Villager, text: str, to: str | None) -> None: ...
+    def _start_decisions(self, *, force: bool = False) -> None: ...
 
     # --- the day's happenings ---
 
@@ -202,3 +214,38 @@ class HappeningRuns:
             v["working"] = None
             if v["intention"] and v["intention"]["kind"] == "row":
                 self._end_intention(v, "the boat is back at the pier")
+
+    # --- whispers ---
+
+    def whisper(self, name: str, text: str) -> bool:
+        """The owner's line to one villager, heard now (True) or on waking (False)."""
+        if name not in VILLAGERS:
+            raise WhisperError(404, f"unknown villager {name!r}")
+        text = text.strip()
+        if not 1 <= len(text) <= WHISPER_TEXT:
+            raise WhisperError(422, f"a whisper is 1 to {WHISPER_TEXT} characters")
+        v, tick = self._villager(name), self.world["tick"]
+        day = clock(tick)[0]
+        if sum(1 for w in v["whispers"] if clock(w["tick"])[0] == day) >= WHISPERS_A_DAY:
+            raise WhisperError(409, f"{name} already heard {WHISPERS_A_DAY} whispers today")
+        whispered: dict[str, Any] = {"text": text, "tick": tick, "heard": None}
+        v["whispers"] = [*v["whispers"], whispered][-WHISPERS_KEPT:]
+        if not v["asleep"]:
+            self._hear(v, whispered)
+            self._start_decisions()
+        self._publish()
+        return whispered["heard"] is not None
+
+    def _hear(self, v: Villager, whispered: dict[str, Any]) -> None:
+        """A whisper as something heard: a claim from "a voice", and a reason to decide."""
+        tick, text = self.world["tick"], whispered["text"]
+        whispered["heard"] = tick
+        v["inbox"].append({"from": "a voice", "to": None, "text": text, "tick": tick})
+        self._event(v, "whispered", f'A voice whispered to you: "{text}"')
+        self._trigger(v, "whispered")
+        self._note(f"A voice whispered to {v['name']}.")
+
+    def _hear_waiting(self, v: Villager) -> None:
+        for whispered in v["whispers"]:
+            if whispered["heard"] is None:
+                self._hear(v, whispered)
