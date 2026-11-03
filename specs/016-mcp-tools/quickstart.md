@@ -40,5 +40,34 @@ The local model is off for now, so manual runs use `openai/gpt-6-luna`. Set `OPE
 6. **Secrets** (SC-004):
    - give an HTTP entry a header `Authorization: Bearer ${SOME_TOKEN}`;
    - run a tool of it;
-   - confirm the token appears nowhere on the Tools page, in the span detail, or in
-     `sqlite3 backend/data/agent_lab.db "select count(*) from spans where input || output || attributes like '%<token>%'"`, which gives 0.
+   - confirm the token appears nowhere on the Tools page, in the span detail, or in the stored
+     spans, where this gives 0:
+
+     ```bash
+     python3 -c "import sqlite3; print(sqlite3.connect('backend/data/agent_lab.db').execute(
+       \"select count(*) from spans where coalesce(input,'') || coalesce(output,'') ||
+       coalesce(attributes,'') like '%<token>%'\").fetchone()[0])"
+     ```
+
+## Results (2026-11-03)
+
+**Timing** (plan performance goals), measured once with a script:
+
+| Path | Goal | Measured |
+|---|---|---|
+| `calculator` through the in-process lab server | adds under 5 ms | adds 0.014 ms (0.016 ms against 0.002 ms called directly) |
+| `notes/read_note` over stdio | under 100 ms | median 0.19 ms, p95 0.26 ms, max 0.36 ms |
+
+**Manual checks** on `openai/gpt-6-luna`. They ran against a second backend on port 8010, with a
+scratch database and a scratch servers file, so the owner's database was not touched. That
+file listed `notes`, `journal` (a second notes server) and `web` (the lab's own `/mcp` over
+HTTP, with `Authorization: Bearer ${M16_CHECK_TOKEN}`).
+
+| Check | Result |
+|---|---|
+| 1. The Tools page | API only: `lab`, `notes` and `journal` connected at start. `web` failed with "All connection attempts failed" because it was its own address before uvicorn accepted connections; Reconnect connected it (modern, 2026-07-28). **Not looked at in a browser.** |
+| 2. Built-ins unchanged | Passed with reasoning off: "17 × 23 + 11°C = **402**". Both tool spans show `lab.mcp.server: lab`, 2026-07-28, the request id and the response. With reasoning on (the template's default), OpenAI refuses function tools for gpt-6-luna on `/v1/chat/completions` (HTTP 400). That limit predates M16. |
+| 3. The owner's own server | Passed: a `todo` entry was added to the file, then Reload, then a new block agent using `todo/write_note` and `web/calculator`. It completed 3.3 s after the file edit (through the API, not the builder UI). |
+| 4. Notes between runs (SC-006) | **3/5** with a plain system prompt: in both misses the model did not look in its notes. **4/5** with a system prompt saying "before answering any question, look in your notes": the one miss read the note and then refused to repeat a "password". Every tool call the model made worked. |
+| 5. Claude Code | **Not run**: `claude mcp add` changes the owner's Claude Code settings. `test_mcp_http.py` covers the same path with an outside client, in both revisions. |
+| 6. Secrets (SC-004) | Passed: the token appeared 0 times in 35 tool spans, in the runs, on the Tools page and in the server log. |

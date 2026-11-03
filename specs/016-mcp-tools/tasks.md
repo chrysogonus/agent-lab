@@ -434,7 +434,7 @@ lists and calls both built-ins, in both eras.
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T025 [P] Docs.
+- [X] T025 [P] Docs.
   - New docs/tools.md: the servers file (shape, lookup order, `${VAR}`, `allowHosts`, limits),
     the Tools page, naming (`calculator`, `server/tool`, the model's names), the notes server,
     the two protocol eras, `POST /mcp` and `claude mcp add --transport http glasshouse
@@ -445,7 +445,7 @@ lists and calls both built-ins, in both eras.
     milestone, the Tools page), AGENTS.md (the `mcp/` package, no MCP library, tests use the
     in-process transport, `MockTransport` and the repo's stdio scripts).
 
-- [ ] T026 Timing (plan performance goals): measure a calculator call through the in-process
+- [X] T026 Timing (plan performance goals): measure a calculator call through the in-process
   path (< 5 ms added) and a notes stdio call (< 100 ms) once with a short script in the
   scratchpad; record the figures in specs/016-mcp-tools/quickstart.md under "Results".
 

@@ -40,7 +40,7 @@ settings panel: **+** adds a block after another, **↑ ↓** move it, **✕** r
 
 | Block | What it does |
 |---|---|
-| **Model call** | A system prompt and a message; optionally tools and a limit on model calls (a ReAct loop in one block). |
+| **Model call** | A system prompt and a message; optionally up to 6 tools and a limit on model calls (a ReAct loop in one block). |
 | **Tool call** | One tool with its arguments. |
 | **Check** | At least N bullet lines, at most N words, contains a text, or valid JSON. Failing ends the run. |
 | **Router** | A model picks one of 2–6 routes; each route is its own list of blocks. |

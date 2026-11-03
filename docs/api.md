@@ -13,9 +13,9 @@ so everything the UI does can be scripted.
 | `POST /agents`, `PUT /agents/{id}`, `DELETE /agents/{id}` | create, update, delete a custom agent (`model`: `{"provider", "model"}` or `null` for Default) |
 | `GET /blocks/new`, `GET /agents/{id}/blocks` | an unsaved block agent: new, or converted from a template or custom agent |
 | `POST /graph` `{"template_id", "config"}` | the graph for an unsaved config (validation errors as `422`) |
-| `GET /tools` | tools an agent can be given, with their parameter schema |
+| `GET /tools` | tools of every connected MCP server, by config name (`calculator`, `server/tool`), with `server` and their parameter schema |
 | `GET /models` | configured models: provider, id, external, available, default (never keys) |
-| `POST /runs` `{"prompt", "agent_id"}` | start a run (`202`) |
+| `POST /runs` `{"prompt", "agent_id"}` | start a run (`202`); `409` when a tool's server is not connected or does not list it |
 | `GET /runs` | past runs with totals, newest first (village turns are left out) |
 | `GET /runs/{id}` | a run and its spans |
 | `WS /runs/{id}/stream` | stored spans, then live span events, then `run_ended` |
@@ -27,6 +27,17 @@ RUN_ID=$(curl -s -X POST http://127.0.0.1:8000/runs -H 'content-type: applicatio
   | python3 -c 'import json, sys; print(json.load(sys.stdin)["run_id"])')
 curl -s "http://127.0.0.1:8000/runs/$RUN_ID"
 ```
+
+## MCP
+
+See [tools.md](tools.md).
+
+| Endpoint | What it does |
+|---|---|
+| `GET /mcp/servers` | the servers file (`file`, `file_error`) and every server: kind, target, state, reason, revision, tools, last connect's messages (secrets redacted) |
+| `POST /mcp/servers/{name}/reconnect` | re-read one entry and connect it again (`202`, `404` for an unknown name) |
+| `POST /mcp/reload` | re-read the servers file (`202`) |
+| `POST /mcp` | the lab's own MCP server for outside clients (both revisions; `GET` and `DELETE` are `405`) |
 
 ## Village
 

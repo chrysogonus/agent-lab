@@ -2,8 +2,9 @@
 
 Glasshouse: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
 builder, per-agent models) with a live trace view, plus a village of four villager agents
-(M6–M15). Rules for every change: `.specify/memory/constitution.md`. Current feature:
-`specs/015-daily-happenings/`; earlier milestones in `specs/001-…` to `specs/014-…`. Human
+(M6–M15), with tools over hand-written MCP (M16). Rules for every change:
+`.specify/memory/constitution.md`. Current feature: `specs/016-mcp-tools/`; earlier milestones in
+`specs/001-…` to `specs/015-…`. Human
 documentation: `README.md` and `docs/` (keep both in step with user-visible changes).
 
 ## Commands
@@ -46,8 +47,10 @@ report; keep every gate at its current strictness.
   `health_view.py` village health per day; `evals/` turn checks, scenarios and their results,
   run with `python -m agent_lab.village.evals`; specs/007-village-life/ to
   specs/015-daily-happenings/), `backend/evals/` (the shipped checks and scenarios, JSON),
-  `tools/` (`catalog.py`:
-  every tool by name), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
+  `mcp/` (hand-written MCP, docs/tools.md: `jsonrpc.py`, `server.py` one server core for both
+  protocol eras, `transports.py` in-process/stdio/HTTP, `client.py` one connection,
+  `servers_file.py`, `host.py` connections and `HostTool`s, `lab_server.py`, `notes.py`),
+  `tools/` (calculator and weather, served by `mcp/lab_server.py`), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
   `bus.py`, `runs.py`, `api.py`.
 - `backend/tests/`: pytest; `helpers.py` builds scripted runs and `assert_trace_valid`;
@@ -70,9 +73,11 @@ report; keep every gate at its current strictness.
    (`specs/002-workflow-patterns/contracts/trace-conventions.md`).
 3. **Spans are upserted to SQLite on start and end and published on the bus.** The UI reads
    only `WS /runs/{id}/stream` (stored spans, then live), so live view and replay share one path.
-4. **Security.** Bind to 127.0.0.1. The tracer redacts before any sink sees a span. Tools get
-   parsed arguments only and declare `scopes`; agents reject ungranted scopes. The API checks
-   `Host`, CORS origin and WebSocket `Origin`.
+4. **Security.** Bind to 127.0.0.1. The tracer redacts before any sink sees a span, with the
+   servers file's `env` and `headers` values as secrets too. Every tool is an MCP tool reached
+   through `mcp/host.py`; the servers file is the grant (local programs get only `PATH`, `HOME`
+   and named variables; addresses stay on this computer unless allowed). The API checks `Host`,
+   CORS origin, WebSocket `Origin` and the `/mcp` `Origin`.
 5. **Templates and custom agents.** Each template's pydantic `Config` is the only definition of
    its editable fields, defaults and limits; graphs and decision schemas are derived from it.
    A custom agent is a stored (template id, config) that the server validates with that model;
@@ -105,7 +110,9 @@ report; keep every gate at its current strictness.
 
 - Hand-write agent logic; agent frameworks and MCP SDKs stay out. Ask the owner before adding
   any dependency.
-- Tests use `FakeLLM` or `httpx.MockTransport`, never a real model or provider. The real-model
+- Tests use `FakeLLM` or `httpx.MockTransport`, never a real model or provider. MCP tests use the
+  in-process lab server, `MockTransport` and the repo's own stdio scripts
+  (`backend/tests/mcp_legacy_server.py`, `python -m agent_lab.mcp.notes`); no MCP library. The real-model
   evals (`make eval-checks`, `make eval-scenarios`) never run in `make check`; they report and
   never gate. They only read the owner's database and write under `backend/data/`.
 - Before editing the store or the runner while `make dev` runs, stop it or back up

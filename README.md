@@ -19,6 +19,7 @@ Status: a personal learning project that runs on your own machine (both servers 
 |---|---|
 | **Run and trace agents**<br>Pick one of six agents (ReAct plus five workflow patterns), ask something and watch the graph light up node by node. Click a span to see its prompt, answer, tokens and latency. → [docs/agents.md](docs/agents.md) | <img src="docs/images/run-view.png" alt="run view" width="420"> |
 | **Build your own**<br>Customize any template by clicking its nodes, or snap together a block agent (model calls, tools, checks, routers, parallel groups, loops). Saved agents run like the built-in ones. → [docs/builder.md](docs/builder.md) | <img src="docs/images/builder.png" alt="builder" width="420"> |
+| **Bring your own tools**<br>Tools come from MCP servers, spoken to by hand-written protocol code: the lab's own (calculator, weather), a notes server that ships with it, and any server you list. The **Tools** page shows each server, its state and its tools, and Claude Code can use the lab's tools too. → [docs/tools.md](docs/tools.md) | |
 | **Watch a village live**<br>Four villagers plan their day, set out to do things and keep at them, deal with the day's happenings (a letter, a visitor, a lost goat, a broken fence, a peddler), row the boat they built, hear your whispers, work, talk face to face, remember, reflect at night and live through seasons and weather. Their work fills baskets for the harvest festival's stalls, or buys wood and paint from a daily trader; every third day they vote at the town hall on what to build next, and what they build stays on the map. A chronicler writes a diary entry every night, and **Village health** counts how they behaved each day; turn checks and scenarios measure the villagers on the real model. → [docs/village.md](docs/village.md) | <img src="docs/images/chronicle.png" alt="the village chronicle" width="420"> |
 
 ## How it works
@@ -29,7 +30,7 @@ flowchart LR
     API --> Agents["Agents & workflows<br/>hand-written Python"]
     Agents -- "every call is a span" --> Tracer["Tracer"]
     Agents --> LLM["Model server<br/>vLLM on :8001 (or Ollama / OpenAI)"]
-    Agents --> Tools["Tools<br/>calculator, get_weather"]
+    Agents -- "MCP" --> Tools["MCP servers<br/>the lab's own, notes, yours"]
     Tracer --> DB[("SQLite")]
     Tracer -- "live spans" --> API
     Village["Village loop"] -- "each decision is an agent run" --> Agents
@@ -72,6 +73,8 @@ backend/src/agent_lab/
   workflows/   chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer
   blocks/      block agents: layout rules, graph, runner
   village/     map and clock, observations and actions, plans, work, trade, building, meetings, memory, seasons, chronicle, step loop
+  mcp/         hand-written MCP: JSON-RPC, server core, transports, client, host, the notes server
+  tools/       calculator and get_weather, served by the lab's own MCP server
   tracing/     spans, tracer, redaction of secrets
   llm/         model client, configured models, FakeLLM for tests
   api.py       HTTP and WebSocket endpoints
@@ -95,10 +98,10 @@ specs/                   one folder per milestone: spec, plan, tasks (Spec Kit)
 | | | ✅ M12 | Building together: a daily trader, town hall votes, building |
 | | | ✅ M13 | Measuring the village: village health, turn checks, scenarios |
 | | | ✅ M14 | Better villagers: intentions, what you can do here, memory by season |
-| | | ✅ M15 | Daily happenings, boat trips, whispers |
+| ✅ M16 | Tools over MCP: host, the lab's server, notes | ✅ M15 | Daily happenings, boat trips, whispers |
 
-After M15 come MCP, an evaluation harness for the lab's other agents, memory for the lab's
-other agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
+After M16 come an evaluation harness for the lab's other agents, memory for the lab's other
+agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
 
 ## More
 

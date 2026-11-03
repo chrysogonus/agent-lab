@@ -34,8 +34,11 @@ flowchart LR
     end
 ```
 
-Two tools exist: `calculator` (safe arithmetic) and `get_weather` (a fake, deterministic
+The lab's own tools are `calculator` (safe arithmetic) and `get_weather` (a fake, deterministic
 report: the same city always gets the same weather, so runs are repeatable and need no network).
+They come from the lab's own MCP server; agents can also use the notes server's tools and any
+MCP server you list, named `server/tool` ([tools.md](tools.md)). A tool span shows the server
+and the JSON-RPC request and response.
 
 ## Reading a run
 

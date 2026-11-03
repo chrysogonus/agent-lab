@@ -27,7 +27,7 @@ flowchart TB
     agent --> steps["agents/steps.py<br/>chat · call_tool · decide"]
     steps --> tracer["tracing/<br/>span + redaction"]
     steps --> llm["llm/<br/>model client"]
-    steps --> tools["tools/<br/>calculator · get_weather"]
+    steps --> host["mcp/host.py<br/>tools/call"] --> servers["MCP servers<br/>lab (in-process) · stdio · HTTP"]
     tracer --> store["store.py<br/>SQLite"]
     tracer --> bus["bus.py"] --> ws["WS /runs/{id}/stream"] --> ui["frontend RunViewer"]
 ```
@@ -46,7 +46,8 @@ The full set is in the [constitution](../.specify/memory/constitution.md); the s
 - **Local and safe by default.** Servers bind to 127.0.0.1; API keys are redacted before any span
   is stored or streamed; model output is never executed.
 - **Smallest change that works.** Build what the current milestone needs, nothing for later.
-- **Tests never need a model.** They replay scripted answers with `FakeLLM`.
+- **Tests never need a model.** They replay scripted answers with `FakeLLM`. MCP servers in
+  tests are the in-process lab server, `httpx.MockTransport` and the repo's own stdio scripts.
 - **View logic lives in `frontend/src/lib/`** as pure, tested functions; components stay thin.
 
 ## The milestone workflow (Spec Kit)
@@ -72,5 +73,7 @@ there under "Manual check results".
 | the run view | `frontend/src/components/RunViewer.tsx`, `lib/run-state.ts` |
 | the builder | `frontend/src/components/AgentBuilder.tsx`, `components/builder/`, `lib/builder.ts` |
 | the village view | `frontend/src/components/village/`, `lib/village.ts` |
+| MCP: the protocol, servers file, host | `backend/src/agent_lab/mcp/`; the default servers file `backend/mcp.json`, your own `backend/data/mcp.json` or `MCP_SERVERS_FILE` |
+| the Tools page | `frontend/src/components/ToolsView.tsx`, `lib/tools.ts` |
 
 Next.js 16 differs from older versions: read `frontend/AGENTS.md` before editing the frontend.
