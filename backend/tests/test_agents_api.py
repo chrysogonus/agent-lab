@@ -149,6 +149,7 @@ def test_tools(store: Store) -> None:
     with client:
         tools = client.get("/tools").json()
     assert [t["name"] for t in tools] == ["calculator", "get_weather"]
+    assert [t["server"] for t in tools] == ["lab", "lab"]
     assert all(t["description"] for t in tools)
     # The builder shows one argument field per parameter of a tool block.
     assert [list(t["parameters"]["properties"]) for t in tools] == [["expression"], ["city"]]

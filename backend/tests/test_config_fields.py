@@ -46,10 +46,17 @@ def test_item_name_rejected(name: str) -> None:
         Fields(name=name)
 
 
-def test_known_tool() -> None:
-    assert known_tool("calculator") == "calculator"
-    with pytest.raises(ValueError, match="unknown tool"):
-        known_tool("read_file")
+@pytest.mark.parametrize(
+    "name", ["calculator", "get_weather", "lab/calculator", "notes/write_note", "a-1/my.tool_x"]
+)
+def test_known_tool(name: str) -> None:
+    assert known_tool(name) == name
+
+
+@pytest.mark.parametrize("name", ["read_file", "Notes/x", "a/b/c", "notes/", "/x", "1a/x"])
+def test_unknown_tool_name(name: str) -> None:
+    with pytest.raises(ValueError, match="use calculator, get_weather or server/tool"):
+        known_tool(name)
 
 
 def test_unique() -> None:

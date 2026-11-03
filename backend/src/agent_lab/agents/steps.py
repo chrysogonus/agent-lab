@@ -6,15 +6,16 @@ gets a span. `lab.came_from` on the first span of a node visit records the graph
 
 import hashlib
 import json
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 
 from agent_lab.llm.base import ChatResponse, LLMClient, Message, ToolCall
+from agent_lab.mcp.host import HostTool
 from agent_lab.store import RunStatus
-from agent_lab.tools.base import Tool, ToolError
+from agent_lab.tools.base import ToolError
 from agent_lab.tracing.span import SpanKind
 from agent_lab.tracing.tracer import Tracer
 
@@ -57,7 +58,7 @@ async def chat(
     node_id: str,
     messages: list[Message],
     *,
-    tools: Sequence[Tool] = (),
+    tools: Mapping[str, HostTool] | None = None,
     response_format: dict[str, Any] | None = None,
     came_from: Sequence[str] | None = None,
     attributes: dict[str, Any] | None = None,
@@ -81,7 +82,7 @@ async def chat(
     ) as span:
         response = await ctx.llm.chat(
             messages,
-            [t.schema() for t in tools],
+            [t.schema(name) for name, t in (tools or {}).items()],
             response_format=response_format,
             reasoning=ctx.reasoning,
         )
@@ -101,27 +102,28 @@ async def chat(
 
 async def call_tool(
     ctx: StepContext,
-    tools: dict[str, Tool],
+    tools: Mapping[str, HostTool],
     call: ToolCall,
     *,
     caller: str,
     came_from: Sequence[str] | None = None,
     node_id: str | None = None,
 ) -> str:
-    """Run one tool call; errors become the result text so the model can recover.
+    """Send one tool call to its server; errors become the result text so the model can recover.
 
-    `node_id` replaces the shared `tool:<name>` node (a block agent's tool-call block).
+    `tools` maps the names the model sees to the tools. `node_id` replaces the shared
+    `tool:<config name>` node (a block agent's tool-call block).
     """
     tool = tools.get(call.name)
     async with ctx.tracer.span(
         SpanKind.TOOL,
-        f"execute_tool {call.name}",
+        f"execute_tool {tool.config_name if tool else call.name}",
         # An unknown tool has no node; attribute the span to the node that requested it.
-        node_id=(node_id or f"tool:{call.name}") if tool else caller,
+        node_id=(node_id or f"tool:{tool.config_name}") if tool else caller,
         input=call.arguments,
         attributes={
             "gen_ai.operation.name": "execute_tool",
-            "gen_ai.tool.name": call.name,
+            "gen_ai.tool.name": tool.config_name if tool else call.name,
             "gen_ai.tool.call.id": call.id,
             **(_came_from(came_from) if tool else {}),
         },
@@ -129,13 +131,24 @@ async def call_tool(
         try:
             if tool is None:
                 raise ToolError(f"unknown tool {call.name!r}")
-            result = tool.fn(**_parse_arguments(tool, call.arguments))
+            arguments = _parse_arguments(call.arguments)
         except ToolError as exc:
             # Fed back to the model as the tool result, so it can recover.
             span.error = str(exc)
-            result = f"error: {exc}"
-        span.output = result
-    return result
+            span.output = f"error: {exc}"
+            return span.output
+        result = await tool.call(arguments)
+        span.attributes |= {
+            "mcp.method.name": "tools/call",
+            "mcp.protocol.version": tool.connection.protocol_version,
+            "jsonrpc.request.id": result.request["id"],
+            "lab.mcp.server": tool.server,
+            "lab.mcp.request": result.request,
+            "lab.mcp.response": result.response,
+        }
+        span.error = result.error
+        span.output = result.text
+    return result.text
 
 
 async def decide[T: BaseModel](
@@ -233,17 +246,12 @@ def _errors(exc: ValidationError) -> str:
     return "; ".join(e["msg"] for e in exc.errors())
 
 
-def _parse_arguments(tool: Tool, raw: str) -> dict[str, object]:
+def _parse_arguments(raw: str) -> dict[str, Any]:
+    """The model's argument text as an object; the server checks the arguments themselves."""
     try:
         args = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ToolError(f"arguments are not valid JSON: {exc.msg}") from exc
     if not isinstance(args, dict):
         raise ToolError("arguments must be a JSON object")
-    args = cast(dict[str, object], args)  # JSON object keys are always strings
-    expected: set[str] = set(tool.parameters.get("properties", {}))
-    missing: set[str] = set(tool.parameters.get("required", [])) - args.keys()
-    extra = args.keys() - expected
-    if missing or extra:
-        raise ToolError(f"invalid arguments: missing {sorted(missing)}, unexpected {sorted(extra)}")
-    return args
+    return cast(dict[str, Any], args)  # JSON object keys are always strings

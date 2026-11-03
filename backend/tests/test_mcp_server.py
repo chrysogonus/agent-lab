@@ -134,3 +134,16 @@ def test_tool_error_message_is_kept() -> None:
     answer = server.handle(jsonrpc.request(1, "tools/call", {"name": "r", "arguments": {}}))
     assert answer is not None
     assert answer["result"]["content"][0]["text"] == "no such note"
+
+
+def test_the_lab_server_lists_the_built_ins() -> None:
+    from agent_lab.mcp.lab_server import LAB
+    from agent_lab.tools.weather import WEATHER
+
+    answer = LAB.handle(jsonrpc.request(1, "tools/list", {"_meta": META}))
+    assert answer is not None
+    assert answer["result"]["tools"] == [
+        {"name": t.name, "description": t.description, "inputSchema": t.parameters}
+        for t in (CALCULATOR, WEATHER)
+    ]
+    assert LAB.info == {"name": "glasshouse", "version": "0.1.0"}

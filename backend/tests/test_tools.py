@@ -3,8 +3,8 @@ import json
 import pytest
 
 from agent_lab.tools.base import ToolError
-from agent_lab.tools.calculator import CALCULATOR, calculate
-from agent_lab.tools.weather import WEATHER, get_weather
+from agent_lab.tools.calculator import calculate
+from agent_lab.tools.weather import get_weather
 
 
 @pytest.mark.parametrize(
@@ -61,11 +61,6 @@ def test_weather_deterministic() -> None:
 def test_weather_rejects_bad_city() -> None:
     with pytest.raises(ToolError):
         get_weather("")
-
-
-def test_m1_tools_have_no_scopes() -> None:
-    assert CALCULATOR.scopes == frozenset()
-    assert WEATHER.scopes == frozenset()
 
 
 @pytest.mark.parametrize("value", [5, None, ["1+1"], {"x": 1}])

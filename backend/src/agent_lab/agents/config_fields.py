@@ -1,11 +1,10 @@
 """Field rules shared by the template configs (data-model.md, "Shared field rules")."""
 
+import re
 from collections.abc import Iterable
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints
-
-from agent_lab.tools.catalog import TOOLS
 
 RESERVED_NAMES = frozenset({"start", "end", "gate", "router", "merge"})
 
@@ -43,9 +42,13 @@ BlockName = Annotated[
 ]
 
 
+_TOOL_NAME = re.compile(r"^(calculator|get_weather|[a-z][a-z0-9-]{0,29}/[A-Za-z0-9_.-]{1,64})$")
+
+
 def known_tool(name: str) -> str:
-    if name not in TOOLS:
-        raise ValueError(f"unknown tool {name!r}; known: {', '.join(TOOLS)}")
+    """A tool name of the right form; whether a server offers it is checked when a run starts."""
+    if not _TOOL_NAME.fullmatch(name):
+        raise ValueError(f"unknown tool name {name!r}: use calculator, get_weather or server/tool")
     return name
 
 

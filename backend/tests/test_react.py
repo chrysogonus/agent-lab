@@ -3,6 +3,7 @@ from helpers import (
     answer,
     assert_trace_valid,
     ended,
+    lab_tools,
     make_agent,
     make_tracer,
     taken_edges,
@@ -13,10 +14,7 @@ from agent_lab.agents.react import ReActAgent, ReActConfig, ReActState, build_gr
 from agent_lab.agents.steps import config_version
 from agent_lab.llm.base import LLMError
 from agent_lab.llm.fake import FakeLLM
-from agent_lab.tools.base import Tool
-from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import Span, SpanKind
-from agent_lab.tracing.tracer import Tracer
 
 
 @pytest.mark.anyio
@@ -156,21 +154,6 @@ async def test_model_error_fails_run() -> None:
     assert all(s.error == "LLMError: HTTP 500: boom" for s in spans)
 
 
-def test_ungranted_scope_rejected() -> None:
-    risky = Tool(
-        name="read_file",
-        description="",
-        parameters={},
-        fn=lambda: "",
-        scopes=frozenset({"fs:read"}),
-    )
-    # read_file is not a known tool, so skip validation: the agent's own scope check is tested.
-    config = ReActConfig.model_construct(model="m", tools=["read_file"])
-    tracer = Tracer(run_id="r", agent_id="react", config_version="v", sink=lambda e, s: None)
-    with pytest.raises(ValueError, match="ungranted scopes"):
-        ReActAgent(llm=FakeLLM([]), tools=[risky], config=config, tracer=tracer)
-
-
 @pytest.mark.anyio
 async def test_reasoning_traced_not_resent() -> None:
     thinking = tool_call("calculator", '{"expression": "2+3"}')
@@ -223,9 +206,7 @@ async def run_with(
 ) -> tuple[ReActState, list[Span]]:
     """Runs the agent as the registry builds it: tools come from the config's names."""
     tracer, events = make_tracer("react")
-    agent = ReActAgent(
-        llm=llm, tools=[TOOLS[t] for t in config.tools], config=config, tracer=tracer
-    )
+    agent = ReActAgent(llm=llm, tools=lab_tools(), config=config, tracer=tracer)
     return await agent.run(prompt), ended(events)
 
 
@@ -268,3 +249,23 @@ async def test_iteration_limits() -> None:
     graph = build_graph(["calculator", "get_weather"])
     assert_trace_valid(graph, spans)
     assert_trace_valid(graph, long_spans)
+
+
+@pytest.mark.anyio
+async def test_the_sample_calls_the_labs_server_over_mcp() -> None:
+    llm = FakeLLM(
+        [
+            tool_call("calculator", '{"expression": "17*23"}', "c1"),
+            tool_call("get_weather", '{"city": "Berlin"}', "c2"),
+            answer("done"),
+        ]
+    )
+    agent, events = make_agent(llm)
+    await agent.run("What is 17*23 plus the current temperature in Berlin?")
+    tools = [s for s in ended(events) if s.kind == SpanKind.TOOL]
+    assert [s.attributes["lab.mcp.server"] for s in tools] == ["lab", "lab"]
+    assert [s.attributes["lab.mcp.request"]["params"]["name"] for s in tools] == [
+        "calculator",
+        "get_weather",
+    ]
+    assert tools[0].attributes["lab.mcp.response"]["result"]["content"][0]["text"] == "391"

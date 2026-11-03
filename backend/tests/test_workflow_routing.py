@@ -4,6 +4,7 @@ from helpers import (
     assert_trace_valid,
     ended,
     json_answer,
+    lab_tools,
     make_tracer,
     taken_edges,
     tool_call,
@@ -28,7 +29,7 @@ async def run(
     llm = FakeLLM(script)
     tracer, events = make_tracer(AGENT_ID)
     config = config or Config(model=llm.model)
-    workflow = RoutingWorkflow(llm=llm, config=config, tracer=tracer)
+    workflow = RoutingWorkflow(llm=llm, config=config, tracer=tracer, tools=lab_tools())
     outcome = await workflow.run("question")
     return outcome, ended(events), llm
 

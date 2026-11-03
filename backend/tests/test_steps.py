@@ -1,13 +1,17 @@
 from typing import Literal
 
 import pytest
-from helpers import answer, ended, json_answer, make_ctx
+from helpers import answer, ended, json_answer, lab_tools, make_ctx
 from pydantic import BaseModel
 
 from agent_lab.agents import steps
 from agent_lab.agents.steps import DecisionError
 from agent_lab.llm.base import ToolCall
 from agent_lab.llm.fake import FakeLLM
+from agent_lab.mcp.client import Connection
+from agent_lab.mcp.host import HostTool
+from agent_lab.mcp.server import Server
+from agent_lab.mcp.transports import InProcess
 from agent_lab.tools.calculator import CALCULATOR
 from agent_lab.tracing.span import SpanKind
 
@@ -88,7 +92,68 @@ async def test_decide_rejects_invalid(content: str) -> None:
 async def test_call_tool_on_own_node() -> None:
     ctx, events = make_ctx(FakeLLM([]))
     call = ToolCall(id="c1", name="calculator", arguments='{"expression": "2+3"}')
-    tools = {"calculator": CALCULATOR}
+    tools = lab_tools("calculator")
     assert await steps.call_tool(ctx, tools, call, caller="x", node_id="calc") == "5"
     await steps.call_tool(ctx, tools, call, caller="x")
     assert [s.node_id for s in ended(events)] == ["calc", "tool:calculator"]
+
+
+@pytest.mark.anyio
+async def test_a_tool_call_is_an_mcp_call() -> None:
+    ctx, events = make_ctx(FakeLLM([]))
+    call = ToolCall(id="c1", name="calculator", arguments='{"expression": "2+3"}')
+    await steps.call_tool(ctx, lab_tools("calculator"), call, caller="x")
+    span = ended(events)[0]
+    assert span.input == '{"expression": "2+3"}' and span.output == "5" and span.error is None
+    request, response = span.attributes["lab.mcp.request"], span.attributes["lab.mcp.response"]
+    assert request["method"] == "tools/call"
+    assert request["params"]["name"] == "calculator"
+    assert request["params"]["arguments"] == {"expression": "2+3"}
+    assert response["result"]["content"] == [{"type": "text", "text": "5"}]
+    assert span.attributes["mcp.method.name"] == "tools/call"
+    assert span.attributes["mcp.protocol.version"] == "2026-07-28"
+    assert span.attributes["jsonrpc.request.id"] == request["id"]
+    assert span.attributes["lab.mcp.server"] == "lab"
+    assert span.attributes["gen_ai.tool.name"] == "calculator"
+
+
+@pytest.mark.anyio
+async def test_a_tool_error_reaches_the_model() -> None:
+    ctx, events = make_ctx(FakeLLM([]))
+    call = ToolCall(id="c1", name="calculator", arguments='{"expression": "1/0"}')
+    assert await steps.call_tool(ctx, lab_tools(), call, caller="x") == "error: division by zero"
+    assert ended(events)[0].error == "division by zero"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("arguments", "text"),
+    [
+        (
+            "{",
+            "error: arguments are not valid JSON: "
+            "Expecting property name enclosed in double quotes",
+        ),
+        ("[1]", "error: arguments must be a JSON object"),
+    ],
+)
+async def test_unreadable_arguments_send_nothing(arguments: str, text: str) -> None:
+    ctx, events = make_ctx(FakeLLM([]))
+    call = ToolCall(id="c1", name="calculator", arguments=arguments)
+    assert await steps.call_tool(ctx, lab_tools(), call, caller="x") == text
+    assert "lab.mcp.request" not in ended(events)[0].attributes
+
+
+@pytest.mark.anyio
+async def test_model_names_map_back_to_config_names() -> None:
+    server = Server("s", "1", [CALCULATOR])
+    connection = Connection("s", InProcess(server))
+    await connection.open()
+    other = HostTool("s", "calculator", "s/calculator", "", CALCULATOR.parameters, connection)
+    ctx, events = make_ctx(FakeLLM([]))
+    call = ToolCall(id="c1", name="s__calculator", arguments='{"expression": "1"}')
+    await steps.call_tool(ctx, {"s__calculator": other}, call, caller="x")
+    span = ended(events)[0]
+    assert span.node_id == "tool:s/calculator"
+    assert span.attributes["gen_ai.tool.name"] == "s/calculator"
+    assert span.attributes["lab.mcp.server"] == "s"

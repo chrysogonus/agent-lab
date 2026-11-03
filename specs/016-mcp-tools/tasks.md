@@ -133,12 +133,12 @@ Every story needs these. Nothing is wired into agents yet.
 tool results as before (SC-002); each tool span carries `lab.mcp.server: lab`, the request and
 the response.
 
-- [ ] T006 [US1] The lab's server in backend/src/agent_lab/mcp/lab_server.py:
+- [X] T006 [US1] The lab's server in backend/src/agent_lab/mcp/lab_server.py:
   `LAB = Server("glasshouse", "0.1.0", [CALCULATOR, WEATHER])`. Test in
   backend/tests/test_mcp_server.py: it lists `calculator` and `get_weather` with today's
   descriptions and parameters.
 
-- [ ] T007 [US1] The host, lab only, in backend/src/agent_lab/mcp/host.py, tests in
+- [X] T007 [US1] The host, lab only, in backend/src/agent_lab/mcp/host.py, tests in
   backend/tests/test_mcp_host.py (research §4, data-model "Tool").
   - `Host(file_path=None, http_client=None)`; `start()` opens `lab` over `InProcess(LAB)`
     (kind `internal`, target `built in`) and `close()` closes every connection.
@@ -157,7 +157,7 @@ the response.
   - Tests: resolve of bare, `lab/` and unknown names; both error texts; model names for a clash
     (`a/search`, `b/search`), for `my.tool`, and for a 70-character name.
 
-- [ ] T008 [US1] Tools without the catalog.
+- [X] T008 [US1] Tools without the catalog.
   - backend/src/agent_lab/tools/base.py: `Tool` drops `scopes`.
   - Remove backend/src/agent_lab/tools/catalog.py.
   - backend/src/agent_lab/agents/config_fields.py: `known_tool` checks the form only:
@@ -169,7 +169,7 @@ the response.
     `catalog.TOOLS` patching in backend/tests/test_blocks_api.py (rewrite that test against the
     host: a tool that the host does not list).
 
-- [ ] T009 [US1] Tool calls through the host in backend/src/agent_lab/agents/steps.py, tests in
+- [X] T009 [US1] Tool calls through the host in backend/src/agent_lab/agents/steps.py, tests in
   backend/tests/test_steps.py (data-model "Tool span").
   - `chat(…, tools=dict[model name, HostTool])` offers `tool.schema(model_name)`.
   - `call_tool(ctx, tools: dict[model name, HostTool], call, *, caller, came_from, node_id)`:
@@ -185,7 +185,7 @@ the response.
   - Tests: a calculator call has the six attributes; a division by zero is an error span and the
     model gets the text (US1 scenario 4); the model-name → config-name mapping on a clash.
 
-- [ ] T010 [US1] Agents take resolved tools.
+- [X] T010 [US1] Agents take resolved tools.
   - backend/src/agent_lab/agents/react.py: `ReActAgent(…, tools: dict[str, HostTool])`;
     `granted_scopes` goes.
   - backend/src/agent_lab/agents/registry.py: the ReAct `build` passes the resolved tools
@@ -206,7 +206,7 @@ the response.
   - The village's block agents are built with no tools; check backend/src/agent_lab/village/
     passes nothing new.
 
-- [ ] T011 [US1] Runs and the API resolve tools (research §8, §11).
+- [X] T011 [US1] Runs and the API resolve tools (research §8, §11).
   - backend/src/agent_lab/runs.py: a `config_tools(config)` collecting ReAct `tools`, routing
     route tools, and block tools at any depth (`tool_names`); `new_run` resolves them through
     the host before creating the run; `execute_run` passes the resolved tools to the agent.
@@ -221,7 +221,7 @@ the response.
     is stored.
   - Use `with TestClient(app)` where a test needs the lifespan.
 
-- [ ] T012 [US1] Behaviour unchanged (SC-001, SC-002).
+- [X] T012 [US1] Behaviour unchanged (SC-001, SC-002).
   - backend/tests/test_templates.py and backend/tests/golden/: the ReAct sample run gives the
     same answer and tool results; no golden file changes.
   - A test in backend/tests/test_react.py: the tool spans of the sample carry

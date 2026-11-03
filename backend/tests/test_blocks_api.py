@@ -12,7 +12,6 @@ from test_api import BASE
 from agent_lab.api import create_app
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
-from agent_lab.tools import catalog
 
 
 @pytest.fixture
@@ -111,21 +110,29 @@ def test_blocks_is_not_a_template(store: Store) -> None:
     assert run.status_code == 422
 
 
-def test_run_rejected_when_stored_agent_invalid(store: Store) -> None:
+def test_run_refused_when_a_server_is_missing(store: Store) -> None:
     client, _ = client_for(store)
-    saved_tools = dict(catalog.TOOLS)
-    try:
-        with client:
-            agent = save(client, block_agent(model_block("a"), tool_block("calc")))
-            del catalog.TOOLS["calculator"]  # the tool is gone after a change
-            response = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]})
-            runs = client.get("/runs").json()
-    finally:
-        catalog.TOOLS.clear()
-        catalog.TOOLS.update(saved_tools)  # same order for later tests
-    assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["body", "agent_id"]
+    with client:
+        agent = save(
+            client,
+            block_agent(
+                model_block("a", tools=["calculator", "notes/write_note"]), tool_block("c")
+            ),
+        )
+        response = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]})
+        runs = client.get("/runs").json()
+    assert response.status_code == 409
+    assert response.json() == {"detail": 'server "notes" is not connected'}
     assert runs == []
+
+
+def test_run_refused_when_a_tool_is_not_listed(store: Store) -> None:
+    client, _ = client_for(store)
+    with client:
+        agent = save(client, block_agent(tool_block("c", tool="lab/nope", x="1")))
+        response = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]})
+    assert response.status_code == 409
+    assert response.json() == {"detail": 'tool "lab/nope" is not listed by "lab"'}
 
 
 def test_build_and_run_three_blocks(store: Store) -> None:

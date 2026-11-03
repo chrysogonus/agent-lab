@@ -1,6 +1,8 @@
 """HTTP and WebSocket API. Loopback only; see contracts/http-api.md."""
 
 import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, status
@@ -14,6 +16,7 @@ from agent_lab.agents.registry import (
     BLOCKS,
     KINDS,
     AgentSpec,
+    config_tools,
     editable,
     pinned,
     validate_config,
@@ -23,9 +26,9 @@ from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
 from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
+from agent_lab.mcp.host import Host, ToolsUnavailable
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
-from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.span import Span
 from agent_lab.village.happening_runs import WhisperError
 from agent_lab.village.health import reason_template
@@ -65,7 +68,8 @@ class ModelInfo(BaseModel):
 
 
 class ToolInfo(BaseModel):
-    name: str
+    name: str  # the config name: calculator, get_weather or server/tool
+    server: str
     description: str
     parameters: dict[str, Any]  # JSON Schema of the arguments (a tool block's argument fields)
 
@@ -116,8 +120,19 @@ def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
     return RequestValidationError([{"loc": loc, "msg": msg, "type": "value_error"}])
 
 
-def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -> FastAPI:
-    app = FastAPI(title="Glasshouse")
+def create_app(
+    *, store: Store, models: Models, secrets: tuple[str, ...] = (), host: Host | None = None
+) -> FastAPI:
+    """`host` defaults to one with only the lab's own server."""
+    host = host or Host()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        await host.start()
+        yield
+        await host.close()
+
+    app = FastAPI(title="Glasshouse", lifespan=lifespan)
     # Rejects DNS-rebinding requests that reach the loopback port under a foreign Host.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
     app.add_middleware(
@@ -223,10 +238,8 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
 
     @app.get("/tools")
     async def list_tools() -> list[ToolInfo]:
-        return [
-            ToolInfo(name=t.name, description=t.description, parameters=t.parameters)
-            for t in TOOLS.values()
-        ]
+        await host.start()
+        return [ToolInfo.model_validate(t) for t in host.tools()]
 
     @app.get("/blocks/new")
     async def new_block_agent() -> AgentInfo:
@@ -339,10 +352,15 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
         except UnavailableModel as exc:
             raise field_error(("body", "agent_id"), str(exc)) from None
         except (LayoutError, ValidationError) as exc:
-            # A stored agent that no longer validates, e.g. a tool removed from the catalog.
+            # A stored agent that no longer validates, e.g. after a rule changed.
             raise field_error(
                 ("body", "agent_id"), f"the agent is no longer valid: {exc}"
             ) from None
+        await host.start()
+        try:
+            tools = host.resolve(config_tools(config))
+        except ToolsUnavailable as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(
@@ -354,6 +372,7 @@ def create_app(*, store: Store, models: Models, secrets: tuple[str, ...] = ()) -
                 store=store,
                 bus=bus,
                 secrets=secrets,
+                tools=tools,
             )
         )
         tasks.add(task)

@@ -3,6 +3,7 @@
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 
 from pydantic import BaseModel
 
@@ -11,6 +12,7 @@ from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
 from agent_lab.llm.base import LLMClient
 from agent_lab.llm.models import Models
+from agent_lab.mcp.host import HostTool
 from agent_lab.store import Run, RunStatus, Store
 from agent_lab.tracing.redact import redact
 from agent_lab.tracing.span import Span
@@ -82,7 +84,10 @@ async def execute_run(
     store: Store,
     bus: Bus,
     secrets: tuple[str, ...] = (),
+    tools: Mapping[str, HostTool] | None = None,
 ) -> None:
+    """`tools` are the config's tools, resolved by the host (`registry.config_tools`)."""
+
     def sink(event: str, span: Span) -> None:
         store.save_span(span)
         bus.publish(run.run_id, {"type": event, "span": span.model_dump(mode="json")})
@@ -94,7 +99,7 @@ async def execute_run(
         sink=sink,
         secrets=secrets,
     )
-    agent = spec.create(llm, config, tracer)
+    agent = spec.create(llm, config, tracer, tools or {})
     status: RunStatus = "error"
     answer: str | None = None
     try:

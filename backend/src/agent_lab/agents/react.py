@@ -1,5 +1,6 @@
 """ReAct: the model reasons, calls tools, sees their results, and repeats until it answers."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field, field_validator
@@ -9,8 +10,8 @@ from agent_lab.agents.config_fields import LOCAL, Prompt, Provider, known_tool, 
 from agent_lab.agents.steps import StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient, Message
+from agent_lab.mcp.host import HostTool, model_names
 from agent_lab.store import RunStatus
-from agent_lab.tools.base import Tool
 from agent_lab.tracing.span import SpanKind
 from agent_lab.tracing.tracer import Tracer
 
@@ -70,20 +71,16 @@ class ReActAgent:
         self,
         *,
         llm: LLMClient,
-        tools: list[Tool],
+        tools: Mapping[str, HostTool],
         config: ReActConfig,
         tracer: Tracer,
-        granted_scopes: frozenset[str] = frozenset(),
     ) -> None:
-        for tool in tools:
-            if not tool.scopes <= granted_scopes:
-                missing = sorted(tool.scopes - granted_scopes)
-                raise ValueError(f"tool {tool.name!r} needs ungranted scopes {missing}")
-        self.tools = {t.name: t for t in tools}
+        """`tools` holds at least the config's tools, by config name."""
+        self.tools = model_names(tools[name] for name in config.tools)  # by the model's names
         self.config = config
         self.tracer = tracer
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
-        self.graph = build_graph(list(self.tools))
+        self.graph = build_graph(config.tools)
 
     def start(self, prompt: str) -> ReActState:
         return ReActState(messages=steps.messages(self.config.system_prompt, prompt))
@@ -128,9 +125,7 @@ class ReActAgent:
             node_id="llm",
             attributes=steps.came_from(state.came_from),
         ):
-            response = await steps.chat(
-                self.ctx, "llm", state.messages, tools=list(self.tools.values())
-            )
+            response = await steps.chat(self.ctx, "llm", state.messages, tools=self.tools)
             state.messages.append(response.as_message())
             if not response.tool_calls:
                 state.done = True
@@ -139,7 +134,9 @@ class ReActAgent:
                 return state
             # Unknown tools have no node, so they never become an edge.
             state.came_from = [
-                f"tool:{c.name}" for c in response.tool_calls if c.name in self.tools
+                f"tool:{self.tools[c.name].config_name}"
+                for c in response.tool_calls
+                if c.name in self.tools
             ]
             for call in response.tool_calls:
                 result = await steps.call_tool(

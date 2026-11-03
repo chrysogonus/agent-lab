@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from helpers import answer, ended, json_answer, make_tracer, taken_edges, tool_call
+from helpers import answer, ended, json_answer, lab_tools, make_tracer, taken_edges, tool_call
 
 from agent_lab.agents.registry import AGENTS, validate_config
 from agent_lab.agents.steps import config_version
@@ -95,7 +95,7 @@ async def run_template(case: str) -> dict[str, Any]:
     llm = FakeLLM(list(script))
     config = validate_config(template_id, {}, ModelRef(provider="local", model=llm.model))
     tracer, events = make_tracer(template_id)
-    result = await spec.create(llm, config, tracer).run(prompt)
+    result = await spec.create(llm, config, tracer, lab_tools()).run(prompt)
     requests = [
         json.loads(json.dumps({"messages": m, **r}))
         for m, r in zip(llm.calls, llm.requests, strict=True)

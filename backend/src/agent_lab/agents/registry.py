@@ -1,6 +1,6 @@
 """Every runnable agent and workflow by id; `POST /runs` picks one with `agent_id`."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -10,12 +10,12 @@ from agent_lab.agents import react
 from agent_lab.agents.config_fields import LOCAL
 from agent_lab.blocks.graph import build_graph as blocks_graph
 from agent_lab.blocks.model import BlocksConfig, LayoutError, layout_errors
-from agent_lab.blocks.run import BlockAgent
+from agent_lab.blocks.run import BlockAgent, tool_names
 from agent_lab.graph import Graph
 from agent_lab.llm.base import LLMClient
 from agent_lab.llm.models import ModelRef
+from agent_lab.mcp.host import HostTool
 from agent_lab.store import RunStatus
-from agent_lab.tools.catalog import TOOLS
 from agent_lab.tracing.tracer import Tracer
 from agent_lab.workflows import chain, evaluator, orchestrator, parallel, routing
 
@@ -38,7 +38,8 @@ class AgentSpec:
     config_model: type[BaseModel]  # the shape, its defaults (the template) and limits
     # Config is each agent's own model; Any keeps these callables assignable.
     graph: Callable[[Any], Graph]
-    create: Callable[[LLMClient, Any, Tracer], Runnable]
+    # The tools are the resolved tools of the config (`config_tools`), by config name.
+    create: Callable[[LLMClient, Any, Tracer, Mapping[str, HostTool]], Runnable]
 
 
 _SPECS = [
@@ -49,8 +50,8 @@ _SPECS = [
         sample_prompt="What is 17*23 plus the current temperature in Berlin?",
         config_model=react.ReActConfig,
         graph=lambda config: react.build_graph(config.tools),
-        create=lambda llm, config, tracer: react.ReActAgent(
-            llm=llm, tools=[TOOLS[t] for t in config.tools], config=config, tracer=tracer
+        create=lambda llm, config, tracer, tools: react.ReActAgent(
+            llm=llm, tools=tools, config=config, tracer=tracer
         ),
     ),
     AgentSpec(
@@ -60,7 +61,7 @@ _SPECS = [
         sample_prompt=chain.SAMPLE_PROMPT,
         config_model=chain.Config,
         graph=chain.build_graph,
-        create=lambda llm, config, tracer: chain.ChainWorkflow(
+        create=lambda llm, config, tracer, tools: chain.ChainWorkflow(
             llm=llm, config=config, tracer=tracer
         ),
     ),
@@ -71,8 +72,8 @@ _SPECS = [
         sample_prompt=routing.SAMPLE_PROMPT,
         config_model=routing.Config,
         graph=routing.build_graph,
-        create=lambda llm, config, tracer: routing.RoutingWorkflow(
-            llm=llm, config=config, tracer=tracer
+        create=lambda llm, config, tracer, tools: routing.RoutingWorkflow(
+            llm=llm, config=config, tracer=tracer, tools=tools
         ),
     ),
     AgentSpec(
@@ -82,7 +83,7 @@ _SPECS = [
         sample_prompt=parallel.SAMPLE_PROMPT,
         config_model=parallel.Config,
         graph=parallel.build_graph,
-        create=lambda llm, config, tracer: parallel.ParallelWorkflow(
+        create=lambda llm, config, tracer, tools: parallel.ParallelWorkflow(
             llm=llm, config=config, tracer=tracer
         ),
     ),
@@ -93,7 +94,7 @@ _SPECS = [
         sample_prompt=orchestrator.SAMPLE_PROMPT,
         config_model=orchestrator.Config,
         graph=lambda config: orchestrator.build_graph(),
-        create=lambda llm, config, tracer: orchestrator.OrchestratorWorkflow(
+        create=lambda llm, config, tracer, tools: orchestrator.OrchestratorWorkflow(
             llm=llm, config=config, tracer=tracer
         ),
     ),
@@ -104,7 +105,7 @@ _SPECS = [
         sample_prompt=evaluator.SAMPLE_PROMPT,
         config_model=evaluator.Config,
         graph=lambda config: evaluator.build_graph(),
-        create=lambda llm, config, tracer: evaluator.EvaluatorWorkflow(
+        create=lambda llm, config, tracer, tools: evaluator.EvaluatorWorkflow(
             llm=llm, config=config, tracer=tracer
         ),
     ),
@@ -120,7 +121,9 @@ BLOCKS = AgentSpec(
     sample_prompt="What is 17 times 23?",
     config_model=BlocksConfig,
     graph=blocks_graph,
-    create=lambda llm, config, tracer: BlockAgent(llm=llm, config=config, tracer=tracer),
+    create=lambda llm, config, tracer, tools: BlockAgent(
+        llm=llm, config=config, tracer=tracer, tools=tools
+    ),
 )
 KINDS: dict[str, AgentSpec] = {**AGENTS, BLOCKS.id: BLOCKS}  # what a custom agent can be
 
@@ -151,3 +154,14 @@ def model_of(config: BaseModel) -> ModelRef:
     ref = pinned(config.model_dump())
     assert ref is not None, "every config has a model"
     return ref
+
+
+def config_tools(config: BaseModel) -> list[str]:
+    """Every tool a config names, in order: ReAct tools, route tools, block tools at any depth."""
+    if isinstance(config, react.ReActConfig):
+        return list(config.tools)
+    if isinstance(config, routing.Config):
+        return list(dict.fromkeys(r.tool for r in config.routes if r.tool))
+    if isinstance(config, BlocksConfig):
+        return sorted(tool_names(config.blocks))
+    return []

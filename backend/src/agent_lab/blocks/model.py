@@ -14,7 +14,7 @@ from agent_lab.agents.config_fields import (
     known_tool,
     unique,
 )
-from agent_lab.tools.catalog import TOOLS
+from agent_lab.mcp.lab_server import LAB
 
 MAX_BLOCKS = 30
 MAX_DEPTH = 3
@@ -34,7 +34,7 @@ class ModelBlock(BaseModel):
     name: BlockName
     system: Prompt
     message: Prompt = "{previous}"
-    tools: list[ToolName] = Field(default=[], max_length=2)
+    tools: list[ToolName] = Field(default=[], max_length=6)
     max_iterations: int = Field(default=4, ge=1, le=10)  # model calls; used only with tools
     answer_on_last_call: bool = False  # the last call offers no tools, so the model must answer
 
@@ -170,8 +170,10 @@ def own_errors(block: Block) -> list[tuple[Loc, str]]:
     """Rules between the fields of one block."""
     errors: list[tuple[Loc, str]] = []
     if isinstance(block, ToolBlock):
-        expected = set(TOOLS[block.tool].parameters.get("properties", {}))
-        if set(block.arguments) != expected:
+        # Only the built-ins are known when saving; other servers check arguments when called.
+        built_in = LAB.tools.get(block.tool.removeprefix("lab/"))
+        expected: set[str] = set(built_in.parameters.get("properties", {})) if built_in else set()
+        if built_in and set(block.arguments) != expected:
             errors.append(
                 (("arguments",), f"arguments must be exactly: {', '.join(sorted(expected))}")
             )

@@ -238,3 +238,18 @@ def test_nesting_at_most_three_levels() -> None:
         ("blocks", 0, "branches", 0, "blocks", 0, "body", 0, "kind"),
         "nesting is limited to 3 levels",
     ) in layout(four)
+
+
+def test_a_model_call_block_offers_up_to_six_tools() -> None:
+    six = [f"s/t{i}" for i in range(6)]
+    blocks_config(model_block("a", tools=six))
+    assert ("blocks", 0, "model", "tools") in field_error_locs(
+        model_block("a", tools=[*six, "s/t6"])
+    )
+
+
+def test_server_tools_are_checked_when_called() -> None:
+    assert layout(tool_block("t", tool="notes/write_note", title="n", text="hi")) == []
+    assert layout(tool_block("t", tool="lab/calculator", x="1")) == [
+        (("blocks", 0, "arguments"), "arguments must be exactly: expression")
+    ]

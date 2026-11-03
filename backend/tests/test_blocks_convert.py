@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 import pytest
-from helpers import answer, ended, json_answer, make_tracer, taken_edges, tool_call
+from helpers import answer, ended, json_answer, lab_tools, make_tracer, taken_edges, tool_call
 from test_templates import CASES
 
 from agent_lab.agents.registry import AGENTS, validate_config
@@ -88,9 +88,13 @@ async def test_converted_template_behaves_the_same(case: str) -> None:
     template, blocks = converted(template_id)
     spec = AGENTS[template_id]
 
-    want = await run(lambda llm, tracer: spec.create(llm, template, tracer), script, prompt)
+    want = await run(
+        lambda llm, tracer: spec.create(llm, template, tracer, lab_tools()), script, prompt
+    )
     got = await run(
-        lambda llm, tracer: BlockAgent(llm=llm, config=blocks, tracer=tracer), script, prompt
+        lambda llm, tracer: BlockAgent(llm=llm, config=blocks, tracer=tracer, tools=lab_tools()),
+        script,
+        prompt,
     )
 
     assert got == want, case
@@ -129,10 +133,12 @@ async def test_single_step_chain_keeps_its_gate(outline: str) -> None:
     stored = {"steps": [{"name": "outline", "prompt": "Outline it."}], "gate": True}
     template, blocks = converted("chain", stored)
     want = await run(
-        lambda llm, tracer: AGENTS["chain"].create(llm, template, tracer), [answer(outline)], "x"
+        lambda llm, tracer: AGENTS["chain"].create(llm, template, tracer, {}),
+        [answer(outline)],
+        "x",
     )
     got = await run(
-        lambda llm, tracer: BlockAgent(llm=llm, config=blocks, tracer=tracer),
+        lambda llm, tracer: BlockAgent(llm=llm, config=blocks, tracer=tracer, tools=lab_tools()),
         [answer(outline)],
         "x",
     )
@@ -145,7 +151,9 @@ async def test_converted_judge_sees_the_request() -> None:
     _, blocks = converted("evaluator")
     llm = FakeLLM([answer("Bright lamp"), json_answer({"approved": True, "feedback": ""})])
     tracer, _ = make_tracer()
-    await BlockAgent(llm=llm, config=blocks, tracer=tracer).run("A lamp called Glow")
+    await BlockAgent(llm=llm, config=blocks, tracer=tracer, tools=lab_tools()).run(
+        "A lamp called Glow"
+    )
     judge = llm.calls[1]
     assert (
         "Product: A lamp called Glow" in judge[0]["content"]

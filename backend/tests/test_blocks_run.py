@@ -2,7 +2,6 @@
 
 import json
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -15,6 +14,7 @@ from helpers import (
     check_block,
     ended,
     json_answer,
+    lab_tools,
     loop_block,
     make_tracer,
     model_block,
@@ -29,8 +29,6 @@ from agent_lab.blocks.graph import build_graph
 from agent_lab.blocks.run import BlockAgent
 from agent_lab.llm.base import ChatResponse
 from agent_lab.llm.fake import FakeLLM, ScriptItem
-from agent_lab.tools import catalog
-from agent_lab.tools.calculator import CALCULATOR
 from agent_lab.tracing.span import Span
 
 PROMPT = "What is 17 times 23?"
@@ -43,7 +41,7 @@ async def run_blocks(
     config = blocks_config(*blocks)
     llm = FakeLLM(list(script), delay=delay)
     tracer, events = make_tracer("custom-1")
-    outcome = await BlockAgent(llm=llm, config=config, tracer=tracer).run(prompt)
+    outcome = await BlockAgent(llm=llm, config=config, tracer=tracer, tools=lab_tools()).run(prompt)
     spans = ended(events)
     assert_trace_valid(build_graph(config), spans)
     return outcome, spans, llm
@@ -125,7 +123,7 @@ async def test_reasoning_setting_reaches_every_call() -> None:
     config = blocks_config(model_block("a"), model_block("b"), reasoning=True)
     llm = FakeLLM([answer("x"), answer("y")])
     tracer, _ = make_tracer()
-    await BlockAgent(llm=llm, config=config, tracer=tracer).run("hi")
+    await BlockAgent(llm=llm, config=config, tracer=tracer, tools=lab_tools()).run("hi")
     assert [r["reasoning"] for r in llm.requests] == [True, True]
 
 
@@ -225,7 +223,7 @@ async def test_failing_branch_ends_run_after_the_others_finish() -> None:
     llm = FakeLLM(llm_script, delay=0.02)
     tracer, events = make_tracer()
     with pytest.raises(RuntimeError):
-        await BlockAgent(llm=llm, config=config, tracer=tracer).run(PROMPT)
+        await BlockAgent(llm=llm, config=config, tracer=tracer, tools=lab_tools()).run(PROMPT)
     ended_nodes = {s.node_id for s in ended(events)}
     assert {"ok", "bad"} <= ended_nodes  # both branches finished and are in the trace
 
@@ -333,17 +331,3 @@ async def test_answer_on_last_call_offers_no_tools() -> None:
     assert outcome.status == "completed"  # the second call could not run a tool
     assert [bool(r["tools"]) for r in llm.requests] == [True, False]
     assert len([s for s in spans if s.kind == "tool"]) == 1
-
-
-def test_ungranted_tool_scopes_rejected() -> None:
-    saved = dict(catalog.TOOLS)
-    catalog.TOOLS["calculator"] = replace(CALCULATOR, scopes=frozenset({"fs:read"}))
-    try:
-        config = blocks_config(model_block("a"), tool_block("calc"))
-        with pytest.raises(ValueError, match="ungranted scopes"):
-            BlockAgent(llm=FakeLLM([]), config=config, tracer=make_tracer()[0])
-        granted = frozenset({"fs:read"})
-        BlockAgent(llm=FakeLLM([]), config=config, tracer=make_tracer()[0], granted_scopes=granted)
-    finally:
-        catalog.TOOLS.clear()
-        catalog.TOOLS.update(saved)

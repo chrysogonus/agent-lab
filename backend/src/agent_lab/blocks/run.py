@@ -6,7 +6,7 @@ it, so every recorded transition is an edge of `blocks.graph.build_graph`.
 
 import asyncio
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, cast
 
 from agent_lab.agents import steps
@@ -25,7 +25,7 @@ from agent_lab.blocks.model import (
     children,
 )
 from agent_lab.llm.base import LLMClient, Message, ToolCall
-from agent_lab.tools.catalog import TOOLS
+from agent_lab.mcp.host import HostTool, model_names
 from agent_lab.tracing.span import SpanKind
 from agent_lab.tracing.tracer import Tracer
 from agent_lab.workflows.chain import check_outline
@@ -91,12 +91,10 @@ class BlockAgent:
         llm: LLMClient,
         config: BlocksConfig,
         tracer: Tracer,
-        granted_scopes: frozenset[str] = frozenset(),
+        tools: Mapping[str, HostTool] | None = None,
     ) -> None:
-        for name in sorted(tool_names(config.blocks)):  # as ReActAgent: no ungranted scopes
-            if not TOOLS[name].scopes <= granted_scopes:
-                missing = sorted(TOOLS[name].scopes - granted_scopes)
-                raise ValueError(f"tool {name!r} needs ungranted scopes {missing}")
+        """`tools` holds at least every tool the blocks name, by config name."""
+        self.tools = {name: (tools or {})[name] for name in sorted(tool_names(config.blocks))}
         self.config = config
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
@@ -143,7 +141,12 @@ class BlockAgent:
             arguments = {k: fill(v, **scope) for k, v in block.arguments.items()}
             call = ToolCall(id=block.name, name=block.tool, arguments=json.dumps(arguments))
             result = await steps.call_tool(
-                self.ctx, TOOLS, call, caller=block.name, came_from=came, node_id=block.name
+                self.ctx,
+                {block.tool: self.tools[block.tool]},
+                call,
+                caller=block.name,
+                came_from=came,
+                node_id=block.name,
             )
             return result, [block.name]
         if isinstance(block, CheckBlock):
@@ -162,14 +165,14 @@ class BlockAgent:
         if not block.tools:
             reply = await steps.chat(self.ctx, block.name, messages, came_from=came)
             return reply.content or "", [block.name]
-        tools = {t: TOOLS[t] for t in block.tools}
+        tools = model_names(self.tools[t] for t in block.tools)
         for iteration in range(1, block.max_iterations + 1):  # the ReAct loop as one block
             last = block.answer_on_last_call and iteration == block.max_iterations
             reply = await steps.chat(
                 self.ctx,
                 block.name,
                 messages,
-                tools=[] if last else list(tools.values()),
+                tools=None if last else tools,
                 came_from=came,
                 attributes={"lab.iteration": iteration},
             )
@@ -183,7 +186,9 @@ class BlockAgent:
                 tool_message: Message = {"role": "tool", "tool_call_id": call.id, "content": result}
                 messages.append(tool_message)
             # Unknown tools have no node, so they never become an edge.
-            came = _unique(f"tool:{c.name}" for c in reply.tool_calls if c.name in tools)
+            came = _unique(
+                f"tool:{tools[c.name].config_name}" for c in reply.tool_calls if c.name in tools
+            )
         raise Stop(
             Outcome(
                 "max_iterations",

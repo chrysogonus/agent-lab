@@ -1,7 +1,7 @@
-"""Tool declaration. Tools receive only their parsed arguments: no file or network handles."""
+"""A tool as an MCP server defines it: it receives only its parsed arguments."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -15,16 +15,3 @@ class Tool:
     description: str
     parameters: dict[str, Any]  # JSON Schema of the arguments object
     fn: Callable[..., str]
-    # Access a tool needs beyond pure computation, e.g. {"net:api.example.com"}.
-    scopes: frozenset[str] = field(default_factory=frozenset[str])
-
-    def schema(self) -> dict[str, Any]:
-        """OpenAI-style function tool declaration."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.parameters,
-            },
-        }

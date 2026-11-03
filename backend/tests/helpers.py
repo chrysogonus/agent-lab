@@ -1,5 +1,6 @@
 """Shared builders for scripted runs."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -10,12 +11,19 @@ from agent_lab.graph import Graph
 from agent_lab.llm.base import ChatResponse, ToolCall
 from agent_lab.llm.fake import FakeLLM
 from agent_lab.llm.models import ModelEntry, ModelRef, Models
-from agent_lab.tools.calculator import CALCULATOR
-from agent_lab.tools.weather import WEATHER
+from agent_lab.mcp.host import Host, HostTool
+from agent_lab.mcp.lab_server import BUILT_INS
 from agent_lab.tracing.span import Span
 from agent_lab.tracing.tracer import Tracer
 
-TOOLS = [CALCULATOR, WEATHER]
+# The lab's own server through a host, opened once: tools reach it over MCP as in a real run.
+LAB_HOST = Host()
+asyncio.run(LAB_HOST.start())
+
+
+def lab_tools(*names: str) -> dict[str, HostTool]:
+    """The built-in tools by config name (all of them by default), resolved by the host."""
+    return LAB_HOST.resolve(names or BUILT_INS)
 
 
 def tool_call(name: str, arguments: str, call_id: str = "c1") -> ChatResponse:
@@ -32,16 +40,14 @@ def answer(text: str) -> ChatResponse:
 
 def make_agent(llm: FakeLLM, max_iterations: int = 6) -> tuple[ReActAgent, list[tuple[str, Span]]]:
     events: list[tuple[str, Span]] = []
-    config = ReActConfig(
-        model=llm.model, tools=[t.name for t in TOOLS], max_iterations=max_iterations
-    )
+    config = ReActConfig(model=llm.model, tools=list(BUILT_INS), max_iterations=max_iterations)
     tracer = Tracer(
         run_id="run-1",
         agent_id="react",
         config_version=config_version(config),
         sink=lambda event, span: events.append((event, span)),
     )
-    return ReActAgent(llm=llm, tools=TOOLS, config=config, tracer=tracer), events
+    return ReActAgent(llm=llm, tools=lab_tools(), config=config, tracer=tracer), events
 
 
 def ended(events: list[tuple[str, Span]]) -> list[Span]:

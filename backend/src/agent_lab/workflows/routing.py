@@ -1,5 +1,6 @@
 """Routing: one model decision picks a route; only that route's handler runs."""
 
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, create_model, field_validator, model_validator
@@ -17,8 +18,7 @@ from agent_lab.agents.config_fields import (
 from agent_lab.agents.steps import DecisionError, Outcome, StepContext
 from agent_lab.graph import Edge, Graph, Node
 from agent_lab.llm.base import LLMClient
-from agent_lab.tools.base import Tool
-from agent_lab.tools.catalog import TOOLS
+from agent_lab.mcp.host import HostTool, model_names
 from agent_lab.tracing.span import SpanKind
 from agent_lab.tracing.tracer import Tracer
 
@@ -132,7 +132,16 @@ def build_graph(config: Config) -> Graph:
 
 
 class RoutingWorkflow:
-    def __init__(self, *, llm: LLMClient, config: Config, tracer: Tracer) -> None:
+    def __init__(
+        self,
+        *,
+        llm: LLMClient,
+        config: Config,
+        tracer: Tracer,
+        tools: Mapping[str, HostTool] | None = None,
+    ) -> None:
+        """`tools` holds at least the routes' tools, by config name."""
+        self.tools = {r.tool: (tools or {})[r.tool] for r in config.routes if r.tool}
         self.config = config
         self.ctx = StepContext(llm=llm, tracer=tracer, reasoning=config.reasoning)
 
@@ -161,24 +170,23 @@ class RoutingWorkflow:
                 ctx, route.name, steps.messages(route.prompt, prompt), came_from=["router"]
             )
             return Outcome("completed", reply.content or "", [route.name])
-        return await self._with_tool(route.name, TOOLS[route.tool], route.prompt, prompt)
+        return await self._with_tool(route.name, self.tools[route.tool], route.prompt, prompt)
 
-    async def _with_tool(self, node: str, tool: Tool, system: str, prompt: str) -> Outcome:
+    async def _with_tool(self, node: str, tool: HostTool, system: str, prompt: str) -> Outcome:
         """One model call with the handler's tool, its tool calls, then the answer."""
         messages = steps.messages(system, prompt)
-        first = await steps.chat(self.ctx, node, messages, tools=[tool], came_from=["router"])
+        offered = model_names([tool])
+        first = await steps.chat(self.ctx, node, messages, tools=offered, came_from=["router"])
         if not first.tool_calls:
             return Outcome("completed", first.content or "", [node])
         messages.append(first.as_message())
         ran = False
         for call in first.tool_calls:
-            result = await steps.call_tool(
-                self.ctx, {tool.name: tool}, call, caller=node, came_from=[node]
-            )
-            ran = ran or call.name == tool.name
+            result = await steps.call_tool(self.ctx, offered, call, caller=node, came_from=[node])
+            ran = ran or call.name in offered
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
         # Only a tool that ran is an edge back; after unknown tools the call stays on the node.
         final = await steps.chat(
-            self.ctx, node, messages, came_from=[f"tool:{tool.name}"] if ran else None
+            self.ctx, node, messages, came_from=[f"tool:{tool.config_name}"] if ran else None
         )
         return Outcome("completed", final.content or "", [node])
