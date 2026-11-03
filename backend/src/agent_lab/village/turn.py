@@ -553,10 +553,8 @@ def _to_visitor(world: dict[str, Any], name: str, action: Action) -> Action:
     named = action.villager if isinstance(action, Find) else None
     if isinstance(action, Say) and action.to:
         named = action.to
-    if not named or villager_named(named):
-        return action
-    visitor = visitor_named(world, named)
-    if visitor is None:
+    visitor = visitor_named(world, named) if named else None  # before the villagers its
+    if visitor is None:  # description names ("Anna, Greta's sister")
         return action
     if visitor["concerns"] == name:
         return Move(action="move", place="home")

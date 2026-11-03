@@ -1079,3 +1079,17 @@ def test_selling_or_giving_to_the_peddler_is_trading_with_it() -> None:
     assert parsed({"action": "sell", "goods": "lantern"}, world, "Lina") == trade
     assert parsed({"action": "trade", "goods": "the lantern"}, world, "Lina") == trade
     assert parsed({"action": "give", "to": "the peddler"}, world, "Lina") == trade
+
+
+def test_the_visitors_full_description_names_the_visitor_not_the_host() -> None:
+    world = world_with(Greta=at(*place_cells("fields")[0]))
+    visitor_for(world)
+    for named in ("Anna, Greta's sister", "Anna"):
+        assert parsed({"action": "find", "villager": named}, world, "Greta") == (
+            {"action": "move", "place": "home"},
+            None,
+        ), named
+    assert parsed({"action": "find", "villager": "Greta"}, world, "Lina") == (
+        {"action": "find", "villager": "Greta"},
+        None,
+    )

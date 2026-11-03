@@ -243,6 +243,7 @@ def day_health(
         reason_template(a["reason"]) for a in actions if a["action"] == "wait" and a.get("reason")
     )
     talks = [len(m[3].split(" / ")) if m[3] else 0 for m in map(TALK.match, notes) if m]
+    events = [n for n in notes if not TALK.match(n)]  # a talk's quotes are claims, not events
     has_trail = bool(trail)
     return {
         "day": day,
@@ -282,12 +283,12 @@ def day_health(
         ),
         "stuck_hours": _stuck_hours(trail) if has_trail else None,
         "happenings": {
-            "count": sum(1 for n in notes if CAME.match(n)),
-            "dealt": sum(1 for n in notes if DEALT.match(n)),
+            "count": sum(1 for n in events if CAME.match(n)),
+            "dealt": sum(1 for n in events if DEALT.match(n)),
         },
-        "boat_trips": sum(1 for n in notes if ROWED.match(n)),
+        "boat_trips": sum(1 for n in events if ROWED.match(n)),
         "whispers": {
-            "count": sum(1 for n in notes if WHISPERED.match(n)),
+            "count": sum(1 for n in events if WHISPERED.match(n)),
             "followed": sum(1 for a in actions if a.get("after_whisper") and a["action"] != "wait"),
         },
     }

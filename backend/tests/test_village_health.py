@@ -359,3 +359,16 @@ def test_happenings_boat_trips_and_whispers() -> None:
     assert health["happenings"] == {"count": 3, "dealt": 1}
     assert health["boat_trips"] == 1
     assert health["whispers"] == {"count": 2, "followed": 1}
+
+
+def test_talk_about_a_happening_is_not_a_happening() -> None:
+    """Notes of conversations quote what was said; only the village's own notes count."""
+    notes = [
+        "Greta and Lina talked; what they said (their claims): Greta: The garden gate broke.",
+        "Jonas and Hilde talked; what they said (their claims): Jonas: We rowed out on the lake.",
+        "Lina and Hilde talked; what they said (their claims): Lina: A voice whispered to Lina.",
+    ]
+    health = day_health(DAY, [run("Lina", tick(10), wait())], notes, [], None, final=True)
+    assert health is not None
+    assert health["happenings"] == {"count": 0, "dealt": 0}
+    assert health["boat_trips"] == 0 and health["whispers"]["count"] == 0
