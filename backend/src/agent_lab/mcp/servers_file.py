@@ -148,10 +148,17 @@ def check_host(entry: HttpEntry) -> None:
         raise EntryError(f'host "{host}" is not this computer; add it to allowHosts to allow it')
 
 
-def secrets(entry: Entry) -> list[str]:
-    """Every resolved `env` and `headers` value: redacted wherever it could show."""
+MIN_SECRET_WORD = 8  # a shorter last word ("Basic ab") would hide ordinary text everywhere
+
+
+def secrets(entry: Entry, environ: Mapping[str, str]) -> list[str]:
+    """What to redact wherever it could show: every resolved `env` and `headers` value, the
+    variables they take, and the credential after a scheme (the token of `Bearer <token>`)."""
     values = entry.env if isinstance(entry, StdioEntry) else entry.headers
-    return [v for v in values.values() if v]
+    found = [v for v in _fill(values, environ).values() if v]
+    found += [environ[n] for v in values.values() for n in _VARIABLE.findall(v) if environ.get(n)]
+    found += [w for v in list(found) if len(w := v.split()[-1]) >= MIN_SECRET_WORD and w != v]
+    return list(dict.fromkeys(found))
 
 
 def target(entry: Entry) -> str:

@@ -14,9 +14,11 @@ from test_api import BASE
 from test_blocks_api import block_agent, save
 
 from agent_lab.api import create_app
+from agent_lab.bus import Bus
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.mcp.host import Host
 from agent_lab.mcp.lab_server import LAB
+from agent_lab.runs import execute_run, new_run
 from agent_lab.store import Store
 
 WEB = "http://127.0.0.1:9000/mcp"
@@ -32,7 +34,8 @@ def web_handler(request: httpx.Request) -> httpx.Response:
     """A modern server; its tool echoes the request's Authorization header back."""
     message = json.loads(request.content)
     if message.get("method") == "tools/call":
-        text = f"{request.headers['authorization']} says 4"
+        authorization = request.headers["authorization"]
+        text = f"{authorization} says 4 (key {authorization.split()[-1]})"
         result = {"content": [{"type": "text", "text": text}], "isError": False}
         return httpx.Response(200, json={"jsonrpc": "2.0", "id": message["id"], "result": result})
     answer_ = LAB.handle(message)
@@ -101,13 +104,35 @@ def test_a_run_uses_an_owners_server_and_hides_its_secret(store: Store, tmp_path
     client, llm = client_for(store, tmp_path, script)
     with client:
         settled(client)
-        agent = save(client, block_agent(model_block("a", tools=["web/calculator"])))
+        system = f"Never repeat {TOKEN}."  # a secret written into a prompt is redacted too
+        agent = save(client, block_agent(model_block("a", system=system, tools=["web/calculator"])))
         run, spans = run_to_end(client, agent["id"], "2+2?")
         stored = client.get(f"/runs/{run['run_id']}").json()
     assert run["status"] == "completed"
     tool = next(s for s in spans if s["kind"] == "tool")
     assert tool["node_id"] == "tool:web/calculator"
     assert tool["attributes"]["lab.mcp.server"] == "web"
-    assert tool["output"] == "[REDACTED] says 4"
-    assert llm.calls[1][-1]["content"] == f"Bearer {TOKEN} says 4"  # the model gets the result
+    assert tool["output"] == "[REDACTED] says 4 (key [REDACTED])"
+    assert llm.calls[1][-1]["content"] == f"Bearer {TOKEN} says 4 (key {TOKEN})"  # unredacted
+    assert TOKEN not in json.dumps(run)
     assert TOKEN not in json.dumps(stored)
+
+
+@pytest.mark.anyio
+async def test_a_run_whose_agent_cannot_be_built_ends(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = store.create_agent(
+        template_id="blocks",
+        name="Calc",
+        description="",
+        sample_prompt="x",
+        config={"blocks": [model_block("a", tools=["calculator"])]},
+    )
+    models = fake_models(FakeLLM([]))
+    run, config, spec, llm = new_run("hi", agent.agent_id, models, store)
+    store.create_run(run)
+    await execute_run(
+        run=run, prompt="hi", config=config, spec=spec, llm=llm, store=store, bus=Bus(), tools={}
+    )
+    stored = store.get_run(run.run_id)
+    assert stored is not None and stored.status == "error"

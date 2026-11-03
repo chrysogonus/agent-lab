@@ -472,3 +472,33 @@ async def test_http_unsupported_version_is_not_legacy() -> None:
     await connection.open()
     assert connection.state == "failed"
     assert connection.reason == "unsupported protocol version 2026-07-28"
+
+
+@pytest.mark.anyio
+async def test_malformed_answers_reach_an_end() -> None:
+    bad_schema = {
+        "tools": [{"name": "odd", "inputSchema": {"type": "object", "properties": ["x"]}}]
+    }
+    connection, _ = await opened(
+        except_method("tools/list", lambda m: jsonrpc.result(m["id"], bad_schema))
+    )
+    assert connection.state == "connected" and connection.tools == []
+
+    connection, _ = await opened(
+        except_method("tools/list", lambda m: jsonrpc.result(m["id"], ["x"]))
+    )
+    assert (
+        connection.state == "failed"
+        and connection.reason == "the answer to tools/list is not an object"
+    )
+
+    connection, transport = await opened()
+    transport.answer = except_method(
+        "tools/call", lambda m: jsonrpc.result(m["id"], ["unexpected"])
+    )
+    called = await connection.call("calculator", {})
+    assert called.text == "error: the answer to tools/call is not an object"
+    transport.answer = except_method(
+        "tools/call", lambda m: {"jsonrpc": "2.0", "id": m["id"], "error": "x"}
+    )
+    assert (await connection.call("calculator", {})).text == "error: x"

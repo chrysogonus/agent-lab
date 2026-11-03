@@ -185,7 +185,7 @@ class Host:
             else:
                 assert isinstance(resolved, StdioEntry)
                 transport = Stdio(resolved.command, resolved.args, resolved.env)
-            self._secrets[name] = secrets(resolved)
+            self._secrets[name] = secrets(entry, self.environ)
         except EntryError as exc:
             transport = _Refused(str(exc))
         connection = Connection(name, transport, kind=entry.type, target=target(entry))

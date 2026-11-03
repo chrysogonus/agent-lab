@@ -99,10 +99,10 @@ async def execute_run(
         sink=sink,
         secrets=secrets,
     )
-    agent = spec.create(llm, config, tracer, tools or {})
     status: RunStatus = "error"
     answer: str | None = None
     try:
+        agent = spec.create(llm, config, tracer, tools or {})
         result = await agent.run(prompt)
         status, answer = result.status, result.answer
     except Exception:

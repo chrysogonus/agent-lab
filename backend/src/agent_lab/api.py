@@ -191,7 +191,7 @@ def create_app(
         allow_headers=["content-type"],
     )
     bus = Bus()
-    village = Village(store=store, models=models, bus=bus, secrets=secrets)
+    village = Village(store=store, models=models, bus=bus, secrets=secrets, host=host)
     app.state.village = village  # for tests that set up a scene
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
@@ -463,6 +463,7 @@ def create_app(
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
         run_secrets = (*secrets, *host.secrets())  # the servers file's keys too
         run.prompt = redact(run.prompt, run_secrets)
+        run.config = redact(run.config, run_secrets)
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(

@@ -81,10 +81,17 @@ def test_values_from_the_environment() -> None:
     resolved = resolve_values(entry, {"TOKEN": "s3cret"})
     assert isinstance(resolved, HttpEntry)
     assert resolved.headers == {"Authorization": "Bearer s3cret"}
-    assert secrets(resolved) == ["Bearer s3cret"]
+    assert secrets(entry, {"TOKEN": "s3cret"}) == ["Bearer s3cret", "s3cret"]
     stdio = resolve_values(StdioEntry(command="x", env={"KEY": "${K}", "N": "1"}), {"K": "v"})
     assert isinstance(stdio, StdioEntry) and stdio.env == {"KEY": "v", "N": "1"}
-    assert secrets(stdio) == ["v", "1"]
+    assert secrets(StdioEntry(command="x", env={"KEY": "${K}", "N": "1"}), {"K": "v"}) == [
+        "v",
+        "1",
+    ]
+    literal = HttpEntry(url="http://127.0.0.1/mcp", headers={"Authorization": "Basic abcdefgh12"})
+    assert secrets(literal, {}) == ["Basic abcdefgh12", "abcdefgh12"]
+    short = HttpEntry(url="http://127.0.0.1/mcp", headers={"X": "Basic ab"})
+    assert secrets(short, {}) == ["Basic ab"]  # a short word alone would hide ordinary text
     with pytest.raises(EntryError, match="variable TOKEN is not set"):
         resolve_values(entry, {})
 

@@ -14,9 +14,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from agent_lab.agents.registry import config_tools
 from agent_lab.blocks.model import LayoutError
 from agent_lab.bus import Bus
 from agent_lab.llm.models import Models, UnavailableModel
+from agent_lab.mcp.host import Host, ToolsUnavailable
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
@@ -173,8 +175,10 @@ class Village(MeetingRuns, HappeningRuns):
         secrets: tuple[str, ...] = (),
         idle_pause: float = 60.0,
         move_gap: float | None = None,
+        host: Host | None = None,
     ) -> None:
         self.store, self.models, self.bus, self.secrets = store, models, bus, secrets
+        self.host = host or Host()  # tools an owner gives a village agent; the lab's by default
         self.world = self._load()
         self.world["running"] = False  # a restarted backend shows the world paused
         self._refresh_rules()
@@ -803,6 +807,11 @@ class Village(MeetingRuns, HappeningRuns):
             return None, None, "turn failed: unknown agent"
         except (UnavailableModel, LayoutError, ValidationError) as exc:
             return None, None, f"turn failed: {exc}"
+        try:
+            await self.host.start()
+            tools = self.host.resolve(config_tools(config))
+        except ToolsUnavailable as exc:
+            return None, None, f"turn failed: {exc}"
         self.store.create_run(run)
         self.bus.publish(
             CHANNEL, {"type": "decision_started", "villager": name, "run_id": run.run_id}
@@ -815,7 +824,8 @@ class Village(MeetingRuns, HappeningRuns):
             llm=llm,
             store=self.store,
             bus=self.bus,
-            secrets=self.secrets,
+            secrets=(*self.secrets, *self.host.secrets()),
+            tools=tools,
         )
         done = self.store.get_run(run.run_id)
         if done is None or done.status != "completed":

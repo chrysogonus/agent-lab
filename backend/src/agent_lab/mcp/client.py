@@ -52,8 +52,10 @@ class CallResult:
 def _header_params(schema: dict[str, Any]) -> dict[str, str] | None:
     """Arguments mirrored into `Mcp-Param-*` headers; None when a declaration is invalid."""
     found: dict[str, str] = {}
-    properties = cast(dict[str, Any], schema.get("properties") or {})
-    for name, prop in properties.items():
+    properties: object = schema.get("properties") or {}
+    if not isinstance(properties, dict):
+        return None
+    for name, prop in cast(dict[str, Any], properties).items():
         if not isinstance(prop, dict) or "x-mcp-header" not in prop:
             continue
         prop = cast(dict[str, Any], prop)
@@ -116,6 +118,20 @@ def cut(text: str) -> str:
     return text if extra <= 0 else f"{text[:MAX_TEXT]}\n[cut: {extra} more characters]"
 
 
+def _error(answer: Message) -> tuple[int, str, Any]:
+    """(code, message, data) of a JSON-RPC error answer, whatever shape it came in."""
+    error = answer["error"]
+    if not isinstance(error, dict):
+        return jsonrpc.INTERNAL_ERROR, str(error), None
+    error = cast(dict[str, Any], error)
+    code = error.get("code")
+    return (
+        code if isinstance(code, int) else jsonrpc.INTERNAL_ERROR,
+        str(error.get("message")),
+        error.get("data"),
+    )
+
+
 def _header_value(value: object) -> str | None:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -170,6 +186,9 @@ class Connection:
             self.fail(str(exc))
         except OSError as exc:  # e.g. a program that does not exist
             self.fail(f"cannot start: {exc.strerror or exc}")
+        except Exception as exc:  # a malformed answer must still end the attempt
+            log.exception("connecting %s failed", self.name)
+            self.fail(f"unexpected answer: {exc}")
 
     def fail(self, reason: str) -> None:
         self.state, self.reason = "failed", reason
@@ -286,13 +305,11 @@ class Connection:
         answer = await self.transport.send(message)
         self._log("in", answer)
         if "error" in answer:
-            error = cast(dict[str, Any], answer["error"])
-            raise RpcError(
-                error.get("code", jsonrpc.INTERNAL_ERROR),
-                str(error.get("message")),
-                error.get("data"),
-            )
-        return cast(dict[str, Any], answer.get("result") or {})
+            raise RpcError(*_error(answer))
+        result = answer.get("result", {})
+        if not isinstance(result, dict):
+            raise TransportError(f"the answer to {method} is not an object")
+        return cast(dict[str, Any], result)
 
     async def call(self, tool: str, arguments: dict[str, Any]) -> CallResult:
         request = self._request("tools/call", {"name": tool, "arguments": arguments})
@@ -320,8 +337,11 @@ class Connection:
         except TransportError as exc:
             return failed(str(exc))
         if "error" in response:
-            return failed(str(cast(dict[str, Any], response["error"]).get("message")), response)
-        result = cast(dict[str, Any], response.get("result") or {})
+            return failed(_error(response)[1], response)
+        result = response.get("result", {})
+        if not isinstance(result, dict):
+            return failed("the answer to tools/call is not an object", response)
+        result = cast(dict[str, Any], result)
         if result.get("resultType", "complete") == "input_required":
             return failed("the tool asked for input, which the lab does not support", response)
         text = cut(result_text(result))

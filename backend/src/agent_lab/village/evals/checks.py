@@ -9,9 +9,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from agent_lab.agents.registry import model_of
+from agent_lab.agents.registry import config_tools, model_of
 from agent_lab.bus import Bus
 from agent_lab.llm.models import Models
+from agent_lab.mcp.host import Host, ToolsUnavailable
 from agent_lab.runs import execute_run, new_run, resolve
 from agent_lab.store import Store
 from agent_lab.village.evals.fixtures import FixtureError, build_world
@@ -205,13 +206,26 @@ def agent_of(check: Check, owner: World) -> str:
 async def _attempt(
     check: Check, prompt: str, agent_id: str, models: Models, store: Store, result_id: str
 ) -> tuple[str | None, str | None, str | None]:
-    """(run id, answer, why it failed) for one attempt."""
+    """(run id, answer, why it failed) for one attempt. Agents get the lab's own tools only."""
     run, config, spec, llm = new_run(
         prompt, agent_id, models, store, villager=check.get("as"), eval_id=result_id
     )
+    host = Host()
+    await host.start()
+    try:
+        tools = host.resolve(config_tools(config))
+    except ToolsUnavailable as exc:
+        return None, None, f"the run failed: {exc}"
     store.create_run(run)
     await execute_run(
-        run=run, prompt=prompt, config=config, spec=spec, llm=llm, store=store, bus=Bus()
+        run=run,
+        prompt=prompt,
+        config=config,
+        spec=spec,
+        llm=llm,
+        store=store,
+        bus=Bus(),
+        tools=tools,
     )
     done = store.get_run(run.run_id)
     if done is None or done.status != "completed":

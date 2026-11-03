@@ -3520,3 +3520,45 @@ async def test_at_the_most_an_event_takes_the_place_of_an_intention_note(tmp_pat
     assert len(items) == runner.RECORD_MOST
     assert items[-1]["text"] == "The peddler left the square; nobody traded for a kite."
     assert items[0]["text"] == "set out 1"  # the earliest intention note made room
+
+
+TOOL_AGENT = {
+    "reasoning": False,
+    "blocks": [
+        {
+            "kind": "tool",
+            "name": "calc",
+            "tool": "calculator",
+            "arguments": {"expression": "{input}"},
+        }
+    ],
+}
+
+
+@pytest.mark.anyio
+async def test_a_village_agent_may_call_tools(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    agent = v.store.create_agent(
+        template_id="blocks", name="Calc", description="", sample_prompt="x", config=TOOL_AGENT
+    )
+    assert await v._run(agent.agent_id, "Greta", "6*7", 0) == (ANY_ID, "42", None)  # pyright: ignore[reportPrivateUsage]
+
+
+@pytest.mark.anyio
+async def test_a_village_agent_without_its_server_fails_its_turn(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path)
+    config = json.loads(json.dumps(TOOL_AGENT).replace('"calculator"', '"notes/read_note"'))
+    agent = v.store.create_agent(
+        template_id="blocks", name="Reader", description="", sample_prompt="x", config=config
+    )
+    run_id, answer_, failed = await v._run(agent.agent_id, "Greta", "x", 0)  # pyright: ignore[reportPrivateUsage]
+    assert (run_id, answer_) == (None, None)
+    assert failed == 'turn failed: server "notes" is not connected'
+
+
+class _AnyId:
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, str) and len(other) == 32
+
+
+ANY_ID: Any = _AnyId()
