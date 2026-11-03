@@ -55,7 +55,9 @@ Cell = tuple[int, int]
 
 
 def label(place: str) -> str:
-    return "building site" if place == "site" else PLACES[place][1]  # the site: M12
+    if place in ("site", "lake"):  # the building site (M12), the lake from the boat (M15)
+        return "building site" if place == "site" else "lake"
+    return PLACES[place][1]
 
 
 def walkable(x: int, y: int) -> bool:

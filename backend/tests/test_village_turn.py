@@ -18,7 +18,15 @@ from agent_lab.village.turn import (
     seen_text,
     villager_agent,
 )
-from agent_lab.village.world import VILLAGERS, door, label_cell, new_world, place_cells, steps_to
+from agent_lab.village.world import (
+    VILLAGERS,
+    door,
+    label,
+    label_cell,
+    new_world,
+    place_cells,
+    steps_to,
+)
 
 MARKET = label_cell("market")
 
@@ -938,3 +946,69 @@ def test_the_rules_describe_leading_and_the_peddler() -> None:
     assert '{"action": "lead"} to take a lost animal next to you home' in RULES
     assert "the peddler's curiosity" in RULES
     assert '{"action": "lead"}' not in OLD_RULES[-1] and "Each turn lists" in OLD_RULES[-1]
+
+
+# --- M15 US2: the boat (FR-006, FR-007) ---
+
+
+def boat_world(**villagers: Any) -> dict[str, Any]:
+    from agent_lab.village.evals.fixtures import build_world
+
+    return build_world({"day": 66, "time": "14:00", "built": ["boat"], "villagers": villagers})
+
+
+def test_row_the_boat_alone_with_someone_or_until_a_time() -> None:
+    world = boat_world(Jonas={"at": "pier"}, Greta={"at": [21, 17]})
+    assert parsed({"action": "row"}, world, "Jonas") == ({"action": "row"}, None)
+    assert parsed({"action": "row", "with": "greta", "until": "15:00"}, world, "Jonas") == (
+        {"action": "row", "with": "Greta", "until": 900},
+        None,
+    )
+    assert parsed({"action": "row", "with": "Lina"}, world, "Jonas") == (
+        {"action": "wait"},
+        "Lina is not next to you",
+    )
+    assert parsed({"action": "row"}, world_with(), "Jonas") == (
+        {"action": "wait"},
+        "the village has no boat",
+    )
+
+
+def test_the_one_invited_joins_with_row() -> None:
+    from agent_lab.village.boat import start_trip
+
+    world = boat_world(Jonas={"at": "pier"}, Greta={"at": [21, 17]})
+    start_trip(world, "Jonas", "Greta", None)
+    assert parsed({"action": "row"}, world, "Greta") == ({"action": "row"}, None)
+
+
+def test_work_in_the_boat_fishes_the_lake() -> None:
+    from agent_lab.village.boat import start_trip
+
+    world = boat_world(Jonas={"at": "pier"})
+    start_trip(world, "Jonas", None, None)
+    world["boat"]["state"] = "out"
+    assert parsed({"action": "work"}, world, "Jonas") == ({"action": "work", "place": "lake"}, None)
+    world["villagers"][1] |= {"x": 23, "y": 20}  # on the water
+    text = observation(world, "Jonas")
+    assert "You are out on the lake in the boat for about an hour." in text
+    assert "\nYou are on the lake, in the boat.\n" in text
+    assert label("lake") == "lake"
+    assert "The boat is out on the lake with Jonas for about an hour." in observation(world, "Lina")
+
+
+def test_the_rules_describe_rowing() -> None:
+    from agent_lab.village.turn import RULES
+
+    assert '{"action": "row", "with": "Greta"}' in RULES
+
+
+def test_someone_seen_on_the_lake_is_on_the_lake() -> None:
+    world = world_with()
+    world["villagers"][0]["beliefs"]["Jonas"] = {
+        "where": None,
+        "cell": [23, 20],
+        "tick": 30,
+        "source": "seen",
+    }
+    assert belief_text(world, "Hilde", "Jonas") == "on the lake (seen 09:30)"

@@ -3300,3 +3300,106 @@ def test_the_state_gives_happenings_with_what_to_draw() -> None:
     assert v.state()["happenings"][1]["figure"] == "animal"
     letter["state"] = "here"
     assert v.state()["happenings"][0]["figure"] is None  # delivered
+
+
+# --- M15 US2: boat trips (FR-006 to FR-008) ---
+
+ROW = json.dumps({"action": "row"})
+
+
+def with_boat(v: Village) -> None:
+    v.world["built"] = [{"key": "boat", "day": 1}]
+    v.world["day_record"] = {"day": 1, "items": []}
+
+
+@pytest.mark.anyio
+async def test_a_trip_alone_goes_out_and_comes_back_after_an_hour(tmp_path: Path) -> None:
+    v, llm = village_for(tmp_path, {"Jonas": [ROW]})
+    morning(v)
+    with_boat(v)
+    put(v, "Jonas", *place_cells("pier")[0], triggers=["arrived"])
+    await v.step()  # he decides: boarding
+    assert v.world["boat"]["state"] == "boarding"
+    await v.step()  # out
+    jonas = villager(v, "Jonas")
+    assert v.world["boat"]["state"] == "out" and place_at(jonas["x"], jonas["y"]) is None
+    assert "Jonas rowed out on the lake." in notes(v)
+    for _ in range(6):
+        await v.step()
+    assert v.world["boat"] is None and place_at(jonas["x"], jonas["y"]) == "pier"
+    assert "Jonas came back to the pier." in notes(v)
+    assert any(m["text"] == "A boat trip on the lake on your own." for m in jonas["memories"])
+    assert jonas["intention"] is None
+    assert len(calls_of(llm, "Jonas")) == 2  # set out, then asked again once back
+
+
+@pytest.mark.anyio
+async def test_a_trip_together_after_an_invitation(tmp_path: Path) -> None:
+    invite = json.dumps({"action": "row", "with": "Greta"})
+    v, _ = village_for(tmp_path, {"Jonas": [invite], "Greta": [ROW]})
+    morning(v)
+    with_boat(v)
+    px, py = place_cells("pier")[0]
+    put(v, "Jonas", px, py, triggers=["arrived"], neighbours=["Greta"])
+    put(v, "Greta", px, py + 1, neighbours=["Jonas"])
+    await v.step()  # Jonas asks; Greta is told and decides
+    assert texts(v, "Greta", "invited") == [
+        'Jonas asks you to come out in the boat ({"action": "row"} to come along).'
+    ]
+    await v.step()  # Greta's row joins; the boat leaves
+    assert v.world["boat"]["rowers"] == ["Jonas", "Greta"]
+    talk(v, "Jonas", "Greta", 2)
+    v.world["conversations"][0]["last_tick"] -= 10  # long silent: it would end on land
+    for _ in range(3):
+        await v.step()
+    assert len(v.world["conversations"]) == 1  # the boat's talk lasts the trip
+    for _ in range(6):
+        await v.step()
+    assert v.world["boat"] is None
+    greta = villager(v, "Greta")
+    assert any(m["text"] == "A boat trip on the lake with Jonas." for m in greta["memories"])
+    assert "Jonas and Greta rowed out on the lake." in notes(v)
+
+
+@pytest.mark.anyio
+async def test_an_invitation_not_taken_leaves_alone(tmp_path: Path) -> None:
+    invite = json.dumps({"action": "row", "with": "Greta"})
+    v, _ = village_for(tmp_path, {"Jonas": [invite]})
+    morning(v)
+    with_boat(v)
+    px, py = place_cells("pier")[0]
+    put(v, "Jonas", px, py, triggers=["arrived"], neighbours=["Greta"])
+    put(v, "Greta", px, py + 1, neighbours=["Jonas"])
+    for _ in range(3):
+        await v.step()
+    assert v.world["boat"]["state"] == "out" and v.world["boat"]["rowers"] == ["Jonas"]
+
+
+@pytest.mark.anyio
+async def test_fishing_from_the_boat(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Jonas": [ROW, WORK]})
+    morning(v)
+    with_boat(v)
+    put(v, "Jonas", *place_cells("pier")[0], triggers=["arrived"])
+    await v.step()
+    await v.step()  # out
+    villager(v, "Jonas")["triggers"] = ["spoken to"]
+    await v.step()  # he works the lake
+    for _ in range(3):
+        await v.step()
+    assert villager(v, "Jonas")["basket"] == "fish"
+
+
+@pytest.mark.anyio
+async def test_bedtime_brings_the_boat_back(tmp_path: Path) -> None:
+    v, _ = village_for(tmp_path, {"Jonas": [ROW]})
+    morning(v, bedtime_tick("Jonas", minutes_before=30))
+    with_boat(v)
+    put(v, "Jonas", *place_cells("pier")[0], triggers=["arrived"])
+    for _ in range(4):
+        await v.step()
+    jonas = villager(v, "Jonas")
+    assert v.world["boat"] is None and jonas["bedtime"]
+    assert place_at(jonas["x"], jonas["y"]) == "pier" or not place_at(jonas["x"], jonas["y"])
+    for _ in range(3):
+        await v.step()  # and he walks home

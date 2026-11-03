@@ -366,3 +366,9 @@ def test_a_broken_place_fills_baskets_half_as_fast() -> None:
     world = world_with(Jonas=at(PIER[0], **working("pier")))
     world["happenings"] = [broken("fields")]  # elsewhere: no matter
     assert steps_until_basket(world)[0] == 6
+
+
+def test_fishing_from_the_boat_fills_a_basket_twice_as_fast() -> None:
+    world = world_with(Jonas={"working": {"place": "lake", "steps": 0}})
+    assert goods_at(world, "lake") == "fish"
+    assert steps_until_basket(world) == (3, [("Jonas", "fish")])

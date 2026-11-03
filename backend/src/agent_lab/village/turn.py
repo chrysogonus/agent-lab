@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal, cast
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from agent_lab.village.affordances import can_do_lines
+from agent_lab.village.boat import boat_text, in_boat, row_refusal
 from agent_lab.village.build import needs_left, project_text, site_at, site_cells
 from agent_lab.village.happenings import known_lines, lead_refusal
 from agent_lab.village.intention import intention_text
@@ -40,6 +41,7 @@ from agent_lab.village.world import (
     steps_to,
     usual_place,
     villager_named,
+    walkable,
 )
 
 SPEECH_SHOWN = 200  # characters of a line shown on the map and heard by others
@@ -95,6 +97,13 @@ class Lead(BaseModel):
     purpose: str | None = None
 
 
+class Row(BaseModel):
+    action: Literal["row"]  # M15: take the boat out from the pier, or join it when asked
+    with_: str | None = Field(default=None, alias="with")
+    until: str | None = None
+    purpose: str | None = None
+
+
 class Give(BaseModel):
     action: Literal["give"]
     to: str | None = None  # without a name: onto the festival stalls
@@ -109,7 +118,7 @@ class Wait(BaseModel):
     action: Literal["wait"]
 
 
-type Action = Move | Find | Say | Goodbye | Work | Build | Bring | Lead | Give | Buy | Wait
+type Action = Move | Find | Say | Goodbye | Work | Build | Bring | Lead | Row | Give | Buy | Wait
 ACTION = TypeAdapter[Action](Annotated[Action, Field(discriminator="action")])
 
 Villager = dict[str, Any]
@@ -153,6 +162,8 @@ def _place_phrase(where: str | None, at: tuple[int, int]) -> str:
         return "at home"
     if where:
         return f"at the {label(where)}"
+    if not walkable(*at):
+        return "on the lake"  # in the boat (M15)
     nearest = min(PLACES, key=lambda p: steps_to(at[0], at[1], place_cells(p)))
     return f"near the {label(nearest)}"
 
@@ -194,6 +205,8 @@ def where_text(world: dict[str, Any], v: Villager) -> str:
     here = place_at(v["x"], v["y"])
     if v["asleep"]:
         return "You are asleep at home."
+    if in_boat(world, v["name"]):
+        return "You are on the lake, in the boat."
     if site_at(world, cell(v)):  # some sites lie on a place: the market, the town hall
         return "You are at the building site" + (f", at the {label(here)}." if here else ".")
     if here:
@@ -268,7 +281,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         conversation = "You are not talking with anyone"
     tired = [n for n in next_to if talked_out(world, name, n)]
     here = place_at(me["x"], me["y"])
-    x, y = cell(me)
+    x, y = place_cells("pier")[0] if in_boat(world, name) else cell(me)  # on the water: the pier
     places = [f"{label(p)} {steps_to(x, y, place_cells(p))} steps" for p in PLACES if p != here]
     places.append(f"your home {steps_to(x, y, [door(name)])} steps")
     if world["project"] and not site_at(world, (x, y)):
@@ -295,6 +308,7 @@ def observation(world: dict[str, Any], name: str) -> str:
         meeting_text(world, name),
         *project_text(world, name),
         *known_lines(world, name),
+        *filter(None, [boat_text(world, name)]),
         *(
             [f"You keep: {listed([k['name'] for k in me['keepsakes']])}."]
             if me["keepsakes"]
@@ -367,12 +381,12 @@ def parse_action(
     except ValidationError as exc:
         return wait, f"not a valid action: {exc.errors()[0]['msg']}"
     extra: dict[str, Any] = {}
-    if isinstance(action, Work | Build) and action.until:
+    if isinstance(action, Work | Build | Row) and action.until:
         until, why = _until(world, action.until)
         if why:
             return wait, why
         extra |= {} if until is None else {"until": until}
-    if isinstance(action, Move | Find | Work | Build | Bring | Lead):
+    if isinstance(action, Move | Find | Work | Build | Bring | Lead | Row):
         purpose = (action.purpose or "").strip()
         extra |= {"purpose": purpose} if purpose else {}
     if isinstance(action, Move):
@@ -403,6 +417,12 @@ def parse_action(
         if at_site:
             return {"action": "work", "place": "site", **extra}, None
         return _leaving(world, name, {"action": "build", **extra}), None
+    if isinstance(action, Row):
+        why = row_refusal(world, name, action.with_)
+        if why:
+            return wait, why
+        with_ = {"with": villager_named(action.with_)} if action.with_ else {}
+        return {"action": "row", **with_, **extra}, None
     if isinstance(action, Lead):
         why = lead_refusal(world, name)
         return (wait, why) if why else (_leaving(world, name, {"action": "lead", **extra}), None)
@@ -545,6 +565,7 @@ def _work_place(
     "elsewhere-site": the building site away from here, which is building."""
     me = villager_of(world, name)
     here = "site" if site_at(world, cell(me)) else place_at(me["x"], me["y"])
+    here = "lake" if in_boat(world, name) else here
     place = here if text is None else place_named(text)
     if text is not None and place is None:
         return None, f"unknown place {text!r}"
@@ -770,7 +791,14 @@ RULES = (  # M15: the day's happenings
         '{"action": "give", "to": "Hilde"}',
         '{"action": "lead"} to take a lost animal next to you home to its owner,\n'
         '{"action": "give", "to": "Hilde"}',
-    ).replace(
+    )
+    .replace(
+        '{"action": "wait"} to go on',
+        '{"action": "row", "with": "Greta"} at the pier to take the village\'s boat out on the '
+        'lake for about an hour ("with" asks someone next to you along, who comes with its own '
+        '{"action": "row"}),\n{"action": "wait"} to go on',
+    )
+    .replace(
         "basket you carry for a load of wood, paint or saplings for building,",
         "basket you carry for a load of wood, paint or saplings for building; at the square, "
         'also for the peddler\'s curiosity while it is there ({"action": "buy", "goods": '

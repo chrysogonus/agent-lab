@@ -3,12 +3,13 @@
 import re
 from typing import Any
 
+from agent_lab.village.boat import in_boat
 from agent_lab.village.build import site_at, site_refusal
 from agent_lab.village.happenings import repair_at
 from agent_lab.village.trade import BASKET_GOODS
 from agent_lab.village.world import adjacent, listed, place_at, villager_named
 
-GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers"}
+GOODS = {"pier": "fish", "fields": "vegetables", "flower_garden": "flowers", "lake": "fish"}
 BASKET_STEPS = 6  # one village hour of work, added up over everyone working a place
 MEND_STEPS = 6  # an hour of work, added up, mends a broken thing (M15)
 NO_GIVING = (
@@ -44,6 +45,7 @@ def goods_at(world: dict[str, Any], place: str) -> str | None:
     growth = world["growth"]
     ready = {
         "pier": True,
+        "lake": True,  # from the boat (M15)
         "fields": growth["fields"]["stage"] in ("ripe", "harvested"),
         "flower_garden": growth["flower_garden"]["stage"] == "blooming",
     }
@@ -53,6 +55,8 @@ def goods_at(world: dict[str, Any], place: str) -> str | None:
 def work_refusal(world: dict[str, Any], name: str) -> str | None:
     """Why a villager cannot work where it stands, or None."""
     me = _villager(world, name)
+    if in_boat(world, name):
+        return None  # fishing the lake (M15)
     here = _here(me)
     if site_at(world, (me["x"], me["y"])):  # building comes first where a site is
         if (me["working"] and me["working"]["place"] == "site") or any(
@@ -164,6 +168,7 @@ def work_step(world: dict[str, Any]) -> list[tuple[str, str]]:
             v["working"]["steps"] += 1
         goods = goods_at(world, place)
         steps = BASKET_STEPS * (2 if repair_at(world, place) else 1)  # broken: half as fast
+        steps = BASKET_STEPS // 2 if place == "lake" else steps  # from the boat: twice as fast
         harvest = min(world["harvest"][place] + len(here), steps) if goods else 0
         empty = [v for v in here if v["basket"] is None]
         if goods and harvest == steps and empty:
@@ -216,7 +221,7 @@ def delivery_text(world: dict[str, Any], name: str) -> str | None:
 
 def stalls_text(stalls: dict[str, int]) -> str:
     """What the festival stalls hold and still lack."""
-    held = [g for g in GOODS.values() if stalls[g]]
-    lacking = [g for g in GOODS.values() if not stalls[g]]
+    held = [g for g in BASKET_GOODS if stalls[g]]
+    lacking = [g for g in BASKET_GOODS if not stalls[g]]
     text = "The festival stalls on the square " + (f"hold {listed(held)}" if held else "are empty")
     return text + (f"; they still lack {listed(lacking)}." if lacking else ".")

@@ -20,6 +20,7 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
+from agent_lab.village.boat import in_boat
 from agent_lab.village.build import (
     CATALOGUE,
     build_step,
@@ -126,7 +127,15 @@ from agent_lab.village.world import (
     usual_place,
 )
 
-INTENDING = ("move", "find", "work", "build", "bring", "lead")  # answers that start an intention
+INTENDING = (
+    "move",
+    "find",
+    "work",
+    "build",
+    "bring",
+    "lead",
+    "row",
+)  # answers that start an intention
 CHANNEL = "village"  # bus channel of the village stream
 TRAIL_DAYS = 28  # village days of the day trail kept, as the chronicle
 EVENTS_KEPT = 10
@@ -620,8 +629,8 @@ class Village(MeetingRuns, HappeningRuns):
     def _walks(self, v: Villager) -> bool:
         """Set on going somewhere, it walks on while talking, and the talk ends when they walk
         apart (M14: one rule where the bedtime walk and the walk to the meeting were special)."""
-        if v["asleep"] or not v["goal"]:
-            return False
+        if v["asleep"] or not v["goal"] or in_boat(self.world, v["name"]):
+            return False  # rowers go where the boat goes
         if v["bedtime"]:
             return True
         if v["name"] in self.decisions:
@@ -722,6 +731,9 @@ class Village(MeetingRuns, HappeningRuns):
         tick = self.world["tick"]
         for c in list(self.world["conversations"]):
             a, b = self._villager(c["a"]), self._villager(c["b"])
+            boat = self.world["boat"]
+            if boat and {a["name"], b["name"]} <= set(boat["rowers"]):
+                continue  # a talk in the boat lasts the trip (M15)
             if not adjacent(cell(a), cell(b)):
                 self._end_conversation(c, "you walked apart")
             elif tick - c["last_tick"] >= SILENT_STEPS:
@@ -992,6 +1004,8 @@ class Village(MeetingRuns, HappeningRuns):
             self._buy(v, action["goods"], action["paid"])
         elif kind == "lead":
             self._lead(v)
+        elif kind == "row":
+            self._row(v, action)
         elif kind == "goodbye":  # then perhaps on its way
             if action["text"] and awake_neighbours(self.world, name):
                 self._say(v, action["text"], None)
@@ -1266,6 +1280,7 @@ class Village(MeetingRuns, HappeningRuns):
         for v in world["villagers"]:
             self._pursue(v)
         self._happenings()
+        self._boat()
         for name, goods in work_step(world):
             v = self._villager(name)
             self._event(v, "basket", f"You filled a basket of {goods}.")

@@ -8,6 +8,7 @@ It replaces the hints M11 and M12 added one by one.
 import json
 from typing import Any
 
+from agent_lab.village.boat import row_refusal
 from agent_lab.village.build import needs_left, site_at
 from agent_lab.village.happenings import animal_next_to, repair_at
 from agent_lab.village.trade import BUILDING_GOODS, buy_refusal, carried_text
@@ -63,6 +64,12 @@ def can_do(world: dict[str, Any], name: str) -> list[Entry]:
         found.append(({"action": "build"}, f"the building site holds {_loads(project['site'])}"))
     elif needed and at_site:
         found.append(({"action": "build"}, f"you can set down your {goods} and build with them"))
+    if row_refusal(world, name, None) is None and not world["boat"]:
+        for v in world["villagers"]:
+            if v is not me and row_refusal(world, name, v["name"]) is None:
+                why = f"take the boat out on the lake with {v['name']}"
+                found.append(({"action": "row", "with": v["name"]}, why))
+        found.append(({"action": "row"}, "take the boat out on the lake"))
     if needed:
         found.append(({"action": "bring"}, f"the building site still needs the {goods} you carry"))
     trader = world["trader"]

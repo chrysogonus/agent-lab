@@ -8,6 +8,7 @@ the intention ends or something happens.
 
 from typing import Any
 
+from agent_lab.village.boat import in_boat
 from agent_lab.village.build import needs_left, site_at
 from agent_lab.village.trade import carried_text
 from agent_lab.village.work import work_refusal
@@ -21,7 +22,7 @@ from agent_lab.village.world import (
     sees,
 )
 
-KINDS = ("go", "work", "build", "bring", "see", "lead")
+KINDS = ("go", "work", "build", "bring", "see", "lead", "row")
 PURPOSE_KEPT = 120
 
 Intention = dict[str, Any]
@@ -78,6 +79,8 @@ def _goal(place: str) -> dict[str, Any]:
 
 
 def _at(world: dict[str, Any], v: Villager, place: str) -> bool:
+    if place == "lake":
+        return in_boat(world, v["name"])  # the lake is worked from the boat (M15)
     if place == "home":
         return _cell(v) == door(v["name"])
     if place == "site":
@@ -102,6 +105,10 @@ def next_step(world: dict[str, Any], v: Villager) -> Step:
         return _see(world, v, intention)
     if kind == "lead":
         return _lead(world, v, intention)
+    if kind == "row":
+        boat = world["boat"]
+        aboard = boat and (v["name"] in boat["rowers"] or boat["invited"] == v["name"])
+        return {"kind": "none"} if aboard else {"kind": "done", "why": "the boat trip is over"}
     project = world["project"]
     if place == "site" and project is None:
         return {"kind": "given_up", "why": "nothing is being built any more"}
@@ -172,6 +179,8 @@ def _phrase(intention: Intention, basket: str | None = None) -> str:
         return "go home" if place == "home" else f"go to the {label(place)}"
     if kind == "lead":
         return f"take the lost animal home to {intention['villager']}"
+    if kind == "row":
+        return "row the boat on the lake"
     if kind == "build":
         return "build at the building site"
     if kind == "bring":

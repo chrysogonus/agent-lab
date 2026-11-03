@@ -51,6 +51,7 @@ def test_remember_sets_importance_by_kind_and_cuts_long_text() -> None:
         "summary": 4,
         "happening": 3,
         "keepsake": 3,
+        "boat": 4,
     }
 
 

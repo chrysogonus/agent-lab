@@ -5,6 +5,7 @@ and `boat.py`."""
 from typing import Any
 
 from agent_lab.store import Store
+from agent_lab.village.boat import boat_step, start_trip
 from agent_lab.village.happenings import (
     animal_next_to,
     day_happenings,
@@ -15,7 +16,7 @@ from agent_lab.village.happenings import (
 )
 from agent_lab.village.trade import carried_text
 from agent_lab.village.work import mend_step
-from agent_lab.village.world import clock, hhmm, label
+from agent_lab.village.world import clock, hhmm, label, listed
 
 Villager = dict[str, Any]
 Happening = dict[str, Any]
@@ -160,3 +161,44 @@ class HappeningRuns:
         self._event(v, "traded", f"You {text}.")
         self._remember(v, "keepsake", f"You {text}.", [])
         self._note(f"{v['name']} {text}.")
+
+    # --- boat trips ---
+
+    def _row(self, v: Villager, action: dict[str, Any]) -> None:
+        """Take the boat out from the pier, or join it when asked."""
+        name, boat = v["name"], self.world["boat"]
+        if boat and boat["state"] == "boarding" and boat["invited"] == name:
+            boat |= {"rowers": [*boat["rowers"], name], "invited": None}
+            self._event(v, "rowed", f"You got into the boat with {boat['rowers'][0]}.")
+            return
+        invited: str | None = action.get("with")
+        start_trip(self.world, name, invited, action.get("until"))
+        self._event(v, "rowed", "You take the boat out on the lake.")
+        if invited:
+            other = self._villager(invited)
+            text = f'{name} asks you to come out in the boat ({{"action": "row"}} to come along).'
+            self._event(other, "invited", text, **{"from": name})
+            self._trigger(other, "invited")
+
+    def _boat(self) -> None:
+        """One step of the boat: out from the pier, round the lake, back."""
+        for change in boat_step(self.world):
+            rowers: list[str] = change["rowers"]
+            if change["change"] == "out":
+                self._note(f"{listed(rowers)} rowed out on the lake.")
+                for name in rowers:
+                    self._villager(name)["goal"] = None
+                continue
+            self._back(rowers)
+
+    def _back(self, rowers: list[str]) -> None:
+        self._note(f"{listed(rowers)} came back to the pier.")
+        for name in rowers:
+            v = self._villager(name)
+            others = [n for n in rowers if n != name]
+            company = f"with {listed(others)}" if others else "on your own"
+            self._remember(v, "boat", f"A boat trip on the lake {company}.", others)
+            self._event(v, "rowed", "You came back to the pier.")
+            v["working"] = None
+            if v["intention"] and v["intention"]["kind"] == "row":
+                self._end_intention(v, "the boat is back at the pier")

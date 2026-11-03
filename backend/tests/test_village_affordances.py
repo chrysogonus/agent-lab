@@ -269,3 +269,14 @@ def test_lead_mend_and_the_peddlers_curiosity() -> None:
                 {"text": "Hello there"} if action["action"] in ("say", "goodbye") else {}
             )
             assert parse_action(json.dumps(answer), world, name)[1] is None, action
+
+
+def test_row_at_the_pier_once_there_is_a_boat() -> None:
+    world = world_of(built=["boat"], villagers={"Jonas": {"at": "pier"}, "Greta": {"at": [21, 17]}})
+    assert (
+        {"action": "row", "with": "Greta"},
+        "take the boat out on the lake with Greta",
+    ) in can_do(world, "Jonas")
+    assert ({"action": "row"}, "take the boat out on the lake") in can_do(world, "Jonas")
+    no_boat = world_of(villagers={"Jonas": {"at": "pier"}})
+    assert all(a["action"] != "row" for a in actions(no_boat, "Jonas"))

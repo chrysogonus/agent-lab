@@ -168,7 +168,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 4: User Story 2 — Boat trips (P2)
 
-- [ ] T011 [P] [US2] New backend/src/agent_lab/village/boat.py (research §5, data-model.md
+- [X] T011 [P] [US2] New backend/src/agent_lab/village/boat.py (research §5, data-model.md
   "Boat trip").
   - `LOOP`: lake cells from the pier and back, all water.
   - `row_refusal(world, name, with_)`. Refused when:
@@ -184,7 +184,7 @@ first. Runner tests pass `move_gap=0`.
   - `boat_text(world, name)`.
 
   Tests in new backend/tests/test_village_boat.py. Requirements: FR-006, FR-008.
-- [ ] T012 [US2] turn.py, intention.py and work.py.
+- [X] T012 [US2] turn.py, intention.py and work.py.
   - `Row {with?, until?}`. Validate `with` as an adjacent awake villager. `until` follows the
     M14 rules, and the trip lasts an hour without it. An invited villager answering `row`
     while the boat is boarding joins.
@@ -195,7 +195,7 @@ first. Runner tests pass `move_gap=0`.
 
   Tests in test_village_turn.py, test_village_work.py and test_village_affordances.py.
   Requirements: FR-006, FR-007.
-- [ ] T013 [US2] happening_runs.py and runner.py.
+- [X] T013 [US2] happening_runs.py and runner.py.
   - `_row` and `_boat()`:
     - boarding, then out, with the rowers placed on the boat's cell, not walking (`_walks`);
     - back to the pier cells with notes and memories (kind `boat` importance 4: "A boat trip on

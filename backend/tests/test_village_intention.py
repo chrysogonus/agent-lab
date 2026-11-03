@@ -40,7 +40,7 @@ def set_on(world: dict[str, Any], name: str, action: dict[str, Any]) -> dict[str
 
 
 def test_the_kinds() -> None:
-    assert KINDS == ("go", "work", "build", "bring", "see", "lead")
+    assert KINDS == ("go", "work", "build", "bring", "see", "lead", "row")
 
 
 def test_start_turns_each_answer_into_an_intention() -> None:
@@ -223,3 +223,17 @@ def test_lead_walks_to_the_owners_door_and_is_done_when_the_animal_is_home() -> 
     goat |= {"state": "passed", "leader": None}
     assert next_step(world, v)["kind"] == "given_up"
     assert described(v["intention"]) == "take the lost animal home to Greta"
+
+
+def test_row_lasts_until_the_trip_is_over() -> None:
+    from agent_lab.village.boat import start_trip
+
+    world = build_world(
+        {"day": 66, "time": "14:00", "built": ["boat"], "villagers": {"Jonas": {"at": "pier"}}}
+    )
+    start_trip(world, "Jonas", None, None)
+    v = set_on(world, "Jonas", {"action": "row"})
+    assert v["intention"]["kind"] == "row" and next_step(world, v) == {"kind": "none"}
+    world["boat"] = None
+    assert next_step(world, v) == {"kind": "done", "why": "the boat trip is over"}
+    assert described(v["intention"]) == "row the boat on the lake"
