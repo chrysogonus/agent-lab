@@ -589,6 +589,9 @@ def test_health_on_the_command_line(tmp_path: Path, capsys: pytest.CaptureFixtur
     )
     store.set_village_action("t1", {"action": "wait", "reason": "Hilde is not next to you"})
     assert main(["health", "--db", str(owner)]) == 0
+    assert (
+        "Happenings 0 (0 dealt)  Boat trips 0  Whispers 0 (0 followed)" in capsys.readouterr().out
+    )
     out = capsys.readouterr().out
     assert "Day 1 (so far)" in out and "Waits 100%" in out
     assert "1x <villager> is not next to you" in out

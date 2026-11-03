@@ -28,8 +28,22 @@ def trail_row(world: dict[str, Any], state_of: Callable[[Villager], str]) -> dic
     }
 
 
-DECISIONS = ("move", "find", "say", "goodbye", "work", "give", "buy", "wait", "build", "bring")
+DECISIONS = (
+    *("move", "find", "say", "goodbye", "work", "give", "buy", "wait", "build", "bring"),
+    *("lead", "row"),
+)
 MEETING_RUNS = ("propose", "vote", "decide", "assign")
+# M15: the notes a happening starts and is dealt with by, a boat trip and a whisper
+CAME = re.compile(
+    r"^(The postman brought a letter for \w+\.|.+ came to visit \w+\.|.+ wandered to the .+\."
+    r"|.+ broke\.|A peddler came to the square with .+\.)$"
+)
+DEALT = re.compile(
+    r"^\w+ (got a letter: .+|spent time with .+\.|led .+ home\.|mended .+\."
+    r"|traded a .+ from the peddler\.)$"
+)
+ROWED = re.compile(r"^.+ rowed out on the lake\.$")
+WHISPERED = re.compile(r"^A voice whispered to \w+\.$")
 SET_DOWN = re.compile(r"^\w+ set down a load of \w+ at the building site\.$")
 TALK = re.compile(r"^(\w+) and (\w+) talked; what they said \(their claims\): (.*)$")
 ENTRY = re.compile(r"^(\d{2}):(\d{2}) (?:see (\w+)|([^:]+)): ")
@@ -267,4 +281,13 @@ def day_health(
             else None
         ),
         "stuck_hours": _stuck_hours(trail) if has_trail else None,
+        "happenings": {
+            "count": sum(1 for n in notes if CAME.match(n)),
+            "dealt": sum(1 for n in notes if DEALT.match(n)),
+        },
+        "boat_trips": sum(1 for n in notes if ROWED.match(n)),
+        "whispers": {
+            "count": sum(1 for n in notes if WHISPERED.match(n)),
+            "followed": sum(1 for a in actions if a.get("after_whisper") and a["action"] != "wait"),
+        },
     }

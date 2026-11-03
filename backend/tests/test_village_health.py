@@ -335,3 +335,27 @@ def test_loads_set_down_by_an_intention_count_from_notes_and_trail() -> None:
     assert health is not None
     assert (health["loads_set_down"], health["load_minutes"]) == (1, 50)
     assert health["decisions"] == 2  # bring is a decision
+
+
+def test_happenings_boat_trips_and_whispers() -> None:
+    """M15 (FR-012, FR-013): counted from the day's notes and the decisions."""
+    notes = [
+        "A goat wandered to the market.",  # an animal's start is a "wandered to the" note
+        "Greta's goat wandered to the market.",
+        "Jonas led Greta's goat home.",
+        "A peddler came to the square with a kite.",
+        "The peddler left the square; nobody traded for a kite.",
+        "Jonas and Greta rowed out on the lake.",
+        "Jonas and Greta came back to the pier.",
+        "A voice whispered to Lina.",
+        "A voice whispered to Lina.",
+    ]
+    runs = [
+        run("Lina", tick(10), {"action": "move", "place": "market", "after_whisper": True}),
+        run("Lina", tick(11), {"action": "wait", "after_whisper": True}),
+    ]
+    health = day_health(DAY, runs, notes, [], None, final=True)
+    assert health is not None
+    assert health["happenings"] == {"count": 3, "dealt": 1}
+    assert health["boat_trips"] == 1
+    assert health["whispers"] == {"count": 2, "followed": 1}

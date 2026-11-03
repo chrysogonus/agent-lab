@@ -394,6 +394,9 @@ export type DayHealth = {
   given_back: number;
   weather_slips: string[] | null; // null: the chronicle is not written yet
   stuck_hours: number | null;
+  happenings: { count: number; dealt: number }; // M15
+  boat_trips: number;
+  whispers: { count: number; followed: number };
 };
 
 export const villageHealth = (days = 14): Promise<{ days: DayHealth[] }> => send("GET", `/village/health?days=${days}`);

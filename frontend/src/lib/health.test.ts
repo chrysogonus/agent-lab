@@ -25,6 +25,9 @@ const day = (fields: Partial<DayHealth>): DayHealth => ({
   given_back: 0,
   weather_slips: ["storm"],
   stuck_hours: 1.5,
+  happenings: { count: 2, dealt: 1 },
+  boat_trips: 1,
+  whispers: { count: 3, followed: 2 },
   ...fields,
 });
 
@@ -74,5 +77,14 @@ describe("a day's detail", () => {
     });
     const empty = Object.fromEntries(healthDetail(day({ load_minutes: null, meeting: null, weather_slips: null })).map((c) => [c.label, c.value]));
     expect(empty).toMatchObject({ "Load time": "–", Meeting: "none", "Weather slips": "–" });
+  });
+});
+
+describe("M15 numbers", () => {
+  it("shows happenings, boat trips and whispers in the detail", () => {
+    const cells = Object.fromEntries(healthDetail(day({})).map((c) => [c.label, c.value]));
+    expect(cells["Happenings"]).toBe("2 (1 dealt with)");
+    expect(cells["Boat trips"]).toBe("1");
+    expect(cells["Whispers"]).toBe("3 (2 followed by an action)");
   });
 });

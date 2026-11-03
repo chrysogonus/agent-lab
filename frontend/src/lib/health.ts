@@ -51,6 +51,9 @@ export function healthDetail(day: DayHealth): HealthCell[] {
     day.load_minutes == null ? { label: "Load time", value: "–", why: "no load bought and set down" } : { label: "Load time", value: `${day.load_minutes} min` },
     { label: "Given straight back", value: String(day.given_back) },
     { label: "Meeting", value: meeting ? `${meeting.present.length} came, ${meeting.votes} voted, ${meeting.outcome}` : "none" },
+    { label: "Happenings", value: `${day.happenings.count} (${day.happenings.dealt} dealt with)` },
+    { label: "Boat trips", value: String(day.boat_trips) },
+    { label: "Whispers", value: `${day.whispers.count} (${day.whispers.followed} followed by an action)` },
     {
       label: "Model calls",
       value: `${total}: ${calls.decision} decisions, ${calls.plan} plans, ${calls.reflect} reflections, ${calls.chronicle} chronicle, ${calls.meeting} meeting runs (${day.failed_calls} failed)`,

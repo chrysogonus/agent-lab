@@ -256,7 +256,7 @@ first. Runner tests pass `move_gap=0`.
 
 ## Phase 6: Measuring
 
-- [ ] T018 health.py:
+- [X] T018 health.py:
   - `happenings: {count, dealt}` from the day's notes;
   - `boat_trips` from notes;
   - `whispers: {count, followed}`: notes, and decision runs with `after_whisper` whose action

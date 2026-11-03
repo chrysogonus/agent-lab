@@ -71,6 +71,12 @@ def _health(db: str, days: int) -> int:
             f"Trades {day['trades']}  Loads {day['loads_set_down']}/{day['loads_worked_in']}  "
             f"Stuck hours {day['stuck_hours']}  Weather slips {day['weather_slips']}"
         )
+        found, whispers = day["happenings"], day["whispers"]
+        print(
+            f"  Happenings {found['count']} ({found['dealt']} dealt)  "
+            f"Boat trips {day['boat_trips']}  "
+            f"Whispers {whispers['count']} ({whispers['followed']} followed)"
+        )
         for r in day["refusals"]:
             print(f"    {r['count']}x {r['reason']}")
     return 0
