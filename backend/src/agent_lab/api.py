@@ -1,14 +1,26 @@
 """HTTP and WebSocket API. Loopback only; see contracts/http-api.md."""
 
 import asyncio
+import base64
+import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from agent_lab.agents.registry import (
@@ -26,7 +38,9 @@ from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
 from agent_lab.graph import Graph
 from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
+from agent_lab.mcp import jsonrpc
 from agent_lab.mcp.host import Host, ToolsUnavailable
+from agent_lab.mcp.lab_server import LAB
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
 from agent_lab.tracing.redact import redact
@@ -119,6 +133,40 @@ def config_loc(loc: tuple[str | int, ...]) -> tuple[str | int, ...]:
 def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
     """A 422 in FastAPI's own shape, so every rejection names its field the same way."""
     return RequestValidationError([{"loc": loc, "msg": msg, "type": "value_error"}])
+
+
+def _modern_version(message: object) -> str | None:
+    """The protocol version a modern (2026-07-28) request carries in `_meta`, else None."""
+    if not jsonrpc.is_request(message) and not jsonrpc.is_notification(message):
+        return None
+    params = cast(dict[str, Any], message).get("params")
+    meta = cast(dict[str, Any], params).get("_meta") if isinstance(params, dict) else None
+    version = (
+        cast(dict[str, Any], meta).get(jsonrpc.VERSION_KEY) if isinstance(meta, dict) else None
+    )
+    return version if isinstance(version, str) else None
+
+
+def _decoded(value: str | None) -> str | None:
+    if value and value.startswith("=?base64?") and value.endswith("?="):
+        try:
+            return base64.b64decode(value[9:-2]).decode()
+        except ValueError:
+            return None
+    return value
+
+
+def _header_mismatch(message: dict[str, Any], version: str, headers: Any) -> str | None:
+    """Why a modern request's headers disagree with its body, or None."""
+    if headers.get("mcp-protocol-version") != version:
+        return "the MCP-Protocol-Version header does not match the request"
+    if headers.get("mcp-method") != message["method"]:
+        return "the Mcp-Method header does not match the request"
+    if message["method"] == "tools/call":
+        name = cast(dict[str, Any], message.get("params") or {}).get("name")
+        if _decoded(headers.get("mcp-name")) != name:
+            return "the Mcp-Name header does not match the tool"
+    return None
 
 
 def create_app(
@@ -241,6 +289,37 @@ def create_app(
     async def list_tools() -> list[ToolInfo]:
         await host.start()
         return [ToolInfo.model_validate(t) for t in host.tools()]
+
+    @app.post("/mcp")
+    async def mcp(request: Request) -> Response:
+        """The lab's own MCP server for outside clients (research §9); no sessions, no streams."""
+        origin = request.headers.get("origin")
+        if origin is not None and origin not in ALLOWED_ORIGINS:
+            return JSONResponse({"detail": "origin not allowed"}, status.HTTP_403_FORBIDDEN)
+        try:
+            message = json.loads(await request.body())
+        except ValueError:
+            error = jsonrpc.error(None, jsonrpc.PARSE_ERROR, "parse error")
+            return JSONResponse(error, status.HTTP_400_BAD_REQUEST)
+        if not isinstance(message, dict):  # batches went away in 2025-06-18
+            error = jsonrpc.error(None, jsonrpc.INVALID_REQUEST, "expected one JSON-RPC message")
+            return JSONResponse(error, status.HTTP_400_BAD_REQUEST)
+        message = cast(dict[str, Any], message)
+        modern = _modern_version(message)
+        if modern and (mismatch := _header_mismatch(message, modern, request.headers)):
+            error = jsonrpc.error(message.get("id"), jsonrpc.HEADER_MISMATCH, mismatch)
+            return JSONResponse(error, status.HTTP_400_BAD_REQUEST)
+        answer = LAB.handle(message)
+        if answer is None:
+            return Response(status_code=status.HTTP_202_ACCEPTED)
+        unknown = answer.get("error", {}).get("code") == jsonrpc.METHOD_NOT_FOUND
+        # A legacy client may read 404 as "session expired"; it gets the error with a 200.
+        code = status.HTTP_404_NOT_FOUND if modern and unknown else status.HTTP_200_OK
+        return JSONResponse(answer, code)
+
+    @app.api_route("/mcp", methods=["GET", "DELETE"])
+    async def mcp_no_stream() -> Response:
+        return Response(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, headers={"Allow": "POST"})
 
     @app.get("/mcp/servers")
     async def list_servers() -> dict[str, Any]:

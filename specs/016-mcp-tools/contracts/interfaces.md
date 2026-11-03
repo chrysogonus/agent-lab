@@ -73,7 +73,9 @@ server is named `glasshouse-notes` and lists `list_notes`, `read_note` and `writ
   - `202` for a notification;
   - `400` with `-32020` on a header that does not match the body;
   - `403` when `Origin` is present and not `http://127.0.0.1:3000` or `http://localhost:3000`;
-  - `404` with `-32601` for an unknown method.
+  - `404` with `-32601` for an unknown method in a modern request. A legacy request gets the
+    error with `200`, because legacy clients read a 404 as an expired session;
+  - `400` with `-32700` for a body that is not JSON, or `-32600` for a batch.
 - `GET /mcp` and `DELETE /mcp` → `405`.
 
 ### `GET /mcp/servers`

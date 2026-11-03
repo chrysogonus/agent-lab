@@ -413,7 +413,7 @@ and reads a note, and refuses a name reaching outside its folder.
 **Independent test**: a `Connection` over `Http` to the app (`httpx.ASGITransport`) discovers,
 lists and calls both built-ins, in both eras.
 
-- [ ] T023 [US4] `POST /mcp` in backend/src/agent_lab/api.py, tests in
+- [X] T023 [US4] `POST /mcp` in backend/src/agent_lab/api.py, tests in
   backend/tests/test_mcp_http.py (research §9, contracts "`POST /mcp`").
   - `Origin` present and not `http://127.0.0.1:3000` or `http://localhost:3000` → 403.
   - Modern requests: `MCP-Protocol-Version` must match `_meta`, `Mcp-Method` the method and
@@ -423,7 +423,7 @@ lists and calls both built-ins, in both eras.
   - `GET /mcp` and `DELETE /mcp` → 405.
   - Tests: each answer above; a foreign `Host` header is refused by the existing middleware.
 
-- [ ] T024 [US4] The outside-client test in backend/tests/test_mcp_http.py: a `Connection` over
+- [X] T024 [US4] The outside-client test in backend/tests/test_mcp_http.py: a `Connection` over
   `Http(url="http://127.0.0.1/mcp", client=httpx.AsyncClient(transport=httpx.ASGITransport(app)))`
   opens (modern), lists both tools and calls `calculator` (`2**10 - 24` → `1000`) and
   `get_weather`; the same with the modern discover refused so it goes legacy.
