@@ -32,6 +32,7 @@ import {
   builtLines,
   intentionText,
   happeningMarks,
+  boatPlace,
 } from "./village";
 
 const villager = (fields: Partial<Villager>): Villager => ({
@@ -93,6 +94,7 @@ const state = (fields: Partial<VillageState>): VillageState => ({
   project: null,
   built: [],
   happenings: [],
+  boat: null,
   ...fields,
 });
 
@@ -514,5 +516,18 @@ describe("happenings (M15)", () => {
     expect(turnLabel(turn({ action: "lead" }))).toBe("05:00 takes a lost animal home");
     expect(turnLabel(turn({ action: "buy", goods: "a lantern", paid: "flowers" }))).toBe("05:00 trades a basket of flowers for a lantern from the peddler");
     expect(turnLabel(turn({ action: "buy", goods: "wood", paid: "fish" }))).toBe("05:00 trades a basket of fish for a load of wood");
+  });
+});
+
+describe("the boat (M15)", () => {
+  it("places the boat at its cell, or nowhere without one", () => {
+    expect(boatPlace(state({}))).toBeNull();
+    expect(boatPlace(state({ boat: { state: "out", rowers: ["Jonas"], cell: [23, 20] } }))).toEqual({ x: 23 * 16, y: 20 * 16 });
+  });
+
+  it("labels rowing", () => {
+    const turn = (village_action: Run["village_action"]) => ({ village_tick: 3, status: "completed", village_action }) as Run;
+    expect(turnLabel(turn({ action: "row" }))).toBe("05:00 takes the boat out on the lake");
+    expect(turnLabel(turn({ action: "row", with: "Greta" }))).toBe("05:00 takes the boat out on the lake with Greta");
   });
 });

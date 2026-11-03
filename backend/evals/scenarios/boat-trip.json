@@ -1,0 +1,61 @@
+{
+  "name": "boat-trip",
+  "start": {
+    "day": 66,
+    "time": "14:00",
+    "built": [
+      "boat"
+    ],
+    "villagers": {
+      "Jonas": {
+        "at": "pier",
+        "triggers": [
+          "arrived"
+        ],
+        "plan": [
+          {
+            "time": "14:00",
+            "place": "pier",
+            "purpose": "Take the boat out with Greta"
+          },
+          {
+            "time": "17:00",
+            "place": "market",
+            "purpose": "Sell fish"
+          }
+        ]
+      },
+      "Greta": {
+        "at": [
+          21,
+          17
+        ],
+        "plan": [
+          {
+            "time": "14:00",
+            "place": "pier",
+            "purpose": "A boat trip with Jonas"
+          },
+          {
+            "time": "16:00",
+            "place": "fields",
+            "purpose": "Weed the rows"
+          }
+        ]
+      },
+      "Hilde": {
+        "at": "town_hall"
+      },
+      "Lina": {
+        "at": "flower_garden"
+      }
+    }
+  },
+  "horizon": {
+    "until": "16:00"
+  },
+  "condition": {
+    "kind": "boat_trip",
+    "by": "16:00"
+  }
+}

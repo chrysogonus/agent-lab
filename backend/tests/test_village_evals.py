@@ -610,6 +610,7 @@ def test_results_and_compare_on_the_command_line(
 
 SHIPPED_CHECKS = Path(__file__).parent.parent / "evals" / "checks"
 IDEAL = {  # an answer each shipped check must accept: the checks can be passed
+    "take-the-boat": '{"action": "row", "with": null}',
     "animal-lead": '{"action": "lead"}',
     "repair-mend": '{"action": "work"}',
     "peddler-curiosity": '{"action": "buy", "goods": "lantern"}',
@@ -661,6 +662,8 @@ def test_the_shipped_checks_load_and_can_be_passed() -> None:
     assert '"goods": "a lantern"' in by_name["peddler-curiosity"]
     assert "roses sell for twice the price" in by_name["letter-pass-on"]
     assert "Anna, your sister, is visiting you." in by_name["visitor-host"]
+    assert "The boat lies at the pier." in by_name["take-the-boat"]
+    assert '{"action": "row"}: take the boat out on the lake' in by_name["take-the-boat"]
     assert "You are talking with Jonas (4 lines so far)." in by_name["leave-talk-for-intention"]
     assert "festival" not in by_name["summer-plan-without-festival"].lower()  # out of season
     assert "A trader is at the market until 14:00" in by_name["buy-saplings"]
@@ -847,6 +850,7 @@ def test_the_shipped_scenarios_load_and_start() -> None:
         "meeting-attendance",
         "load-reaches-site",
         "talk-then-go",
+        "boat-trip",
     }
     for s in scenarios:
         assert build_world(s["start"])["day_record"] is not None  # notes kept from the start
@@ -879,3 +883,26 @@ def test_compare_names_agents_on_other_models() -> None:
     after = a_result("b", {"x": (5, 10)}) | {"settings": {"models": {"Jonas": "openai/gpt"}}}
     _, notes = compare(before, after)
     assert notes == ["Jonas ran on local/qwen, then on openai/gpt"]
+
+
+def test_boat_trip_reads_the_notes(tmp_path: Path) -> None:
+    """M15 (FR-013): a trip by the time given, alone or together."""
+    store = Store(tmp_path / "copy.db")
+    world = build_world(MEETING_START | {"time": "14:00"})
+    params = {"by": "16:00"}
+    assert CONDITIONS["boat_trip"](store, world, world["tick"], params) == (
+        False,
+        "nobody took the boat out by 16:00",
+    )
+    world["day_record"]["items"].append(
+        {"tick": world["tick"] + 2, "text": "Jonas and Greta rowed out on the lake."}
+    )
+    assert CONDITIONS["boat_trip"](store, world, world["tick"], params) == (
+        True,
+        "Jonas and Greta rowed out at 14:20, together",
+    )
+    world["day_record"]["items"][-1]["text"] = "Jonas rowed out on the lake."
+    assert CONDITIONS["boat_trip"](store, world, world["tick"], params) == (
+        True,
+        "Jonas rowed out at 14:20, alone",
+    )

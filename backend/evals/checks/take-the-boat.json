@@ -1,0 +1,43 @@
+{
+  "name": "take-the-boat",
+  "agent": "villager",
+  "as": "Jonas",
+  "situation": {
+    "fixture": {
+      "day": 66,
+      "time": "14:00",
+      "built": [
+        "boat"
+      ],
+      "villagers": {
+        "Jonas": {
+          "at": "pier",
+          "triggers": [
+            "arrived"
+          ],
+          "events": [
+            "You arrived at the pier."
+          ],
+          "plan": [
+            {
+              "time": "05:00",
+              "place": "pier",
+              "purpose": "Fish"
+            },
+            {
+              "time": "14:00",
+              "place": "pier",
+              "purpose": "Take the new boat out on the lake"
+            }
+          ]
+        }
+      }
+    },
+    "prompt": "decide"
+  },
+  "expect": {
+    "action": {
+      "action": "row"
+    }
+  }
+}

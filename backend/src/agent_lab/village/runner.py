@@ -20,7 +20,7 @@ from agent_lab.llm.models import Models, UnavailableModel
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import NameInUse, Store
 from agent_lab.tracing.redact import redact
-from agent_lab.village.boat import in_boat
+from agent_lab.village.boat import boat_cell, built, in_boat
 from agent_lab.village.build import (
     CATALOGUE,
     build_step,
@@ -386,6 +386,7 @@ class Village(MeetingRuns, HappeningRuns):
             ],
             "project": self._project_state(world["project"]),
             "happenings": [happening_state(h, minute) for h in world["happenings"]],
+            "boat": self._boat_state(),
             "next_meeting": next_meeting(day),
             "ticking": self.ticking,
             "log": [{**line, "time": clock(line["tick"])[1]} for line in world["log"]],
@@ -435,6 +436,15 @@ class Village(MeetingRuns, HappeningRuns):
             "next": following,
             "revisions": plan["revisions"],
         }
+
+    def _boat_state(self) -> dict[str, Any] | None:
+        """The built boat: at the pier, boarding or out, with whoever is in it (M15)."""
+        if not built(self.world):
+            return None
+        boat = self.world["boat"]
+        state = boat["state"] if boat else "pier"
+        rowers: list[str] = list(boat["rowers"]) if boat else []
+        return {"state": state, "rowers": rowers, "cell": boat_cell(self.world)}
 
     @staticmethod
     def _intention_state(intention: dict[str, Any] | None) -> dict[str, Any] | None:

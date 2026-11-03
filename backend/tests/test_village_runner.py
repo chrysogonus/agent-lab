@@ -3403,3 +3403,16 @@ async def test_bedtime_brings_the_boat_back(tmp_path: Path) -> None:
     assert place_at(jonas["x"], jonas["y"]) == "pier" or not place_at(jonas["x"], jonas["y"])
     for _ in range(3):
         await v.step()  # and he walks home
+
+
+def test_the_state_gives_the_boat_where_it_is() -> None:
+    v, _ = village_for(":memory:")
+    morning(v)
+    assert v.state()["boat"] is None  # not built
+    with_boat(v)
+    assert v.state()["boat"] == {"state": "pier", "rowers": [], "cell": [20, 17]}
+    from agent_lab.village.boat import start_trip
+
+    start_trip(v.world, "Jonas", None, None)
+    v.world["boat"] |= {"state": "out", "at": 2}
+    assert v.state()["boat"] == {"state": "out", "rowers": ["Jonas"], "cell": [23, 20]}

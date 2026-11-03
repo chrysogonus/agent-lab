@@ -246,6 +246,7 @@ export function turnLabel(turn: Run): string {
     return isBasket(action.goods) ? `${time}sets out ${action.goods} on the festival stalls` : `${time}sets down a ${carriedText(action.goods)} at the building site`;
   }
   if (action.action === "lead") return `${time}takes a lost animal home`;
+  if (action.action === "row") return `${time}takes the boat out on the lake${action.with ? ` with ${action.with}` : ""}`;
   if (action.action === "buy") {
     const goods = action.goods;
     if ((BUILDING_GOODS as string[]).includes(goods)) return `${time}trades a ${carriedText(action.paid)} for a ${carriedText(goods as BuildingGoods)}`;
@@ -265,6 +266,11 @@ export function happeningMarks(state: Pick<VillageState, "happenings">): Happeni
   return state.happenings.flatMap((h) =>
     h.figure ? [{ key: `${h.kind}-${h.cell[0]}-${h.cell[1]}`, figure: h.figure, cx: h.cell[0] + 0.5, cy: h.cell[1] + 0.5, label: h.label }] : [],
   );
+}
+
+/** Where to draw the built boat, in pixels: at the pier, or out on the lake (M15). */
+export function boatPlace(state: Pick<VillageState, "boat">): { x: number; y: number } | null {
+  return state.boat ? { x: state.boat.cell[0] * 16, y: state.boat.cell[1] * 16 } : null;
 }
 
 /** "07:30 town hall: Go through the list", "11:00 see Jonas: Ask for fish" */

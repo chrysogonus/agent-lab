@@ -96,11 +96,24 @@ def _built(store: Store, world: World, start: int, p: dict[str, Any]) -> tuple[b
     return False, f"{p['key']} was not built by day {p['by_day']}"
 
 
+def _boat_trip(store: Store, world: World, start: int, p: dict[str, Any]) -> tuple[bool, str]:
+    """A boat trip by the time given, from the notes (M15)."""
+    by = _tick_at(clock(start)[0], p["by"])
+    record: dict[str, Any] = world["day_record"] or {}
+    for item in record.get("items", []):
+        found = re.match(r"^(.+) rowed out on the lake\.$", item["text"])
+        if found and start <= item["tick"] <= by:
+            how = "together" if " and " in found[1] else "alone"
+            return True, f"{found[1]} rowed out at {clock(item['tick'])[1]}, {how}"
+    return False, f"nobody took the boat out by {p['by']}"
+
+
 CONDITIONS: dict[str, Condition] = {
     "meeting_attendance": _meeting_attendance,
     "load_at_site": _load_at_site,
     "talk_then_go": _talk_then_go,
     "built": _built,
+    "boat_trip": _boat_trip,
 }
 
 

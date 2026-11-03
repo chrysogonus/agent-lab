@@ -13,7 +13,7 @@ import {
   type VillageState,
   type Villager,
 } from "@/lib/api";
-import { GOODS, PACES, PERIOD_SKY, activity, boxOf, calendarText, clockText, glideMs, figures, happeningMarks, isBasket, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine, traderText } from "@/lib/village";
+import { GOODS, PACES, PERIOD_SKY, activity, boxOf, calendarText, clockText, boatPlace, glideMs, figures, happeningMarks, isBasket, logLines, narration, newEntries, placeAreas, rhythm, stallsText, stateText, statusLine, traderText } from "@/lib/village";
 import { RunViewer } from "../RunViewer";
 import { Building, Butterflies, Fireflies, Ground, HappeningFigure, LakeRings, Lights, PixelDigits, Smoke, Snores, TILE, VillagerFigure, VillagerSprite } from "./pixels";
 import { ChroniclePanel } from "./ChroniclePanel";
@@ -102,6 +102,7 @@ function BuiltLayer({ state }: { state: VillageState }) {
           return <Building key={b.key} area={boxOf(c.at)} roof={roof} roofDark={roofDark} />;
         }
         if (c.kind === "trees") return c.at.map((cell) => <Built key={`${b.key}-${cell.join(",")}`} kind="trees" area={boxOf([cell])} index={i} />);
+        if (c.kind === "boat") return null; // drawn where it is, at the pier or on the lake (M15)
         return <Built key={b.key} kind={c.kind} area={boxOf(c.at)} index={i} />;
       })}
     </g>
@@ -119,6 +120,7 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
   const owners = new Map(state.villagers.map((v) => [v.name, v]));
   const houses = homes.map((h) => `${h.letter}:${owners.get(h.villager)?.color ?? "#d6584b"}`).join(",");
   const placed = figures(state).sort((a, b) => a.cy - b.cy); // lower on the map is nearer, drawn later
+  const boat = boatPlace(state);
   const glide = glideMs(state);
   const catalogue = new Map(state.map.catalogue.map((c) => [c.key, c]));
   const building = state.project && catalogue.get(state.project.key);
@@ -172,6 +174,16 @@ function VillageMap({ state, selected, onSelect }: { state: VillageState; select
         const area = areas[h.letter];
         return area && <NamePlate key={h.letter} x={((area.x0 + area.x1 + 1) / 2) * TILE} y={area.y0 * TILE + 16} text={h.villager} small />;
       })}
+      {boat && (
+        <g
+          className="transition-transform ease-linear motion-reduce:transition-none"
+          style={{ transform: `translate(${boat.x}px, ${boat.y}px)`, transitionDuration: `${glide}ms` }}
+          pointerEvents="none"
+          aria-hidden
+        >
+          <Built kind="boat" area={{ x0: 0, y0: 0, x1: 0, y1: 0 }} index={0} />
+        </g>
+      )}
       {happeningMarks(state).map((m) => (
         <g key={m.key} role="img" aria-label={m.label} transform={`translate(${m.cx * TILE} ${m.cy * TILE})`}>
           <title>{m.label}</title>

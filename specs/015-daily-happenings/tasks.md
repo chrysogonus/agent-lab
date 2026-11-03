@@ -214,14 +214,14 @@ first. Runner tests pass `move_gap=0`.
   - bedtime returns the boat.
 
   Requirements: FR-006–FR-008.
-- [ ] T014 [US2] Frontend:
+- [X] T014 [US2] Frontend:
   - lib/api.ts: the boat type, the `row` action, the `rowed` / `invited` events;
   - lib/village.ts: `boatCells`, `turnLabel` for row;
   - pixels.tsx: the boat drawn at its cell with its rowers (at the pier when null and built),
     respecting reduced motion as the walkers do.
 
   Tests in village.test.ts and pixels.test.ts. Requirement: FR-009.
-- [ ] T015 [P] [US2] Check `take-the-boat` and scenario `boat-trip`:
+- [X] T015 [P] [US2] Check `take-the-boat` and scenario `boat-trip`:
   - backend/evals/checks/take-the-boat.json;
   - backend/evals/scenarios/boat-trip.json;
   - the condition `boat_trip` in backend/src/agent_lab/village/evals/scenarios.py, held when a
