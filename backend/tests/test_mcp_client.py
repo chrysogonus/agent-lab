@@ -2,16 +2,18 @@
 
 import asyncio
 import inspect
+import json
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 import pytest
 
 from agent_lab.mcp import jsonrpc
 from agent_lab.mcp.client import Connection
 from agent_lab.mcp.jsonrpc import MODERN, VERSION_KEY, Message
 from agent_lab.mcp.server import Server
-from agent_lab.mcp.transports import InProcess, TransportClosed
+from agent_lab.mcp.transports import Http, InProcess, TransportClosed
 from agent_lab.tools.calculator import CALCULATOR
 from agent_lab.tools.weather import WEATHER
 
@@ -329,3 +331,144 @@ async def test_close_closes_the_transport() -> None:
     connection, transport = await opened()
     await connection.close()
     assert transport.closed
+
+
+# --- Streamable HTTP, served by httpx.MockTransport (research §2) ---
+
+URL = "http://127.0.0.1:9000/mcp"
+
+
+def http_connection(
+    handler: Callable[[httpx.Request], httpx.Response], headers: dict[str, str] | None = None
+) -> Connection:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return Connection("web", Http(URL, headers or {}, client))
+
+
+def json_response(
+    message: Message | None, status: int = 200, headers: dict[str, str] | None = None
+) -> httpx.Response:
+    if message is None:
+        return httpx.Response(202)
+    return httpx.Response(status, json=message, headers=headers)
+
+
+@pytest.mark.anyio
+async def test_http_modern_headers() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return json_response(SERVER.handle(json.loads(request.content)))
+
+    connection = http_connection(handler, {"Authorization": "Bearer t"})
+    await connection.open()
+    result = await connection.call("calculator", {"expression": "2+2"})
+    assert connection.era == "modern" and result.text == "4"
+    for request in seen:
+        body = json.loads(request.content)
+        assert request.headers["accept"] == "application/json, text/event-stream"
+        assert request.headers["content-type"] == "application/json"
+        assert request.headers["authorization"] == "Bearer t"
+        assert request.headers["mcp-protocol-version"] == "2026-07-28"
+        assert request.headers["mcp-method"] == body["method"]
+    assert seen[-1].headers["mcp-name"] == "calculator"
+    assert "mcp-name" not in seen[0].headers
+
+
+@pytest.mark.anyio
+async def test_http_legacy_with_a_session() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        message = json.loads(request.content)
+        if message["method"] == "server/discover":
+            return httpx.Response(404, text="<html>Not Found</html>")
+        return json_response(legacy(message), headers={"Mcp-Session-Id": "abc"})
+
+    connection = http_connection(handler)
+    await connection.open()
+    assert connection.state == "connected", connection.reason
+    assert connection.era == "legacy"
+    assert "mcp-protocol-version" not in seen[1].headers  # initialize
+    for request in seen[2:]:
+        assert request.headers["mcp-protocol-version"] == "2025-11-25"
+        assert request.headers["mcp-session-id"] == "abc"
+        assert "mcp-method" not in request.headers
+    assert [json.loads(r.content)["method"] for r in seen] == [
+        "server/discover",
+        "initialize",
+        "notifications/initialized",
+        "tools/list",
+    ]
+
+
+@pytest.mark.anyio
+async def test_http_server_sent_events() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        message = json.loads(request.content)
+        answer = SERVER.handle(message)
+        if message["method"] != "tools/call":
+            return json_response(answer)
+        notice = jsonrpc.notification("notifications/message", {"level": "info"})
+        body = f"event: message\ndata: {json.dumps(notice)}\n\ndata: {json.dumps(answer)}\n\n"
+        return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+    connection = http_connection(handler)
+    await connection.open()
+    notices: list[Message] = []
+    connection.transport.on_notice(notices.append)
+    result = await connection.call("calculator", {"expression": "3*3"})
+    assert result.text == "9"
+    assert notices[0]["method"] == "notifications/message"
+
+
+@pytest.mark.anyio
+async def test_http_mirrors_header_arguments() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"region": {"type": "string", "x-mcp-header": "Region"}},
+    }
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        message = json.loads(request.content)
+        if message["method"] == "tools/list":
+            tools = {"tools": [{"name": "where", "inputSchema": schema}]}
+            return json_response(jsonrpc.result(message["id"], tools))
+        if message["method"] == "tools/call":
+            content = {"content": [{"type": "text", "text": "ok"}]}
+            return json_response(jsonrpc.result(message["id"], content))
+        return json_response(SERVER.handle(message))
+
+    connection = http_connection(handler)
+    await connection.open()
+    await connection.call("where", {"region": "eu"})
+    assert seen[-1].headers["mcp-param-region"] == "eu"
+    await connection.call("where", {"region": "Köln"})
+    assert seen[-1].headers["mcp-param-region"] == "=?base64?S8O2bG4=?="
+
+
+@pytest.mark.anyio
+async def test_http_unreachable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    connection = http_connection(handler)
+    await connection.open()
+    assert connection.state == "failed" and "connection refused" in (connection.reason or "")
+
+
+@pytest.mark.anyio
+async def test_http_unsupported_version_is_not_legacy() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        message = json.loads(request.content)
+        error = jsonrpc.error(message["id"], -32022, "unsupported protocol version 2026-07-28")
+        return json_response(error, status=400)
+
+    connection = http_connection(handler)
+    await connection.open()
+    assert connection.state == "failed"
+    assert connection.reason == "unsupported protocol version 2026-07-28"

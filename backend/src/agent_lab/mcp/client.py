@@ -133,8 +133,12 @@ class Connection:
         connect_timeout: float = 10,
         call_timeout: float = 30,
         discover_timeout: float = 3,
+        kind: str = "internal",
+        target: str = "built in",
     ) -> None:
         self.name = name
+        self.kind = kind  # internal, stdio or http
+        self.target = target  # the command line or the address
         self.transport = transport
         self.connect_timeout = connect_timeout
         self.call_timeout = call_timeout

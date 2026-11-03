@@ -19,6 +19,7 @@ import {
 } from "@/lib/blocks";
 import { pathKey, setField, type Path } from "@/lib/builder";
 import { FIELD, FieldError, INPUT, NumberField, TextField, Toggle, type Form } from "./fields";
+import { ToolCheckboxes, ToolOptions } from "./ToolChoices";
 
 const REFERENCES = "{input} is the user's prompt, {previous} the previous block's output, {name} an earlier block's output.";
 
@@ -129,22 +130,8 @@ function ModelFields({ form, path, block, tools }: { form: Form; path: Path; blo
       <TextField form={form} path={[...path, "system"]} label="System prompt" multiline mono />
       <TextField form={form} path={[...path, "message"]} label="Message" multiline mono hint={REFERENCES} />
       <fieldset className="flex flex-col gap-1.5">
-        <legend className="mb-1 text-sm font-medium text-ink">Tools it may call</legend>
-        {tools.map((tool) => (
-          <label key={tool.name} className="flex items-start gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
-              checked={block.tools.includes(tool.name)}
-              disabled={form.readOnly}
-              onChange={() => toggle(tool.name)}
-              className="mt-0.5 size-4 accent-llm"
-            />
-            <span>
-              {tool.name}
-              <span className="block text-muted">{tool.description}</span>
-            </span>
-          </label>
-        ))}
+        <legend className="mb-1 text-sm font-medium text-ink">Tools it may call (up to 6)</legend>
+        <ToolCheckboxes tools={tools} chosen={block.tools} disabled={form.readOnly} onToggle={toggle} />
         <FieldError id={`field-${pathKey([...path, "tools"])}-error`} message={form.errors[pathKey([...path, "tools"])]} />
       </fieldset>
       {block.tools.length > 0 && (
@@ -183,11 +170,7 @@ function ToolFields({ form, path, block, tools }: { form: Form; path: Path; bloc
           }
           className={`${FIELD} disabled:bg-paper disabled:text-muted`}
         >
-          {tools.map((tool) => (
-            <option key={tool.name} value={tool.name}>
-              {tool.name}
-            </option>
-          ))}
+          <ToolOptions tools={tools} value={block.tool} />
         </select>
       </div>
       {Object.entries(properties).map(([key, schema]) => (

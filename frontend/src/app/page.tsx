@@ -7,6 +7,7 @@ import { AgentPicker } from "@/components/AgentPicker";
 import { PromptForm } from "@/components/PromptForm";
 import { RunList } from "@/components/RunList";
 import { RunViewer } from "@/components/RunViewer";
+import { ToolsView } from "@/components/ToolsView";
 import {
   createAgent,
   deleteAgent,
@@ -27,6 +28,9 @@ import {
 import { copyName, draftFields, draftFrom, draftFromAgent, fieldErrors, type Draft } from "@/lib/builder";
 import { agentPreview } from "@/lib/run-state";
 
+type View = "agents" | "village" | "tools";
+const VIEW_LABELS: Record<View, string> = { agents: "Agents", village: "Village", tools: "Tools" };
+
 export default function Home() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [current, setCurrent] = useState<Run | null>(null);
@@ -41,7 +45,10 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   // Bumped when an agent is picked: the prompt box then shows that agent's sample prompt.
   const [picks, setPicks] = useState(0);
-  const [view, setView] = useState<"agents" | "village">("agents");
+  const [view, setView] = useState<View>("agents");
+  const refreshTools = useCallback(() => {
+    listTools().then(setTools, () => {});
+  }, []);
 
   const refresh = useCallback(() => {
     listRuns()
@@ -56,9 +63,9 @@ export default function Home() {
   useEffect(() => {
     // Without the backend there is nothing to pick; refresh() already reports that.
     listAgents().then(setAgents, () => {});
-    listTools().then(setTools, () => {});
+    refreshTools();
     listModels().then(setModels, () => {});
-  }, []);
+  }, [refreshTools]);
   useEffect(() => {
     if (!draft?.dirty) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
@@ -186,9 +193,9 @@ export default function Home() {
 
   const runAgent = current && agentPreview(agents, current.agent_id);
 
-  const switchTo = (next: "agents" | "village") => {
-    if (next === view || (next === "village" && !mayLeave())) return;
-    if (next === "village") edit(preview); // unsaved builder changes were discarded
+  const switchTo = (next: View) => {
+    if (next === view || (next !== "agents" && !mayLeave())) return;
+    if (next !== "agents") edit(preview); // unsaved builder changes were discarded
     setView(next);
     if (next === "agents") listAgents().then(setAgents, () => {}); // villager agents may be new
   };
@@ -207,7 +214,7 @@ export default function Home() {
 
   const viewSwitch = (
     <nav aria-label="View" className="flex shrink-0 gap-1 rounded-full border border-rule bg-panel p-0.5 sm:mt-1.5">
-      {(["agents", "village"] as const).map((v) => (
+      {(["agents", "village", "tools"] as const).map((v) => (
         <button
           key={v}
           type="button"
@@ -217,11 +224,23 @@ export default function Home() {
             view === v ? "bg-ink text-panel" : "text-ink hover:bg-paper"
           }`}
         >
-          {v === "agents" ? "Agents" : "Village"}
+          {VIEW_LABELS[v]}
         </button>
       ))}
     </nav>
   );
+
+  if (view === "tools") {
+    return (
+      <div className="flex min-h-dvh flex-col gap-4 p-4">
+        <header className="flex items-start gap-6">
+          <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Glasshouse</h1>
+          {viewSwitch}
+        </header>
+        <ToolsView onChanged={refreshTools} />
+      </div>
+    );
+  }
 
   if (view === "village") {
     return (

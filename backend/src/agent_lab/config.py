@@ -22,6 +22,7 @@ class Settings:
     openai_base_url: str = "https://api.openai.com/v1"
     openai_reasoning_off: str = "none"  # reasoning_effort sent with thinking off; "" sends none
     default_model: str = ""  # provider/model; "" means local/{llm_model}
+    mcp_servers_file: str = ""  # "" means data/mcp.json, else the committed mcp.json
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -38,4 +39,5 @@ class Settings:
             openai_base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_reasoning_off=os.environ.get("OPENAI_REASONING_OFF", "none"),
             default_model=os.environ.get("DEFAULT_MODEL") or f"local/{llm_model}",
+            mcp_servers_file=os.environ.get("MCP_SERVERS_FILE", ""),
         )

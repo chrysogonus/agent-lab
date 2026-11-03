@@ -241,7 +241,7 @@ the response.
 connected with its tools on `GET /mcp/servers`; a builder agent picking one of its tools calls
 it in a run and the result reaches the model.
 
-- [ ] T013 [P] [US2] The servers file in backend/src/agent_lab/mcp/servers_file.py, tests in
+- [X] T013 [P] [US2] The servers file in backend/src/agent_lab/mcp/servers_file.py, tests in
   backend/tests/test_mcp_servers_file.py (data-model "Servers file", research §5).
   - Pydantic models with `extra="forbid"` ("Unknown fields are refused"):
     - the name key `^[a-z][a-z0-9-]{0,29}$`, not `lab`, "at most 20 entries";
@@ -261,7 +261,7 @@ it in a run and the result reaches the model.
   - `target(entry)`: the command line or URL, redacted.
   - Tests: each rule above, a typo field, a missing variable, a remote host refused and allowed.
 
-- [ ] T014 [P] [US2] The stdio transport in backend/src/agent_lab/mcp/transports.py, the legacy
+- [X] T014 [P] [US2] The stdio transport in backend/src/agent_lab/mcp/transports.py, the legacy
   script backend/tests/mcp_legacy_server.py and tests in backend/tests/test_mcp_stdio.py
   (research §2).
   - `Stdio(command, args, env, cwd)`: `asyncio.create_subprocess_exec` with env `PATH`, `HOME`
@@ -279,7 +279,7 @@ it in a run and the result reaches the model.
     (FR-003); a missing command fails with the reason; killing the child makes a call return
     `error: server "x" is unavailable`; `close()` leaves no process.
 
-- [ ] T015 [P] [US2] The HTTP transport in backend/src/agent_lab/mcp/transports.py, tests in
+- [X] T015 [P] [US2] The HTTP transport in backend/src/agent_lab/mcp/transports.py, tests in
   backend/tests/test_mcp_client.py with `httpx.MockTransport` (research §2, contracts "HTTP
   request headers").
   - `Http(url, headers, client: httpx.AsyncClient)`: POST with `Accept: application/json,
@@ -297,7 +297,7 @@ it in a run and the result reaches the model.
   - Tests: a modern fake server (headers checked), a legacy fake with a session id, an SSE
     answer with a notification first, `x-mcp-header` mirroring, a 404 on discover falling back.
 
-- [ ] T016 [US2] The full host in backend/src/agent_lab/mcp/host.py, tests in
+- [X] T016 [US2] The full host in backend/src/agent_lab/mcp/host.py, tests in
   backend/tests/test_mcp_host.py (data-model "State changes", research §3, §11).
   - `Host(file_path, http_client, environ=os.environ)` reads the file at `start()`: `lab` at
     once, every entry in the background (`asyncio.create_task`), each within 10 s; the lab's
@@ -323,7 +323,7 @@ it in a run and the result reaches the model.
     adds, changes and removes; a list-changed notice re-lists; a header secret is absent from
     `servers()`.
 
-- [ ] T017 [US2] The servers API and secrets in runs.
+- [X] T017 [US2] The servers API and secrets in runs.
   - backend/src/agent_lab/config.py: `mcp_servers_file` from `MCP_SERVERS_FILE` (default "").
   - backend/src/agent_lab/main.py: `Host(find(settings.mcp_servers_file), httpx.AsyncClient())`
     passed to `create_app`.
@@ -338,7 +338,7 @@ it in a run and the result reaches the model.
     `Authorization: Bearer ${TOKEN}` stores no span containing the token (SC-004); the US2
     independent test end to end with `FakeLLM`.
 
-- [ ] T018 [P] [US2] Frontend data and logic.
+- [X] T018 [P] [US2] Frontend data and logic.
   - frontend/src/lib/api.ts: `ToolInfo.server: string`; types `McpServer` (fields as in
     `GET /mcp/servers`) and `McpServers` (`file`, `file_error`, `servers`); `listServers()`,
     `reconnectServer(name)`, `reloadServers()`.
@@ -349,7 +349,7 @@ it in a run and the result reaches the model.
     - `stateLabel(server)`: `connected`, `connecting…`, `failed: <reason>`.
   - Update fixtures in frontend/src/lib/blocks.test.ts for `server`.
 
-- [ ] T019 [US2] The Tools view (FR-005, FR-011).
+- [X] T019 [US2] The Tools view (FR-005, FR-011).
   - New frontend/src/components/ToolsView.tsx: one card per server with name, kind, target,
     state and reason, revision, server name and version, "not watched for changes" when
     `watching` is false, its tools (name, description, arguments), and a collapsed "Last
@@ -359,7 +359,7 @@ it in a run and the result reaches the model.
     Tools tab; switching away from Agents keeps the `mayLeave()` rule. Refresh `listTools()`
     after a reconnect or reload.
 
-- [ ] T020 [US2] Pickers across servers (FR-006).
+- [X] T020 [US2] Pickers across servers (FR-006).
   - frontend/src/components/builder/ItemList.tsx `ToolPicker` and the model-call block's list in
     frontend/src/components/builder/BlockSettings.tsx: a small heading per server from
     `groupTools`; a chosen tool that `unavailableTools` returns is still shown, marked

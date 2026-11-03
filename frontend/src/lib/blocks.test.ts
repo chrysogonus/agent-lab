@@ -37,8 +37,8 @@ const model = (name: string, fields: Partial<ModelBlock> = {}): ModelBlock => ({
 });
 
 const tools: ToolInfo[] = [
-  { name: "calculator", description: "math", parameters: { properties: { expression: {} } } },
-  { name: "get_weather", description: "weather", parameters: { properties: { city: {} } } },
+  { name: "calculator", server: "lab", description: "math", parameters: { properties: { expression: {} } } },
+  { name: "get_weather", server: "lab", description: "weather", parameters: { properties: { city: {} } } },
 ];
 
 function draft(blocks: Block[]): Draft {

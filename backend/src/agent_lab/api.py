@@ -29,6 +29,7 @@ from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
 from agent_lab.mcp.host import Host, ToolsUnavailable
 from agent_lab.runs import UnknownAgent, execute_run, new_run
 from agent_lab.store import CustomAgent, NameInUse, Run, Store
+from agent_lab.tracing.redact import redact
 from agent_lab.tracing.span import Span
 from agent_lab.village.happening_runs import WhisperError
 from agent_lab.village.health import reason_template
@@ -241,6 +242,26 @@ def create_app(
         await host.start()
         return [ToolInfo.model_validate(t) for t in host.tools()]
 
+    @app.get("/mcp/servers")
+    async def list_servers() -> dict[str, Any]:
+        await host.start()
+        return host.servers()
+
+    @app.post("/mcp/servers/{name}/reconnect", status_code=status.HTTP_202_ACCEPTED)
+    async def reconnect_server(name: str) -> dict[str, Any]:
+        await host.start()
+        try:
+            host.reconnect(name)
+        except KeyError:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"no server {name!r}") from None
+        return host.server(name)
+
+    @app.post("/mcp/reload", status_code=status.HTTP_202_ACCEPTED)
+    async def reload_servers() -> dict[str, Any]:
+        await host.start()
+        await host.reload()
+        return host.servers()
+
     @app.get("/blocks/new")
     async def new_block_agent() -> AgentInfo:
         """An unsaved block agent with one model block, for the builder to edit."""
@@ -361,6 +382,8 @@ def create_app(
             tools = host.resolve(config_tools(config))
         except ToolsUnavailable as exc:
             raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
+        run_secrets = (*secrets, *host.secrets())  # the servers file's keys too
+        run.prompt = redact(run.prompt, run_secrets)
         store.create_run(run)
         task = asyncio.create_task(
             execute_run(
@@ -371,7 +394,7 @@ def create_app(
                 llm=llm,
                 store=store,
                 bus=bus,
-                secrets=secrets,
+                secrets=run_secrets,
                 tools=tools,
             )
         )

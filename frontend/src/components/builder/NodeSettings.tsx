@@ -2,6 +2,7 @@ import type { ToolInfo } from "@/lib/api";
 import { getField, pathKey, type Section } from "@/lib/builder";
 import { BlockSettings } from "./BlockSettings";
 import { NameField, NumberField, TextField, Toggle, type Form } from "./fields";
+import { ToolOptions } from "./ToolChoices";
 
 function ToolSelect({ form, index, tools }: { form: Form; index: number; tools: ToolInfo[] }) {
   const path = ["config", "routes", index, "tool"];
@@ -20,11 +21,7 @@ function ToolSelect({ form, index, tools }: { form: Form; index: number; tools: 
         className="rounded-md border border-rule bg-panel px-2.5 py-1.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-llm disabled:bg-paper"
       >
         <option value="">No tool: answer in one call</option>
-        {tools.map((t) => (
-          <option key={t.name} value={t.name}>
-            {t.name}
-          </option>
-        ))}
+        <ToolOptions tools={tools} value={typeof value === "string" ? value : null} />
       </select>
     </div>
   );

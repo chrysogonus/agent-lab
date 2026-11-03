@@ -274,11 +274,28 @@ export type AgentInfo = {
 };
 
 export type ToolInfo = {
-  name: string;
+  name: string; // the config name: calculator, get_weather or server/tool
+  server: string;
   description: string;
   // JSON Schema of the arguments: a tool block shows one field per property.
   parameters: { properties?: Record<string, { description?: string }> };
 };
+
+// MCP servers (M16): see specs/016-mcp-tools/contracts/interfaces.md.
+export type McpServer = {
+  name: string;
+  kind: "internal" | "stdio" | "http";
+  target: string;
+  state: "connecting" | "connected" | "failed";
+  reason: string | null;
+  era: "modern" | "legacy" | null;
+  protocol_version: string | null;
+  server_info: { name?: string; version?: string } | null;
+  watching: boolean;
+  tools: { name: string; config_name: string; description: string; parameters: ToolInfo["parameters"] }[];
+  log: { direction: "out" | "in"; message: unknown }[];
+};
+export type McpServers = { file: string | null; file_error: string | null; servers: McpServer[] };
 
 // Block agents (M5): custom agents with template_id "blocks". See specs/005-block-builder.
 export type BlockKind = "model" | "tool" | "check" | "router" | "parallel" | "loop";
@@ -433,6 +450,11 @@ export async function listTools(): Promise<ToolInfo[]> {
   return response.json();
 }
 
+export const listServers = (): Promise<McpServers> => send("GET", "/mcp/servers");
+export const reconnectServer = (name: string): Promise<McpServer> =>
+  send("POST", `/mcp/servers/${encodeURIComponent(name)}/reconnect`);
+export const reloadServers = (): Promise<McpServers> => send("POST", "/mcp/reload");
+
 export async function listModels(): Promise<ModelInfo[]> {
   const response = await fetch(`${API_URL}/models`);
   if (!response.ok) throw new Error(`Loading models failed (HTTP ${response.status}).`);
@@ -456,6 +478,7 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 422) throw new ValidationError((await response.json()).detail);
+  if (response.status === 409) throw new Error((await response.json()).detail); // e.g. a server is down
   if (!response.ok) throw new Error(`${method} ${path} failed (HTTP ${response.status}).`);
   return response.status === 204 ? (undefined as T) : response.json();
 }

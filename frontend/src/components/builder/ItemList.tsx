@@ -9,6 +9,7 @@ import {
   type Section,
 } from "@/lib/builder";
 import type { Form } from "./fields";
+import { ToolCheckboxes } from "./ToolChoices";
 
 const LISTS: Record<ListKind, { title: string; add: string; open: (index: number) => Section }> = {
   steps: { title: "Steps, in order", add: "Add step", open: (index) => ({ kind: "step", index }) },
@@ -125,21 +126,12 @@ export function ToolPicker({ form, tools }: { form: Form; tools: ToolInfo[] }) {
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="mb-1 text-sm font-medium text-ink">Tools it may call</legend>
-      {tools.map((tool) => (
-        <label key={tool.name} className="flex items-start gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={chosen.includes(tool.name)}
-            disabled={form.readOnly}
-            onChange={() => form.update((d) => toggleTool(d, tool.name))}
-            className="mt-0.5 size-4 accent-llm"
-          />
-          <span>
-            {tool.name}
-            <span className="block text-muted">{tool.description}</span>
-          </span>
-        </label>
-      ))}
+      <ToolCheckboxes
+        tools={tools}
+        chosen={chosen}
+        disabled={form.readOnly}
+        onToggle={(name) => form.update((d) => toggleTool(d, name))}
+      />
     </fieldset>
   );
 }

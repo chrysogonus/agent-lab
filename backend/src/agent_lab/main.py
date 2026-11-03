@@ -1,8 +1,12 @@
 """uvicorn entry point: `uvicorn agent_lab.main:app --host 127.0.0.1`."""
 
+import httpx
+
 from agent_lab.api import create_app
 from agent_lab.config import Settings
 from agent_lab.llm.models import models_from_settings
+from agent_lab.mcp.host import Host
+from agent_lab.mcp.servers_file import find
 from agent_lab.store import Store
 
 settings = Settings.from_env()
@@ -17,4 +21,5 @@ app = create_app(
     store=Store(settings.db_path),
     models=models,
     secrets=(settings.llm_api_key, settings.openai_api_key),
+    host=Host(find(settings.mcp_servers_file), httpx.AsyncClient()),
 )
