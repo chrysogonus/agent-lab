@@ -76,7 +76,12 @@ what replaces it.
   - on Sonnet 5.5, server-side fallback: a request Claude declines for some safety reasons is
     answered by the fallback model, and the span's model shows which one answered. Haiku 5.5 has
     no fallback. Any other decline ends the run with an error;
-  - Claude's thinking blocks back unchanged with the tool calls they led to, as the API requires.
+  - Claude's thinking blocks back unchanged with the tool calls they led to, as the API requires;
+  - prompt caching (5-minute entries): the tools and system prompt are cached on every call, and
+    in a tool loop the whole conversation so far. A cached token costs a tenth of the input
+    price, a newly cached one 1.25 times it; prompts under 512 tokens are not cached. Tokens in
+    counts cached tokens too; the span attributes `gen_ai.usage.cache_read.input_tokens` and
+    `…cache_creation.input_tokens` show how many were read and written.
 - There are no retries yet: a rate limit or busy server ends the run with an error (M17).
 - Keys stay in `.env` (ignored by git), are removed from every span and are never returned by
   the API.

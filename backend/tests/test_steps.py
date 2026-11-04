@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from agent_lab.agents import steps
 from agent_lab.agents.steps import DecisionError
-from agent_lab.llm.base import ToolCall
+from agent_lab.llm.base import ChatResponse, ToolCall
 from agent_lab.llm.fake import FakeLLM
 from agent_lab.mcp.client import Connection
 from agent_lab.mcp.host import HostTool
@@ -35,6 +35,22 @@ async def test_chat_records_reasoning_and_came_from() -> None:
     assert span.attributes["lab.came_from"] == ["start"]
     assert span.attributes["lab.round"] == 1
     assert "gen_ai.request.response_format" not in span.attributes
+
+
+@pytest.mark.anyio
+async def test_chat_records_cached_tokens() -> None:
+    cached = ChatResponse(
+        content="hi", tokens_in=1112, tokens_cache_read=800, tokens_cache_write=300
+    )
+    llm = FakeLLM([cached, answer("hi")])
+    ctx, events = make_ctx(llm)
+    await steps.chat(ctx, "n", MESSAGES)
+    await steps.chat(ctx, "n", MESSAGES)
+
+    first, second = ended(events)
+    assert first.attributes["gen_ai.usage.cache_read.input_tokens"] == 800
+    assert first.attributes["gen_ai.usage.cache_creation.input_tokens"] == 300
+    assert "gen_ai.usage.cache_read.input_tokens" not in second.attributes
 
 
 @pytest.mark.anyio

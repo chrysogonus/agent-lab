@@ -97,6 +97,11 @@ async def chat(
             "gen_ai.usage.input_tokens": response.tokens_in,
             "gen_ai.usage.output_tokens": response.tokens_out,
         }
+        if response.tokens_cache_read is not None:
+            span.attributes |= {
+                "gen_ai.usage.cache_read.input_tokens": response.tokens_cache_read,
+                "gen_ai.usage.cache_creation.input_tokens": response.tokens_cache_write,
+            }
     return response
 
 

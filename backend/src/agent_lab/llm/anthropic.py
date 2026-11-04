@@ -27,6 +27,8 @@ UNSUPPORTED = ("minLength", "maxLength", "minimum", "maximum", "multipleOf")
 THINKING_OFF: dict[str, dict[str, str]] = {"claude-sonnet-5-5": {"type": "between_tools"}}
 # Models with server-side refusal fallback; Haiku 5.5 has none.
 WITH_FALLBACK = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"}
+# Prompt caching, 5-minute entries: a hit costs a tenth of the input price, a write 1.25 times it.
+CACHE = {"type": "ephemeral"}
 
 
 class AnthropicClient:
@@ -80,9 +82,13 @@ class AnthropicClient:
         if self._fallback:
             body["fallbacks"] = "default"  # a declined request is retried on the fallback model
         if system:
-            body["system"] = system
+            # Tools render before the system prompt, so this caches both: every call of an agent
+            # (every villager turn) shares them. Prefixes under 512 tokens are simply not cached.
+            body["system"] = [{"type": "text", "text": system, "cache_control": CACHE}]
         if tools:
             body["tools"] = [_tool(t) for t in tools]
+            # A tool loop sends this whole prompt again next call: cache up to its last block.
+            body["cache_control"] = CACHE
         elif used := _used_tools(turns):
             # An answer without tools after tool calls: Claude needs those tools defined, so they
             # are declared but not callable. Thinking blocks are dropped, since the tool list they
@@ -214,8 +220,16 @@ def _parse(data: dict[str, Any]) -> ChatResponse:
             for b in blocks
             if b["type"] == "tool_use"
         ],
-        tokens_in=usage.get("input_tokens"),
+        tokens_in=(
+            usage["input_tokens"]
+            + usage.get("cache_creation_input_tokens", 0)
+            + usage.get("cache_read_input_tokens", 0)
+            if "input_tokens" in usage
+            else None
+        ),
         tokens_out=usage.get("output_tokens"),
+        tokens_cache_read=usage.get("cache_read_input_tokens"),
+        tokens_cache_write=usage.get("cache_creation_input_tokens"),
         model=data.get("model"),
         blocks=blocks,
     )

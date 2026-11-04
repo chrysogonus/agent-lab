@@ -20,6 +20,7 @@ TOOLS: list[dict[str, Any]] = [
         },
     }
 ]
+CACHE = {"type": "ephemeral"}
 THINKING = {"type": "thinking", "thinking": "Multiply first.", "signature": "sig-1"}
 TOOL_USE = {
     "type": "tool_use",
@@ -88,7 +89,9 @@ async def test_request_shape() -> None:
     assert request.headers["anthropic-beta"] == "server-side-fallback-2026-07-01"
     body = body_of(request)
     assert body["model"] == "claude-sonnet-5-5"
-    assert body["system"] == "Be brief."
+    # The system prompt (with the tools before it) is cached; in a tool loop, so is the rest.
+    assert body["system"] == [{"type": "text", "text": "Be brief.", "cache_control": CACHE}]
+    assert body["cache_control"] == CACHE
     assert body["messages"] == [{"role": "user", "content": "6*7?"}]
     assert body["tools"] == [
         {
@@ -110,6 +113,32 @@ async def test_no_tools_sends_no_tools_field() -> None:
     await client.chat([{"role": "user", "content": "hi"}], [])
     assert "tools" not in body_of(seen[0])
     assert "system" not in body_of(seen[0])
+
+
+@pytest.mark.anyio
+async def test_without_tools_only_the_system_prompt_is_cached() -> None:
+    # A single call (a villager's turn): the changing message after it is never read back.
+    client, seen = client_for(ok(answer({"type": "text", "text": "hi"})))
+    await client.chat(
+        [{"role": "system", "content": "Rules."}, {"role": "user", "content": "hi"}], []
+    )
+    body = body_of(seen[0])
+    assert body["system"] == [{"type": "text", "text": "Rules.", "cache_control": CACHE}]
+    assert "cache_control" not in body
+
+
+@pytest.mark.anyio
+async def test_cached_tokens_count_as_input() -> None:
+    usage = {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 300,
+        "cache_read_input_tokens": 800,
+        "output_tokens": 5,
+    }
+    client, _ = client_for(ok(answer({"type": "text", "text": "hi"}, usage=usage)))
+    response = await client.chat([{"role": "user", "content": "hi"}], [])
+    assert (response.tokens_in, response.tokens_out) == (1112, 5)
+    assert (response.tokens_cache_read, response.tokens_cache_write) == (800, 300)
 
 
 @pytest.mark.anyio
@@ -210,7 +239,7 @@ async def test_a_later_system_message_stays_in_place() -> None:
     ]
     await client.chat(messages, [])
     body = body_of(seen[0])
-    assert body["system"] == "One.\n\nTwo."
+    assert body["system"] == [{"type": "text", "text": "One.\n\nTwo.", "cache_control": CACHE}]
     assert body["messages"] == [
         {"role": "user", "content": "hi"},
         {"role": "system", "content": "Later."},

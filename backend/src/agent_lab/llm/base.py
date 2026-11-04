@@ -22,8 +22,11 @@ class ChatResponse(BaseModel):
     # Thinking text some providers return beside the answer; traced, never sent back.
     reasoning: str | None = None
     tool_calls: list[ToolCall] = []
-    tokens_in: int | None = None
+    tokens_in: int | None = None  # all prompt tokens, cached ones included
     tokens_out: int | None = None
+    # Prompt tokens read from / written to the provider's prompt cache, when it reports them.
+    tokens_cache_read: int | None = None
+    tokens_cache_write: int | None = None
     model: str | None = None
     # The provider's own content blocks, sent back unchanged on the next call (Claude's thinking
     # blocks must return with their tool calls); other providers ignore them.
