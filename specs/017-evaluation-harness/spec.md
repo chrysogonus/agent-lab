@@ -169,12 +169,13 @@ completes, and its trace shows the two failed attempts with their reasons and wa
 
 ### User Story 4 - Approvals before tool calls (Priority: P4)
 
-In an agent's settings, the owner marks tools as "ask first". When the model calls such a tool,
-the run pauses in the state "waiting for approval". The trace view shows the tool and the
-arguments, and the owner either:
+In an agent's settings, the owner marks tools as "ask first". Before such a tool is called,
+whoever calls it (the model, or a builder agent's tool block), the run pauses in the state
+"waiting for approval". The trace view shows the tool and the arguments, and the owner either:
 - **approves**, and the call goes out as usual; or
-- **denies**, optionally with a reason, and the model receives the denial (and the reason) as
-  the tool's result, and the run goes on.
+- **denies**, optionally with a reason. The denial (and the reason) becomes the tool's result,
+  just as a tool error does today: the model receives it, or a tool block passes it on as its
+  output. The run goes on.
 
 A request that gets no answer within 10 minutes is denied, with the reason "no answer from the
 owner". The time spent waiting does not count against the run's time budget.
@@ -204,9 +205,14 @@ second run that is approved writes the note.
    **Then** the tool is not called, and the trace marks the denial as the case's.
 5. **Given** a model answer with two calls to tools marked ask first, **When** the run reaches
    them, **Then** the owner decides each call separately, in order.
+6. **Given** a builder agent with a tool block for a tool marked ask first, **When** the run
+   reaches the block, **Then** it waits for the owner. If denied, the tool is not called, and the
+   block's output is the denial text, which the next block receives.
 
 ### Edge Cases
 
+- **The agent or a case is edited during an evaluation**: the evaluation goes on with the copy
+  it took at its start (FR-003a); the edit applies from the next evaluation.
 - **The agent changes between evaluations**: every result records the config version it ran
   with. A comparison shows both versions, and still compares cases that exist in both.
 - **A case is added, changed or removed between evaluations**: a comparison shows the case as
@@ -216,8 +222,10 @@ second run that is approved writes the note.
   separately from fails and are left out of the pass rate.
 - **The judge fails**: when the judge's model call fails or answers neither yes nor no, the check
   counts as an error for that attempt.
-- **An attempt goes over budget**: it fails unless one of its checks expects that end. Checks on
-  the answer see whatever the run produced until then.
+- **An attempt goes over budget**: it fails unless one of its checks expects that end (FR-004).
+  Checks on the answer see whatever the run produced until then.
+- **Every attempt of a case is an error**: the case shows no pass rate, only its errors, and adds
+  nothing to the overall pass rate.
 - **The model for an evaluation is unavailable**: the evaluation does not start, and says why.
 - **The lab stops during an evaluation**: when the lab starts again, the evaluation shows as
   interrupted with the results it had; it does not resume.
@@ -248,10 +256,23 @@ second run that is approved writes the note.
 - **FR-003**: The owner MUST be able to run an agent's cases (all or a chosen set), each 1 to 10
   times, on a chosen model. Each attempt MUST be an ordinary traced run of the agent, stored like
   any other run and marked as part of the evaluation.
+- **FR-003a**: When an evaluation starts, it MUST take a copy of the agent's config (with its
+  budget and ask-first tools), the chosen cases and the model. Every attempt MUST use that copy,
+  so that editing the agent or a case while the evaluation runs changes only later
+  evaluations.
 - **FR-004**: Every check of every attempt MUST end as pass, fail or error, with a reason for a
-  fail or an error. An attempt passes when all its checks pass, fails when any check fails, and
-  is an error otherwise. A case's pass rate is its passed attempts divided by its attempts
-  without errors.
+  fail or an error. An attempt's outcome MUST be decided in this order:
+  1. **error**, when the run was refused before its first step (for example a tool server not
+     connected), ended with a provider error, or was stopped by the owner;
+  2. **fail**, when the run ended in any other state than completed (over budget, out of
+     iterations or rounds), unless one of the case's checks expects that end state;
+  3. **fail**, when any check fails;
+  4. **error**, when any check is an error;
+  5. **pass** otherwise.
+- **FR-004a**: A case's pass rate MUST be its passed attempts divided by its attempts that are not
+  errors. A case whose attempts are all errors MUST show no pass rate, only its error count. The
+  overall pass rate MUST pool the attempts of all cases the same way (passed attempts divided by
+  attempts that are not errors), not average the cases' rates.
 - **FR-005**: A judge check's model call MUST be traced, on the evaluation's model unless the case
   names another, and MUST NOT count against the agent's budget.
 - **FR-006**: An evaluation's results MUST show per case its pass rate, errors and failed checks
@@ -281,11 +302,13 @@ second run that is approved writes the note.
   with its reason and wait, and MUST count against the budget.
 - **FR-015**: The owner MUST be able to mark any of an agent's tools as "ask first" in the agent's
   settings.
-- **FR-016**: When the model calls a tool marked ask first, the run MUST pause in the state
-  "waiting for approval" before the call goes out, and MUST show the tool and its arguments
-  (with secrets redacted) to the owner.
-- **FR-017**: An approval MUST send the call as usual. A denial MUST give the model the result
-  "denied by the owner", with the owner's reason if given, and the run MUST go on. A request with
+- **FR-016**: Before any call of a tool marked ask first goes out, whether the model or a tool
+  block makes it, the run MUST pause in the state "waiting for approval", and MUST show the
+  tool and its arguments (with secrets redacted) to the owner.
+- **FR-017**: An approval MUST send the call as usual. A denial MUST NOT call the tool; the
+  tool's result MUST be "denied by the owner", with the owner's reason if given, and it MUST go
+  where the tool's result would go (to the model, or as a tool block's output). The run MUST go
+  on. A request with
   no answer within 10 minutes MUST be denied with the reason "no answer from the owner".
 - **FR-018**: The lab MUST show the owner every run waiting for approval, from any page.
 - **FR-019**: Time spent waiting for approval MUST NOT count against the run's time budget.
@@ -304,9 +327,9 @@ second run that is approved writes the note.
   requests.
 - **Check**: one condition on an attempt: its kind (answer text, tools, end state, cost, judge)
   and what it expects.
-- **Evaluation**: one run of an agent's cases: the agent and its config version, the model, the
-  repeat count, when it started and ended, and its state (running, finished, stopped,
-  interrupted).
+- **Evaluation**: one run of an agent's cases: the agent and its config version, a copy of the
+  config and the cases as they were at its start, the model, the repeat count, when it started
+  and ended, and its state (running, finished, stopped, interrupted).
 - **Attempt**: one run of one case in an evaluation: the run, and each check's result (pass, fail
   or error) with its reason.
 - **Budget**: an agent's limits per run: model calls, tokens, tool calls and time.
