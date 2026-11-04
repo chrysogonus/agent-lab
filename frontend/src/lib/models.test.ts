@@ -21,6 +21,9 @@ const luna = info({ provider: "openai", provider_label: "OpenAI", model: "gpt-6-
 describe("labels", () => {
   it("names provider and model", () => {
     expect(modelLabel({ provider: "openai", model: "gpt-6-luna" })).toBe("OpenAI · gpt-6-luna");
+    expect(modelLabel({ provider: "anthropic", model: "claude-sonnet-5-5" })).toBe(
+      "Anthropic · claude-sonnet-5-5",
+    );
     expect(defaultLabel([local, luna])).toBe("Default (Local · qwen3.5-9b)");
   });
 

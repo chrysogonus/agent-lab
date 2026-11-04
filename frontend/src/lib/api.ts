@@ -251,7 +251,7 @@ export type VillageState = {
 export type AgentConfig = Record<string, unknown>; // a template's editable fields
 
 /** A model is its provider and id together: the same id may exist on both providers. */
-export type ModelRef = { provider: "local" | "openai"; model: string };
+export type ModelRef = { provider: "local" | "openai" | "anthropic"; model: string };
 
 export type ModelInfo = ModelRef & {
   provider_label: string;

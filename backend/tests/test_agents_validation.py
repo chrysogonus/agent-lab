@@ -130,7 +130,7 @@ CASES: list[tuple[str, str, Callable[[Body], None], list[str | int]]] = [
     (
         "unknown provider",
         "react",
-        lambda b: b.update(model={"provider": "anthropic", "model": "x"}),
+        lambda b: b.update(model={"provider": "acme", "model": "x"}),
         ["model", "provider"],
     ),
     (

@@ -50,7 +50,7 @@ report; keep every gate at its current strictness.
   `mcp/` (hand-written MCP, docs/tools.md: `jsonrpc.py`, `server.py` one server core for both
   protocol eras, `transports.py` in-process/stdio/HTTP, `client.py` one connection,
   `servers_file.py`, `host.py` connections and `HostTool`s, `lab_server.py`, `notes.py`),
-  `tools/` (calculator and weather, served by `mcp/lab_server.py`), `llm/` (client seam, `models.py`: the configured models, `FakeLLM`),
+  `tools/` (calculator and weather, served by `mcp/lab_server.py`), `llm/` (client seam, `openai_compat.py` and `anthropic.py` clients, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
   `bus.py`, `runs.py`, `api.py`.
 - `backend/tests/`: pytest; `helpers.py` builds scripted runs and `assert_trace_valid`;
@@ -121,5 +121,5 @@ report; keep every gate at its current strictness.
 - Each milestone is one Spec Kit feature: `speckit-specify` → `clarify` → `plan` → `tasks` →
   `implement`. Map every requirement to a test in `tasks.md`. Commit after each phase and task
   group; push to `origin` only when the owner asks.
-- `.env` holds `LLM_API_KEY` and `OPENAI_API_KEY`; keep it out of git. Both are passed to the
-  tracer as secrets; never return a key or provider URL from the API.
+- `.env` holds `LLM_API_KEY`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; keep it out of git. All
+  are passed to the tracer as secrets; never return a key or provider URL from the API.

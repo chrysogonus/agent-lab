@@ -75,7 +75,8 @@ def test_default_can_be_an_openai_model() -> None:
         "local/other",  # not configured
         "openai/gpt-6-luna",  # no key
         "qwen3.5-9b",  # no provider
-        "anthropic/claude",  # unknown provider
+        "other/claude",  # unknown provider
+        "anthropic/claude-sonnet-5-5",  # not configured
         "local/",  # no model
     ],
 )
@@ -86,3 +87,45 @@ def test_unusable_default_names_the_setting(default: str) -> None:
 
 def test_parse_ref_splits_at_first_slash() -> None:
     assert parse_ref("local/Qwen/Qwen3-8B") == ModelRef(provider="local", model="Qwen/Qwen3-8B")
+
+
+def test_anthropic_models_with_key() -> None:
+    s = settings(anthropic_models=("claude-sonnet-5-5",), anthropic_api_key="sk-ant-x")
+    entry = models_from_settings(s).entries[1]
+    assert str(entry.ref) == "anthropic/claude-sonnet-5-5"
+    assert (entry.external, entry.unavailable, entry.client.provider) == (True, None, "anthropic")
+
+
+def test_anthropic_models_without_key_are_unavailable() -> None:
+    entry = models_from_settings(settings(anthropic_models=("claude-sonnet-5-5",))).entries[1]
+    assert entry.unavailable == "no API key"
+
+
+def test_default_can_be_an_anthropic_model() -> None:
+    s = settings(
+        anthropic_models=("claude-sonnet-5-5",),
+        anthropic_api_key="sk-ant-x",
+        default_model="anthropic/claude-sonnet-5-5",
+    )
+    assert models_from_settings(s).default == ModelRef(
+        provider="anthropic", model="claude-sonnet-5-5"
+    )
+
+
+def test_env_default_is_claude_with_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("DEFAULT_MODEL", "ANTHROPIC_MODELS", "LLM_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    s = Settings.from_env()
+    assert (s.default_model, s.anthropic_models) == (
+        "anthropic/claude-sonnet-5-5",
+        ("claude-sonnet-5-5",),
+    )
+    monkeypatch.setenv("ANTHROPIC_MODELS", "claude-haiku-5-5, claude-sonnet-5-5")
+    assert Settings.from_env().default_model == "anthropic/claude-haiku-5-5"
+
+
+def test_env_default_stays_local_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("DEFAULT_MODEL", "ANTHROPIC_API_KEY", "LLM_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    assert Settings.from_env().default_model == "local/qwen3.5-9b"

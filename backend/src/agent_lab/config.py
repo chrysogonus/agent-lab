@@ -21,12 +21,19 @@ class Settings:
     openai_models: tuple[str, ...] = ()
     openai_base_url: str = "https://api.openai.com/v1"
     openai_reasoning_off: str = "none"  # reasoning_effort sent with thinking off; "" sends none
+    anthropic_api_key: str = ""
+    anthropic_models: tuple[str, ...] = ()
+    anthropic_base_url: str = "https://api.anthropic.com/v1"
     default_model: str = ""  # provider/model; "" means local/{llm_model}
     mcp_servers_file: str = ""  # "" means data/mcp.json, else the committed mcp.json
 
     @classmethod
     def from_env(cls) -> "Settings":
         llm_model = os.environ.get("LLM_MODEL", "qwen3.5-9b")
+        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        anthropic_models = _ids("ANTHROPIC_MODELS") or ("claude-sonnet-5-5",)
+        # With a Claude key, the first Claude model is the default; otherwise the local one.
+        fallback = f"anthropic/{anthropic_models[0]}" if anthropic_api_key else f"local/{llm_model}"
         return cls(
             llm_provider=os.environ.get("LLM_PROVIDER", "openai_compat"),
             llm_base_url=os.environ.get("LLM_BASE_URL", "http://localhost:8001/v1"),
@@ -38,6 +45,9 @@ class Settings:
             openai_models=_ids("OPENAI_MODELS"),
             openai_base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_reasoning_off=os.environ.get("OPENAI_REASONING_OFF", "none"),
-            default_model=os.environ.get("DEFAULT_MODEL") or f"local/{llm_model}",
+            anthropic_api_key=anthropic_api_key,
+            anthropic_models=anthropic_models,
+            anthropic_base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
+            default_model=os.environ.get("DEFAULT_MODEL") or fallback,
             mcp_servers_file=os.environ.get("MCP_SERVERS_FILE", ""),
         )

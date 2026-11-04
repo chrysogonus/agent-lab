@@ -20,6 +20,6 @@ except ValueError as exc:
 app = create_app(
     store=Store(settings.db_path),
     models=models,
-    secrets=(settings.llm_api_key, settings.openai_api_key),
+    secrets=(settings.llm_api_key, settings.openai_api_key, settings.anthropic_api_key),
     host=Host(find(settings.mcp_servers_file), httpx.AsyncClient()),
 )

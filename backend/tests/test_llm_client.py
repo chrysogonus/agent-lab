@@ -323,3 +323,12 @@ async def test_tool_call_parsing_openai() -> None:
         ("call_9", "calculator", '{"expression": "2*3"}')
     ]
     assert (result.tokens_in, result.tokens_out, result.model) == (5, 3, "gpt-6-luna-2026")
+
+
+@pytest.mark.anyio
+async def test_native_blocks_are_not_sent() -> None:
+    """An assistant message may carry another provider's blocks; they stay out of the body."""
+    transport, bodies = recording()
+    message = {"role": "assistant", "content": "hi", "blocks": [{"type": "text", "text": "hi"}]}
+    await client_with(transport).chat([{"role": "user", "content": "x"}, message], [])
+    assert bodies[0]["messages"][1] == {"role": "assistant", "content": "hi"}

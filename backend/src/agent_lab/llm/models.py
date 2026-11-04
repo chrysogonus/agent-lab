@@ -1,4 +1,4 @@
-"""The configured models: Local and OpenAI from the environment, one client per model."""
+"""The configured models: Local, OpenAI and Anthropic from the environment, one client each."""
 
 from dataclasses import dataclass
 from typing import Literal
@@ -7,10 +7,11 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_lab.config import Settings
+from agent_lab.llm.anthropic import AnthropicClient
 from agent_lab.llm.base import LLMClient
 from agent_lab.llm.openai_compat import OpenAICompatClient
 
-LABELS = {"local": "Local", "openai": "OpenAI"}
+LABELS = {"local": "Local", "openai": "OpenAI", "anthropic": "Anthropic"}
 
 
 class ModelRef(BaseModel):
@@ -18,7 +19,7 @@ class ModelRef(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    provider: Literal["local", "openai"]
+    provider: Literal["local", "openai", "anthropic"]
     model: str = Field(min_length=1, max_length=200)
 
     def __str__(self) -> str:
@@ -62,7 +63,7 @@ def parse_ref(text: str) -> ModelRef:
     """`provider/model`, split at the first `/` (model ids may contain `/`)."""
     provider, _, model = text.partition("/")
     if provider not in LABELS or not model:
-        raise ValueError(f"{text!r} is not provider/model with provider local or openai")
+        raise ValueError(f"{text!r} is not provider/model with provider {', '.join(LABELS)}")
     return ModelRef.model_validate({"provider": provider, "model": model})
 
 
@@ -100,6 +101,22 @@ def models_from_settings(s: Settings) -> Models:
                 ),
             )
             for model in dict.fromkeys(s.openai_models)
+        ]
+    if s.anthropic_models:
+        anthropic_http = httpx.AsyncClient(timeout=300.0)  # thinking turns can run long
+        entries += [
+            ModelEntry(
+                ref=ModelRef(provider="anthropic", model=model),
+                external=True,
+                unavailable=None if s.anthropic_api_key else "no API key",
+                client=AnthropicClient(
+                    base_url=s.anthropic_base_url,
+                    model=model,
+                    api_key=s.anthropic_api_key,
+                    http=anthropic_http,
+                ),
+            )
+            for model in dict.fromkeys(s.anthropic_models)
         ]
     try:
         return Models(entries, parse_ref(s.default_model or f"local/{s.llm_model}"))

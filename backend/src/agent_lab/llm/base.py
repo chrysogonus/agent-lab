@@ -1,6 +1,6 @@
-"""Provider-neutral model interface. An Anthropic adapter implements `LLMClient` later."""
+"""Provider-neutral model interface: OpenAI chat format, translated by each adapter."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from pydantic import BaseModel
 
@@ -22,6 +22,9 @@ class ChatResponse(BaseModel):
     tokens_in: int | None = None
     tokens_out: int | None = None
     model: str | None = None
+    # The provider's own content blocks, sent back unchanged on the next call (Claude's thinking
+    # blocks must return with their tool calls); other providers ignore them.
+    blocks: list[dict[str, Any]] | None = None
 
     def as_message(self) -> Message:
         """The assistant message to append to the conversation."""
@@ -35,6 +38,8 @@ class ChatResponse(BaseModel):
                 }
                 for c in self.tool_calls
             ]
+        if self.blocks is not None:
+            message["blocks"] = self.blocks
         return message
 
 
@@ -59,3 +64,20 @@ class LLMClient(Protocol):
         `reasoning`: False turns model thinking off; None or True keeps the provider default.
         """
         ...
+
+
+def strict_schema(schema: Any, unsupported: tuple[str, ...]) -> Any:
+    """Close every object, require all its properties, and drop the keywords a provider refuses.
+
+    The answer is still validated against the full pydantic model, bounds included.
+    """
+    if isinstance(schema, list):
+        return [strict_schema(v, unsupported) for v in cast(list[Any], schema)]
+    if not isinstance(schema, dict):
+        return schema
+    mapping = cast(dict[str, Any], schema)
+    out = {k: strict_schema(v, unsupported) for k, v in mapping.items() if k not in unsupported}
+    if out.get("type") == "object":
+        out["additionalProperties"] = False
+        out["required"] = list(out.get("properties") or {})
+    return out

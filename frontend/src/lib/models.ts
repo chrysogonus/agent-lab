@@ -1,7 +1,11 @@
 // Model labels and the model select's options. Pure; see specs/004-model-providers.
 import type { ModelInfo, ModelRef, Run } from "./api";
 
-const PROVIDER_LABELS: Record<ModelRef["provider"], string> = { local: "Local", openai: "OpenAI" };
+const PROVIDER_LABELS: Record<ModelRef["provider"], string> = {
+  local: "Local",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+};
 
 export function sameRef(a: ModelRef | null, b: ModelRef | null): boolean {
   return a?.provider === b?.provider && a?.model === b?.model;

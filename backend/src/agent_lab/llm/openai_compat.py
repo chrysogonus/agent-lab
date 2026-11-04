@@ -1,10 +1,10 @@
 """Thin client for OpenAI-compatible `POST /chat/completions` (vLLM, Ollama, OpenAI, ...)."""
 
-from typing import Any, cast
+from typing import Any
 
 import httpx
 
-from agent_lab.llm.base import ChatResponse, LLMError, Message, ToolCall
+from agent_lab.llm.base import ChatResponse, LLMError, Message, ToolCall, strict_schema
 
 # Thinking off on the local server: Ollama reads reasoning_effort; vLLM passes
 # chat_template_kwargs to the Qwen template.
@@ -47,7 +47,8 @@ class OpenAICompatClient:
         response_format: dict[str, Any] | None = None,
         reasoning: bool | None = None,
     ) -> ChatResponse:
-        body: dict[str, Any] = {"model": self.model, "messages": messages, "stream": False}
+        sent = [{k: v for k, v in m.items() if k != "blocks"} for m in messages]
+        body: dict[str, Any] = {"model": self.model, "messages": sent, "stream": False}
         if tools:
             body["tools"] = tools
         if response_format is not None:
@@ -73,25 +74,8 @@ def _strict_format(response_format: dict[str, Any]) -> dict[str, Any]:
     json_schema: dict[str, Any] = response_format.get("json_schema") or {}
     if response_format.get("type") != "json_schema" or "schema" not in json_schema:
         return response_format
-    schema = _strict(json_schema["schema"])
+    schema = strict_schema(json_schema["schema"], ("minLength", "maxLength"))
     return {**response_format, "json_schema": {**json_schema, "schema": schema}}
-
-
-def _strict(schema: Any) -> Any:
-    """Close every object and require all its properties; drop the string length bounds.
-
-    The answer is still validated against the full pydantic model, bounds included.
-    """
-    if isinstance(schema, list):
-        return [_strict(v) for v in cast(list[Any], schema)]
-    if not isinstance(schema, dict):
-        return schema
-    mapping = cast(dict[str, Any], schema)
-    out = {k: _strict(v) for k, v in mapping.items() if k not in ("minLength", "maxLength")}
-    if out.get("type") == "object":
-        out["additionalProperties"] = False
-        out["required"] = list(out.get("properties") or {})
-    return out
 
 
 def _parse(data: dict[str, Any]) -> ChatResponse:
