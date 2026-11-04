@@ -23,7 +23,7 @@ flowchart LR
 | Option | Setup |
 |---|---|
 | **vLLM in Docker** (default) | `make dev-llm` serves 4-bit Qwen3.5 9B as `qwen3.5-9b` on 127.0.0.1:8001. Needs an NVIDIA GPU with ~11 GiB free and the NVIDIA container runtime; the first start downloads ~11 GB. Logs: `docker logs -f agent-lab-vllm`; remove: `make stop-llm`. |
-| **Ollama** | `LOCAL_BASE_URL=http://localhost:11434/v1` and `LOCAL_MODELS=qwen3:8b` |
+| **Ollama** | `LOCAL_BASE_URL=http://localhost:11434/v1` and `LOCAL_MODELS=qwen3:8b`; a `DEFAULT_MODEL` that names a local model must name one in `LOCAL_MODELS` (`local/qwen3:8b`) |
 | **Anything else OpenAI-compatible** | set `LOCAL_BASE_URL`, `LOCAL_MODELS` and, if needed, `LOCAL_API_KEY` |
 
 vLLM batches requests that arrive together, so parallel branches really run at the same time.
