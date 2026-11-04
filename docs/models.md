@@ -9,9 +9,9 @@ endpoint. Both clients are written by hand in `backend/src/agent_lab/llm/`. Sett
 ```mermaid
 flowchart LR
     A[Agent] --> D{its model}
-    D -- "Default" --> DM{"DEFAULT_MODEL<br/>(unset: Claude with a key, else local)"}
+    D -- "Default" --> DM{"DEFAULT_MODEL<br/>(unset: first LOCAL_MODELS)"}
     DM --> A2["Anthropic<br/>ANTHROPIC_MODELS + ANTHROPIC_API_KEY"]
-    DM --> L["Local server<br/>LLM_BASE_URL / LLM_MODEL"]
+    DM --> L["Local server<br/>LOCAL_BASE_URL + LOCAL_MODELS"]
     DM --> O["OpenAI<br/>OPENAI_MODELS + OPENAI_API_KEY"]
     D -- "picked in agent settings" --> A2
     D -- "picked in agent settings" --> L
@@ -23,27 +23,43 @@ flowchart LR
 | Option | Setup |
 |---|---|
 | **vLLM in Docker** (default) | `make dev-llm` serves 4-bit Qwen3.5 9B as `qwen3.5-9b` on 127.0.0.1:8001. Needs an NVIDIA GPU with ~11 GiB free and the NVIDIA container runtime; the first start downloads ~11 GB. Logs: `docker logs -f agent-lab-vllm`; remove: `make stop-llm`. |
-| **Ollama** | `LLM_BASE_URL=http://localhost:11434/v1` and `LLM_MODEL=qwen3:8b` |
-| **Anything else OpenAI-compatible** | set `LLM_BASE_URL`, `LLM_MODEL` and, if needed, `LLM_API_KEY` |
+| **Ollama** | `LOCAL_BASE_URL=http://localhost:11434/v1` and `LOCAL_MODELS=qwen3:8b` |
+| **Anything else OpenAI-compatible** | set `LOCAL_BASE_URL`, `LOCAL_MODELS` and, if needed, `LOCAL_API_KEY` |
 
 vLLM batches requests that arrive together, so parallel branches really run at the same time.
 
 ## Settings
 
+**Switch providers with one line**, `DEFAULT_MODEL=provider/model`, then restart `make dev`:
+
+| To use | Set |
+|---|---|
+| the local Qwen | `DEFAULT_MODEL=local/qwen3.5-9b` (also the default when unset) |
+| OpenAI | `DEFAULT_MODEL=openai/gpt-6-luna` and `OPENAI_API_KEY` |
+| Claude | `DEFAULT_MODEL=anthropic/claude-sonnet-5-5` and `ANTHROPIC_API_KEY` |
+
+`DEFAULT_MODEL` is the model of templates, "Default" agents and the village. A saved agent can
+also be pinned to any listed model in its settings. The backend refuses to start if
+`DEFAULT_MODEL` names a model that is not configured or has no key.
+
+Each provider has the same three settings (defaults shown):
+
+| Provider | Base URL | Models (comma-separated) | API key |
+|---|---|---|---|
+| `local` | `LOCAL_BASE_URL=http://localhost:8001/v1` | `LOCAL_MODELS=qwen3.5-9b` | `LOCAL_API_KEY` (empty for local servers) |
+| `openai` | `OPENAI_BASE_URL=https://api.openai.com/v1` | `OPENAI_MODELS=gpt-6-luna` | `OPENAI_API_KEY` |
+| `anthropic` | `ANTHROPIC_BASE_URL=https://api.anthropic.com/v1` | `ANTHROPIC_MODELS=claude-sonnet-5-5` | `ANTHROPIC_API_KEY` |
+
+Models of a provider without a key are listed as unavailable. Other settings:
+
 | Variable | Example | What it does |
 |---|---|---|
-| `LLM_BASE_URL` | `http://localhost:8001/v1` | the local OpenAI-compatible endpoint |
-| `LLM_MODEL` | `qwen3.5-9b` | its default model |
-| `LLM_API_KEY` | *(empty)* | key for that endpoint; empty for local servers |
-| `LLM_MODELS` | `qwen3:14b,llama3.3` | further models served by the same endpoint |
-| `OPENAI_MODELS` | `gpt-6-luna` | OpenAI models to offer; listed but not pickable without a key |
-| `OPENAI_API_KEY` | `sk-…` | enables the OpenAI models |
 | `OPENAI_REASONING_OFF` | `none` | `reasoning_effort` sent when an agent's thinking is off; empty sends nothing |
-| `ANTHROPIC_API_KEY` | `sk-ant-…` | enables the Claude models, and makes the first one the default |
-| `ANTHROPIC_MODELS` | `claude-sonnet-5-5` | Claude models to offer (default: `claude-sonnet-5-5`); listed but not pickable without a key |
-| `ANTHROPIC_BASE_URL` | `https://api.anthropic.com/v1` | the Messages API address |
-| `DEFAULT_MODEL` | `anthropic/claude-sonnet-5-5` | the model of templates, "Default" agents and the village (default: the first Claude model with a key, else the local `LLM_MODEL`); the backend refuses to start if it is not configured |
 | `AGENT_LAB_DB` | `data/agent_lab.db` | the SQLite file, relative to `backend/` |
+
+The names `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_MODELS` and `LLM_API_KEY` were
+replaced by the `LOCAL_*` settings; the backend refuses to start while one is still set and says
+what replaces it.
 
 ## Good to know
 

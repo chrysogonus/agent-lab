@@ -5,17 +5,15 @@ from typing import Any
 
 import pytest
 
-from agent_lab.config import Settings
+from agent_lab.config import Settings, renamed_settings
 from agent_lab.llm.models import ModelRef, models_from_settings, parse_ref
 
 
 def settings(**changes: Any) -> Settings:
-    """The M3 environment, plus the given M4 settings."""
+    """One local model, plus the given settings."""
     base = Settings(
-        llm_provider="openai_compat",
-        llm_base_url="http://localhost:8001/v1",
-        llm_model="qwen3.5-9b",
-        llm_api_key="",
+        local_base_url="http://localhost:8001/v1",
+        local_models=("qwen3.5-9b",),
         db_path=":memory:",
     )
     return replace(base, **changes)
@@ -34,14 +32,12 @@ def test_m3_environment_is_one_local_model() -> None:
 
 
 def test_further_local_models_without_duplicates() -> None:
-    s = settings(llm_models=("qwen3:8b", "qwen3.5-9b", "Qwen/Qwen3-8B"))
+    s = settings(local_models=("qwen3.5-9b", "qwen3:8b", "qwen3.5-9b", "Qwen/Qwen3-8B"))
     assert refs(s) == ["local/qwen3.5-9b", "local/qwen3:8b", "local/Qwen/Qwen3-8B"]
 
 
 def test_openai_models_with_key() -> None:
-    models = models_from_settings(
-        settings(openai_models=("gpt-6-luna",), openai_api_key="sk-x", llm_models=())
-    )
+    models = models_from_settings(settings(openai_models=("gpt-6-luna",), openai_api_key="sk-x"))
     entry = models.entries[1]
     assert str(entry.ref) == "openai/gpt-6-luna"
     assert (entry.external, entry.unavailable, entry.client.provider) == (True, None, "openai")
@@ -57,7 +53,9 @@ def test_no_openai_models_hides_openai() -> None:
 
 
 def test_same_id_on_both_providers_is_two_entries() -> None:
-    s = settings(llm_models=("shared",), openai_models=("shared",), openai_api_key="sk-x")
+    s = settings(
+        local_models=("qwen3.5-9b", "shared"), openai_models=("shared",), openai_api_key="sk-x"
+    )
     assert refs(s) == ["local/qwen3.5-9b", "local/shared", "openai/shared"]
 
 
@@ -112,20 +110,73 @@ def test_default_can_be_an_anthropic_model() -> None:
     )
 
 
-def test_env_default_is_claude_with_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("DEFAULT_MODEL", "ANTHROPIC_MODELS", "LLM_MODEL"):
+NAMES = (
+    "DEFAULT_MODEL",
+    "LOCAL_BASE_URL",
+    "LOCAL_MODELS",
+    "LOCAL_API_KEY",
+    "OPENAI_MODELS",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_MODELS",
+    "ANTHROPIC_API_KEY",
+)
+
+
+@pytest.fixture
+def clean_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    for name in NAMES:
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    return monkeypatch
+
+
+def test_env_defaults(clean_env: pytest.MonkeyPatch) -> None:
     s = Settings.from_env()
-    assert (s.default_model, s.anthropic_models) == (
-        "anthropic/claude-sonnet-5-5",
-        ("claude-sonnet-5-5",),
+    assert (s.local_base_url, s.local_models, s.local_api_key) == (
+        "http://localhost:8001/v1",
+        ("qwen3.5-9b",),
+        "",
     )
-    monkeypatch.setenv("ANTHROPIC_MODELS", "claude-haiku-5-5, claude-sonnet-5-5")
-    assert Settings.from_env().default_model == "anthropic/claude-haiku-5-5"
+    assert (s.openai_models, s.anthropic_models) == (("gpt-6-luna",), ("claude-sonnet-5-5",))
+    assert s.default_model == "local/qwen3.5-9b"
 
 
-def test_env_default_stays_local_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("DEFAULT_MODEL", "ANTHROPIC_API_KEY", "LLM_MODEL"):
-        monkeypatch.delenv(name, raising=False)
+def test_a_key_alone_does_not_switch_the_default(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
     assert Settings.from_env().default_model == "local/qwen3.5-9b"
+
+
+@pytest.mark.parametrize(
+    "default", ["anthropic/claude-sonnet-5-5", "openai/gpt-6-luna", "local/qwen3.5-9b"]
+)
+def test_default_model_switches_provider(clean_env: pytest.MonkeyPatch, default: str) -> None:
+    clean_env.setenv("DEFAULT_MODEL", default)
+    clean_env.setenv("OPENAI_API_KEY", "sk-x")
+    clean_env.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    models = models_from_settings(Settings.from_env())
+    assert str(models.default) == default
+    assert [str(e.ref) for e in models.entries] == [
+        "local/qwen3.5-9b",
+        "openai/gpt-6-luna",
+        "anthropic/claude-sonnet-5-5",
+    ]
+
+
+def test_local_settings_from_env(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("LOCAL_BASE_URL", "http://localhost:11434/v1")
+    clean_env.setenv("LOCAL_MODELS", "qwen3:8b, qwen3:14b")
+    s = Settings.from_env()
+    assert (s.local_base_url, s.local_models) == (
+        "http://localhost:11434/v1",
+        ("qwen3:8b", "qwen3:14b"),
+    )
+    assert s.default_model == "local/qwen3:8b"
+
+
+def test_old_names_are_reported() -> None:
+    environ = {"LLM_PROVIDER": "anthropic", "LLM_BASE_URL": "x", "LLM_MODEL": "y", "OTHER": "z"}
+    assert renamed_settings(environ) == [
+        "LLM_PROVIDER is gone: DEFAULT_MODEL picks the provider",
+        "LLM_BASE_URL is now LOCAL_BASE_URL",
+        "LLM_MODEL is now LOCAL_MODELS",
+    ]
+    assert renamed_settings({"LOCAL_MODELS": "q"}) == []

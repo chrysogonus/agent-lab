@@ -4,11 +4,12 @@ command line (specs/013-measuring-the-village/contracts/interfaces.md). Reports,
 import argparse
 import asyncio
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from agent_lab.config import Settings
+from agent_lab.config import Settings, renamed_settings
 from agent_lab.llm.models import Models, models_from_settings
 from agent_lab.store import Store
 from agent_lab.village.evals.checks import add_check, load_checks, read_owner, run_checks
@@ -56,6 +57,8 @@ def parser() -> argparse.ArgumentParser:
 
 
 def _models() -> Models:
+    if renamed := renamed_settings(os.environ):
+        raise SystemExit("Rename these settings in .env (see .env.example):\n" + "\n".join(renamed))
     return models_from_settings(Settings.from_env())
 
 

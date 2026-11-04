@@ -55,9 +55,9 @@ make dev              # backend on :8000 and frontend on :3000
 Open **http://127.0.0.1:3000**, pick an agent, press **Run**. Switch to **Village** and press
 **Start** to bring the village to life.
 
-**No GPU?** Point `.env` at any OpenAI-compatible server, e.g. Ollama
-(`LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=qwen3:8b`), or add OpenAI models — see
-[docs/models.md](docs/models.md). The tests need no model at all.
+**No GPU?** Use Claude or OpenAI (set the key and `DEFAULT_MODEL`), or point `LOCAL_BASE_URL`
+at another OpenAI-compatible server such as Ollama — see [docs/models.md](docs/models.md). The
+tests need no model at all.
 
 ## Check
 

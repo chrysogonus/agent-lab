@@ -76,10 +76,10 @@ def models_from_settings(s: Settings) -> Models:
             external=False,
             unavailable=None,
             client=OpenAICompatClient(
-                base_url=s.llm_base_url, model=model, api_key=s.llm_api_key, http=local_http
+                base_url=s.local_base_url, model=model, api_key=s.local_api_key, http=local_http
             ),
         )
-        for model in dict.fromkeys((s.llm_model, *s.llm_models))
+        for model in dict.fromkeys(s.local_models)
     ]
     if s.openai_models:
         openai_http = httpx.AsyncClient(timeout=120.0)
@@ -119,6 +119,6 @@ def models_from_settings(s: Settings) -> Models:
             for model in dict.fromkeys(s.anthropic_models)
         ]
     try:
-        return Models(entries, parse_ref(s.default_model or f"local/{s.llm_model}"))
+        return Models(entries, parse_ref(s.default_model or f"local/{s.local_models[0]}"))
     except ValueError as exc:
         raise ValueError(f"DEFAULT_MODEL: {exc}") from None

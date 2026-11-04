@@ -121,5 +121,5 @@ report; keep every gate at its current strictness.
 - Each milestone is one Spec Kit feature: `speckit-specify` → `clarify` → `plan` → `tasks` →
   `implement`. Map every requirement to a test in `tasks.md`. Commit after each phase and task
   group; push to `origin` only when the owner asks.
-- `.env` holds `LLM_API_KEY`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; keep it out of git. All
+- `.env` holds `LOCAL_API_KEY`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; keep it out of git. All
   are passed to the tracer as secrets; never return a key or provider URL from the API.
