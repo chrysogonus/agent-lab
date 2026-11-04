@@ -2,15 +2,17 @@
 
 import re
 from collections.abc import Iterable
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import AfterValidator, Field, StringConstraints
+
+from agent_lab.llm.base import ProviderName
 
 RESERVED_NAMES = frozenset({"start", "end", "gate", "router", "merge"})
 
 LOCAL = "local"
 # Left out of the JSON when local, so local configs keep their M3 `config_version`.
-Provider = Annotated[Literal["local", "openai"], Field(exclude_if=lambda v: v == LOCAL)]
+Provider = Annotated[ProviderName, Field(exclude_if=lambda v: v == LOCAL)]
 
 Prompt = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]

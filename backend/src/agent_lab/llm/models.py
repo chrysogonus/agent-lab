@@ -1,14 +1,13 @@
 """The configured models: Local, OpenAI and Anthropic from the environment, one client each."""
 
 from dataclasses import dataclass
-from typing import Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_lab.config import Settings
 from agent_lab.llm.anthropic import AnthropicClient
-from agent_lab.llm.base import LLMClient
+from agent_lab.llm.base import LLMClient, ProviderName
 from agent_lab.llm.openai_compat import OpenAICompatClient
 
 LABELS = {"local": "Local", "openai": "OpenAI", "anthropic": "Anthropic"}
@@ -19,7 +18,7 @@ class ModelRef(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    provider: Literal["local", "openai", "anthropic"]
+    provider: ProviderName
     model: str = Field(min_length=1, max_length=200)
 
     def __str__(self) -> str:
@@ -113,6 +112,7 @@ def models_from_settings(s: Settings) -> Models:
                     base_url=s.anthropic_base_url,
                     model=model,
                     api_key=s.anthropic_api_key,
+                    workspace_id=s.anthropic_workspace_id,
                     http=anthropic_http,
                 ),
             )

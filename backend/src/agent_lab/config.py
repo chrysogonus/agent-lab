@@ -38,6 +38,7 @@ class Settings:
     anthropic_api_key: str = ""
     anthropic_models: tuple[str, ...] = ()
     anthropic_base_url: str = "https://api.anthropic.com/v1"
+    anthropic_workspace_id: str = ""  # only for keys not scoped to a workspace
     default_model: str = ""  # provider/model; "" means the first local model
     mcp_servers_file: str = ""  # "" means data/mcp.json, else the committed mcp.json
 
@@ -56,6 +57,7 @@ class Settings:
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             anthropic_models=_ids("ANTHROPIC_MODELS", "claude-sonnet-5-5"),
             anthropic_base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
+            anthropic_workspace_id=os.environ.get("ANTHROPIC_WORKSPACE_ID", ""),
             default_model=os.environ.get("DEFAULT_MODEL") or f"local/{local_models[0]}",
             mcp_servers_file=os.environ.get("MCP_SERVERS_FILE", ""),
         )

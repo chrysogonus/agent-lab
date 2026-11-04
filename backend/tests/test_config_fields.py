@@ -1,10 +1,11 @@
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from agent_lab.agents.config_fields import (
     BlockName,
     ItemName,
     Prompt,
+    Provider,
     ShortText,
     fill,
     known_tool,
@@ -83,3 +84,9 @@ def test_block_name_ok(name: str) -> None:
 def test_block_name_rejected(name: str) -> None:
     with pytest.raises(ValidationError):
         Named(name=name)
+
+
+@pytest.mark.parametrize("provider", ["local", "openai", "anthropic"])
+def test_every_model_provider_is_a_config_provider(provider: str) -> None:
+    """A config can name any provider the model list offers (one list for both)."""
+    assert TypeAdapter(Provider).validate_python(provider) == provider

@@ -54,6 +54,7 @@ Models of a provider without a key are listed as unavailable. Other settings:
 
 | Variable | Example | What it does |
 |---|---|---|
+| `ANTHROPIC_WORKSPACE_ID` | `wrkspc_…` | only for an Anthropic key not scoped to a workspace: the workspace to use (sent as `anthropic-workspace-id`) |
 | `OPENAI_REASONING_OFF` | `none` | `reasoning_effort` sent when an agent's thinking is off; empty sends nothing |
 | `AGENT_LAB_DB` | `data/agent_lab.db` | the SQLite file, relative to `backend/` |
 

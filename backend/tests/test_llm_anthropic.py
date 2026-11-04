@@ -329,3 +329,24 @@ async def test_answer_without_tools_after_a_tool_call() -> None:
     ]
     assert body["tool_choice"] == {"type": "none"}
     assert body["messages"][1] == {"role": "assistant", "content": [TOOL_USE]}
+
+
+@pytest.mark.anyio
+async def test_workspace_header_only_when_set() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return ok(answer({"type": "text", "text": "hi"}))
+
+    for workspace in ("wrkspc_1", ""):
+        client = AnthropicClient(
+            base_url="https://claude.test/v1",
+            model="claude-sonnet-5-5",
+            api_key=KEY,
+            workspace_id=workspace,
+            http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+        await client.chat([{"role": "user", "content": "hi"}], [])
+    assert seen[0].headers["anthropic-workspace-id"] == "wrkspc_1"
+    assert "anthropic-workspace-id" not in seen[1].headers

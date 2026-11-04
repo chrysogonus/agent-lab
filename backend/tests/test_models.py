@@ -119,6 +119,7 @@ NAMES = (
     "OPENAI_API_KEY",
     "ANTHROPIC_MODELS",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_WORKSPACE_ID",
 )
 
 
@@ -170,6 +171,12 @@ def test_local_settings_from_env(clean_env: pytest.MonkeyPatch) -> None:
         ("qwen3:8b", "qwen3:14b"),
     )
     assert s.default_model == "local/qwen3:8b"
+
+
+def test_anthropic_workspace_from_env(clean_env: pytest.MonkeyPatch) -> None:
+    assert Settings.from_env().anthropic_workspace_id == ""
+    clean_env.setenv("ANTHROPIC_WORKSPACE_ID", "wrkspc_1")
+    assert Settings.from_env().anthropic_workspace_id == "wrkspc_1"
 
 
 def test_old_names_are_reported() -> None:

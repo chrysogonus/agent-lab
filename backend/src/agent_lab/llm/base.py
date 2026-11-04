@@ -1,8 +1,11 @@
 """Provider-neutral model interface: OpenAI chat format, translated by each adapter."""
 
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 from pydantic import BaseModel
+
+# The model providers; model refs and agent configs both use this one list.
+ProviderName = Literal["local", "openai", "anthropic"]
 
 # OpenAI chat format: {"role": ..., "content": ..., "tool_calls"?: ..., "tool_call_id"?: ...}
 Message = dict[str, Any]

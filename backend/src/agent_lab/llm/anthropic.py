@@ -30,6 +30,7 @@ class AnthropicClient:
         base_url: str,
         model: str,
         api_key: str,
+        workspace_id: str = "",
         http: httpx.AsyncClient | None = None,
         timeout: float = 300.0,
     ) -> None:
@@ -41,6 +42,8 @@ class AnthropicClient:
             "anthropic-version": API_VERSION,
             "anthropic-beta": FALLBACK_BETA,
         }
+        if workspace_id:  # an organization-wide key must name the workspace to bill
+            self._headers["anthropic-workspace-id"] = workspace_id
         self._http = http or httpx.AsyncClient(timeout=timeout)
 
     async def aclose(self) -> None:
