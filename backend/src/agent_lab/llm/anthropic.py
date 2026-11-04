@@ -75,6 +75,20 @@ class AnthropicClient:
             body["system"] = system
         if tools:
             body["tools"] = [_tool(t) for t in tools]
+        elif used := _used_tools(turns):
+            # An answer without tools after tool calls: Claude needs those tools defined, so they
+            # are declared but not callable. Thinking blocks are dropped, since the tool list they
+            # were written with changed (the API would refuse them).
+            body["tools"] = [
+                {
+                    "name": name,
+                    "description": "Not available for this answer.",
+                    "input_schema": {"type": "object"},
+                }
+                for name in used
+            ]
+            body["tool_choice"] = {"type": "none"}
+            body["messages"] = [_without_thinking(turn) for turn in turns]
         try:
             response = await self._http.post(self._url, json=body, headers=self._headers)
         except httpx.HTTPError as exc:
@@ -139,6 +153,25 @@ def _assistant(message: Message) -> str | list[dict[str, Any]]:
             }
         )
     return blocks
+
+
+def _used_tools(turns: list[dict[str, Any]]) -> list[str]:
+    names = [
+        block["name"]
+        for turn in turns
+        if turn["role"] == "assistant" and isinstance(turn["content"], list)
+        for block in cast(list[dict[str, Any]], turn["content"])
+        if block["type"] == "tool_use"
+    ]
+    return list(dict.fromkeys(names))
+
+
+def _without_thinking(turn: dict[str, Any]) -> dict[str, Any]:
+    if turn["role"] != "assistant" or not isinstance(turn["content"], list):
+        return turn
+    blocks = cast(list[dict[str, Any]], turn["content"])
+    kept = [b for b in blocks if b["type"] not in ("thinking", "redacted_thinking")]
+    return {"role": "assistant", "content": kept}
 
 
 def _tool(tool: dict[str, Any]) -> dict[str, Any]:

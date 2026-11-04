@@ -303,3 +303,29 @@ def test_as_message_carries_blocks() -> None:
         "blocks": [{"type": "text", "text": "hi"}],
     }
     assert "blocks" not in ChatResponse(content="hi").as_message()
+
+
+@pytest.mark.anyio
+async def test_answer_without_tools_after_a_tool_call() -> None:
+    """The routing template's last call offers no tools after a tool call.
+
+    Claude needs the tools of earlier tool_use blocks defined, so they are declared and not
+    callable, and the thinking blocks go: a changed tool list would invalidate them.
+    """
+    client, seen = client_for(ok(answer({"type": "text", "text": "42"})))
+    messages: list[Message] = [
+        {"role": "user", "content": "6*7?"},
+        {"role": "assistant", "content": None, "blocks": [THINKING, TOOL_USE]},
+        {"role": "tool", "tool_call_id": "toolu_1", "content": "42"},
+    ]
+    await client.chat(messages, [])
+    body = body_of(seen[0])
+    assert body["tools"] == [
+        {
+            "name": "calculator",
+            "description": "Not available for this answer.",
+            "input_schema": {"type": "object"},
+        }
+    ]
+    assert body["tool_choice"] == {"type": "none"}
+    assert body["messages"][1] == {"role": "assistant", "content": [TOOL_USE]}
