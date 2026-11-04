@@ -350,3 +350,26 @@ async def test_workspace_header_only_when_set() -> None:
         await client.chat([{"role": "user", "content": "hi"}], [])
     assert seen[0].headers["anthropic-workspace-id"] == "wrkspc_1"
     assert "anthropic-workspace-id" not in seen[1].headers
+
+
+@pytest.mark.anyio
+async def test_haiku_has_no_between_tools_and_no_fallback() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return ok(answer({"type": "text", "text": "hi"}))
+
+    client = AnthropicClient(
+        base_url="https://claude.test/v1",
+        model="claude-haiku-5-5",
+        api_key=KEY,
+        http=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await client.chat([{"role": "user", "content": "hi"}], TOOLS, reasoning=False)
+    await client.chat([{"role": "user", "content": "hi"}], TOOLS)
+    off, on = body_of(seen[0]), body_of(seen[1])
+    assert off["thinking"] == {"type": "disabled"}
+    assert on["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert "fallbacks" not in off and "fallbacks" not in on
+    assert "anthropic-beta" not in seen[0].headers

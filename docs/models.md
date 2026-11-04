@@ -36,7 +36,7 @@ vLLM batches requests that arrive together, so parallel branches really run at t
 |---|---|
 | the local Qwen | `DEFAULT_MODEL=local/qwen3.5-9b` (also the default when unset) |
 | OpenAI | `DEFAULT_MODEL=openai/gpt-6-luna` and `OPENAI_API_KEY` |
-| Claude | `DEFAULT_MODEL=anthropic/claude-sonnet-5-5` and `ANTHROPIC_API_KEY` |
+| Claude | `DEFAULT_MODEL=anthropic/claude-haiku-5-5` (or `…/claude-sonnet-5-5`) and `ANTHROPIC_API_KEY` |
 
 `DEFAULT_MODEL` is the model of templates, "Default" agents and the village. A saved agent can
 also be pinned to any listed model in its settings. The backend refuses to start if
@@ -48,7 +48,7 @@ Each provider has the same three settings (defaults shown):
 |---|---|---|---|
 | `local` | `LOCAL_BASE_URL=http://localhost:8001/v1` | `LOCAL_MODELS=qwen3.5-9b` | `LOCAL_API_KEY` (empty for local servers) |
 | `openai` | `OPENAI_BASE_URL=https://api.openai.com/v1` | `OPENAI_MODELS=gpt-6-luna` | `OPENAI_API_KEY` |
-| `anthropic` | `ANTHROPIC_BASE_URL=https://api.anthropic.com/v1` | `ANTHROPIC_MODELS=claude-sonnet-5-5` | `ANTHROPIC_API_KEY` |
+| `anthropic` | `ANTHROPIC_BASE_URL=https://api.anthropic.com/v1` | `ANTHROPIC_MODELS=claude-haiku-5-5,claude-sonnet-5-5` | `ANTHROPIC_API_KEY` |
 
 Models of a provider without a key are listed as unavailable. Other settings:
 
@@ -69,12 +69,13 @@ what replaces it.
 - An agent on an OpenAI or Claude model sends its prompts and tool results to that provider.
   The village uses the default model too, so a running village on Claude costs money every turn.
 - **On Claude**, the lab sends:
-  - adaptive thinking with summaries shown in the trace; with **Model thinking** off, Claude's
-    lowest setting (`between_tools`), since Sonnet 5.5 cannot turn thinking off completely;
+  - adaptive thinking with summaries shown in the trace; with **Model thinking** off, thinking
+    disabled on Haiku 5.5, and Sonnet 5.5's lowest setting (`between_tools`), since Sonnet 5.5
+    cannot turn thinking off completely;
   - effort `medium` and at most 16,000 output tokens per call;
-  - server-side fallback: a request Claude declines for some safety reasons is answered by the
-    fallback model, and the span's model shows which one answered. Any other decline ends the
-    run with an error;
+  - on Sonnet 5.5, server-side fallback: a request Claude declines for some safety reasons is
+    answered by the fallback model, and the span's model shows which one answered. Haiku 5.5 has
+    no fallback. Any other decline ends the run with an error;
   - Claude's thinking blocks back unchanged with the tool calls they led to, as the API requires.
 - There are no retries yet: a rate limit or busy server ends the run with an error (M17).
 - Keys stay in `.env` (ignored by git), are removed from every span and are never returned by

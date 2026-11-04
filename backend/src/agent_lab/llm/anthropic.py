@@ -21,6 +21,12 @@ MAX_TOKENS = 16_000  # thinking counts toward it; non-streaming, so kept moderat
 EFFORT = "medium"  # the starting point for multistep tool use; valid with thinking off too
 # Claude's structured outputs refuse these keywords; pydantic still checks them afterwards.
 UNSUPPORTED = ("minLength", "maxLength", "minimum", "maximum", "multipleOf")
+# How each model turns thinking off: Sonnet 5.5 refuses "disabled", and "between_tools" is its
+# lowest setting; Haiku 5.5 takes "disabled". shortcut: Opus 5.5 and Fable refuse both; add them
+# here (keeping adaptive thinking) when the lab offers them.
+THINKING_OFF: dict[str, dict[str, str]] = {"claude-sonnet-5-5": {"type": "between_tools"}}
+# Models with server-side refusal fallback; Haiku 5.5 has none.
+WITH_FALLBACK = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"}
 
 
 class AnthropicClient:
@@ -37,11 +43,10 @@ class AnthropicClient:
         self.provider = "anthropic"
         self.model = model
         self._url = base_url.rstrip("/") + "/messages"
-        self._headers = {
-            "x-api-key": api_key,
-            "anthropic-version": API_VERSION,
-            "anthropic-beta": FALLBACK_BETA,
-        }
+        self._fallback = model in WITH_FALLBACK
+        self._headers = {"x-api-key": api_key, "anthropic-version": API_VERSION}
+        if self._fallback:
+            self._headers["anthropic-beta"] = FALLBACK_BETA
         if workspace_id:  # an organization-wide key must name the workspace to bill
             self._headers["anthropic-workspace-id"] = workspace_id
         self._http = http or httpx.AsyncClient(timeout=timeout)
@@ -65,15 +70,15 @@ class AnthropicClient:
             "model": self.model,
             "max_tokens": MAX_TOKENS,
             "messages": turns,
-            # Thinking can't be disabled on Sonnet 5.5; between_tools is its lowest setting.
             "thinking": (
-                {"type": "between_tools"}
+                THINKING_OFF.get(self.model, {"type": "disabled"})
                 if reasoning is False
                 else {"type": "adaptive", "display": "summarized"}
             ),
             "output_config": output,
-            "fallbacks": "default",  # a declined request is retried on the fallback model
         }
+        if self._fallback:
+            body["fallbacks"] = "default"  # a declined request is retried on the fallback model
         if system:
             body["system"] = system
         if tools:

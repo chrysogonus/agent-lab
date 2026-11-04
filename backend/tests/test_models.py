@@ -137,7 +137,10 @@ def test_env_defaults(clean_env: pytest.MonkeyPatch) -> None:
         ("qwen3.5-9b",),
         "",
     )
-    assert (s.openai_models, s.anthropic_models) == (("gpt-6-luna",), ("claude-sonnet-5-5",))
+    assert (s.openai_models, s.anthropic_models) == (
+        ("gpt-6-luna",),
+        ("claude-haiku-5-5", "claude-sonnet-5-5"),
+    )
     assert s.default_model == "local/qwen3.5-9b"
 
 
@@ -158,6 +161,7 @@ def test_default_model_switches_provider(clean_env: pytest.MonkeyPatch, default:
     assert [str(e.ref) for e in models.entries] == [
         "local/qwen3.5-9b",
         "openai/gpt-6-luna",
+        "anthropic/claude-haiku-5-5",
         "anthropic/claude-sonnet-5-5",
     ]
 

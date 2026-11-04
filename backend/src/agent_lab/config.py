@@ -55,7 +55,7 @@ class Settings:
             openai_base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_reasoning_off=os.environ.get("OPENAI_REASONING_OFF", "none"),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            anthropic_models=_ids("ANTHROPIC_MODELS", "claude-sonnet-5-5"),
+            anthropic_models=_ids("ANTHROPIC_MODELS", "claude-haiku-5-5,claude-sonnet-5-5"),
             anthropic_base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1"),
             anthropic_workspace_id=os.environ.get("ANTHROPIC_WORKSPACE_ID", ""),
             default_model=os.environ.get("DEFAULT_MODEL") or f"local/{local_models[0]}",
