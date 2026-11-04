@@ -33,8 +33,9 @@
 
 - The input was empty. The scope (test cases, budgets, retries and approvals) comes from the
   roadmap item and the recommendation the owner accepted; it is recorded under Assumptions.
-- Numbers chosen as defaults, to confirm or change in `/speckit-clarify`: default budget
-  (30 model calls, 200,000 tokens, 30 tool calls, 10 minutes), 2 retries with waits up to 30 s,
-  approval timeout of 10 minutes, at most 50 cases per agent and 10 attempts per case.
+- Numbers chosen as defaults, to confirm or change in `/speckit-clarify`: the default budget for
+  new agents (30 model calls, 200,000 tokens, 30 tool calls, 10 minutes; existing agents have
+  none), 2 retries with waits up to 30 s, approval timeout of 10 minutes, at most 50 cases per
+  agent and 10 attempts per case.
 - The spec uses the lab's own words (run, trace, model call, tool), as earlier specs do; it names
   no framework, storage or protocol.

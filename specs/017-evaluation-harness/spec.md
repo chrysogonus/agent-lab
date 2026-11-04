@@ -8,7 +8,7 @@
 
 **Input**: The roadmap item after M16: "the evaluation harness for the lab's other agents
 (budgets, retries, approvals)". The owner ran `/speckit-specify` with no further text after
-this recommendation: measure saved agents against test cases, and give every run budgets,
+this recommendation: measure saved agents against test cases, and give runs budgets,
 retries and approval steps before tool calls.
 
 ## Context
@@ -106,11 +106,13 @@ check and its reason, and a link to each run.
 
 ### User Story 2 - Budgets and stopping a run (Priority: P2)
 
-Every agent has a budget: the most model calls, tokens, tool calls and time a run may use. The
-owner sets it in the agent's settings; agents that have none get a default that no current
-agent reaches in a normal run. When a run uses up any part of its budget, it stops before its
-next step, with the state "over budget" and a reason saying which limit it reached. Its trace up
-to that point is kept.
+An agent can have a budget: the most model calls, tokens, tool calls and time a run may use.
+The owner sets it in the agent's settings. A new agent starts with the default budget filled
+in; agents saved before this milestone, and the templates, have none and run as before, until
+the owner gives them one. (A builder agent may have up to 30 blocks, loops and parallel
+branches, so no fixed default is safe for every existing agent.) When a run uses up any part
+of its budget, it stops before its next step, with the state "over budget" and a reason saying
+which limit it reached. Its trace up to that point is kept.
 
 The owner can stop any running run of a lab agent from its trace view. It ends with the state
 "stopped", and its trace up to that point is kept.
@@ -134,7 +136,7 @@ calls and the reason.
 4. **Given** a running run, **When** the owner presses Stop, **Then** the run ends as stopped
    within 2 seconds, and its trace shows every step taken until then.
 5. **Given** an agent saved before this milestone, **When** it runs its sample prompt, **Then** it
-   behaves as before: the default budget does not stop it.
+   behaves as before: it has no budget, and nothing stops it early.
 
 ---
 
@@ -262,10 +264,11 @@ second run that is approved writes the note.
   one evaluation MAY run at a time.
 - **FR-009**: Each template MUST come with at least two example cases that pass with the scripted
   fake model's sample behaviour.
-- **FR-010**: Every lab agent MUST have a budget of model calls, tokens, tool calls and time per
-  run, set in its settings. Without one, a default MUST apply: 30 model calls, 200,000 tokens,
-  30 tool calls and 10 minutes. The owner MAY raise each limit to 200 model calls, 2,000,000
-  tokens, 200 tool calls and 60 minutes.
+- **FR-010**: The owner MUST be able to give any saved lab agent a budget of model calls,
+  tokens, tool calls and time per run, in its settings, and to change or remove it. A new agent
+  MUST start with the default budget: 30 model calls, 200,000 tokens, 30 tool calls and 10
+  minutes. An agent without a budget MUST run as before. Each limit MAY be raised to 200 model
+  calls, 2,000,000 tokens, 200 tool calls and 60 minutes.
 - **FR-011**: A run that has used up any part of its budget MUST start no further step and MUST
   end in the state "over budget", with the limit reached and the amount used. A step in progress
   when the time budget runs out MUST be abandoned.
@@ -317,7 +320,7 @@ second run that is approved writes the note.
 ### Measurable Outcomes
 
 - **SC-001**: Every existing agent template and saved builder agent runs its sample prompt
-  unchanged under the default budget. The existing test suite passes.
+  unchanged. The existing test suite passes.
 - **SC-002**: The owner can write three cases for a saved agent and see their pass rates on the
   real model within 10 minutes, without leaving the lab's pages.
 - **SC-003**: No run makes a model call or a tool call after its budget is used up (100% of runs
@@ -345,6 +348,10 @@ second run that is approved writes the note.
 - **One at a time**: an evaluation runs its attempts one after another, and only one evaluation
   runs at a time. This keeps the hosted model within its rate limits and keeps the results easy
   to read.
+- **Budgets are opt-in for existing agents**: existing agents are already bounded by their own
+  loop limits (iterations, rounds, items), but a large builder agent can need more than any
+  fixed default allows. So only new agents start with a budget; the owner adds one to an older
+  agent when wanted.
 - **Budgets are checked between steps**: a single model call can take a run past its token
   budget, since the tokens are known only after the call. The run then stops before the next
   step. Time is the only limit that ends a step in progress.
