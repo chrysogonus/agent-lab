@@ -48,9 +48,10 @@ No test reaches a real model or an outside service.
    each on `anthropic/claude-haiku-5-5`. No run ends in a provider error. This is the first run of the
    template on this model, so a failure here may be about the model and not the harness; open the run
    before concluding.
-6. **The village warning** (FR-008): start the village on the same provider, then open the evaluation
-   start page. It warns, and the evaluation can still start. Afterwards check the village is still
-   running, unless repeated failures paused it.
+6. **The village warning** (FR-008): keep the Village view open in another tab, since the village pauses
+   itself with no viewer, and start it on the same provider. Then open the evaluation start page. It
+   warns, and the evaluation can still start. Afterwards check the village is still running, unless
+   repeated failures paused it.
 7. **A restart** (FR-022): start a long evaluation, stop the backend, and start it again. The evaluation
    shows as interrupted with the results it had.
 
@@ -79,5 +80,22 @@ browser asking for `/favicon.ico`, as it did before M17.
 - Stop a slow run: it ends as stopped.
 - Lower the budget to 1 model call and approve a call: it ends over budget, "model calls: 1 of 1".
 
-**Manual checks 1–7 on a real model**: not run yet. They spend the owner's money and need
-`ANTHROPIC_API_KEY`, so they wait for the owner's go-ahead (T038).
+## Manual check results (2026-11-05)
+
+On `anthropic/claude-haiku-5-5`, through the real pages in headless Chromium unless noted. They ran against
+a scratch backend, database, servers file and notes folder, so the owner's village was not touched. In all:
+46 model calls, 27,665 input and 1,818 output tokens (2 cancelled calls report none), no run ended in a
+provider error, and no call needed a retry.
+
+| Check | Result |
+|---|---|
+| 1. Three cases in 10 minutes (SC-002) | Passed. A new agent from the ReAct template had the default budget and its own copy of the examples. A third case and its results on the page took 4 s, all three at 100%. |
+| 2. Before and after (SC-006) | Passed. With a system prompt that answers only "banana" (changed through the API), every case read "worse: 100% → 0%" on the comparison, with both config versions, and without opening a run. Each failure named its check, for example "the answer does not contain '25': 'banana'". |
+| 3. Budget and Stop (SC-003) | Passed. A budget of 1 model call (set through the API) ended the run over budget, "model calls: 1 of 1", after the tool calls that model call had asked for. Stop on a long essay showed as stopped 122 ms after the click, with its trace kept. |
+| 4. Approvals (SC-005) | Passed with the real notes server. The run waited, with no note written, and the notice showed on the Tools page. Denying with "not now" gave the model "denied by the owner: not now", with no tool span and no note; the model said it could not save it. Approving wrote `capital.md` with the right text. |
+| 5. A real evaluation (SC-007) | Passed. The unchanged ReAct template's two examples, 5 attempts each, with thinking on: 10 of 10, no provider errors, no retries. It ran under the default budget, and the results said so. |
+| 6. The village warning (FR-008) | Passed. With the village running and a Village tab open, the start page warned, and an evaluation started and finished at 100% beside it. The village went on, at tick 3 with no failed ticks, and the warning cleared once it was paused. With no viewer the village pauses itself at once, so no warning shows. |
+| 7. A restart (FR-022) | Passed, with SIGTERM after 2 of 20 attempts. On disk the evaluation was still running with 1 live run. After the restart it showed as interrupted with its 2 passes kept, its run as interrupted, no approval open, and a new evaluation ran normally. |
+
+**Not exercised on a real provider**: retries. No call failed in these checks, so retries are tested only
+against mocked providers.

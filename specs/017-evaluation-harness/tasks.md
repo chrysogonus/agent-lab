@@ -416,7 +416,7 @@ it gives the model the denial as the tool's result; a second run that is approve
 - [X] T037 Review against the requirements in specs/017-evaluation-harness/tasks.md: every row of "Requirement → test" names a test that exists and
   passes; `git diff` shows no change to `backend/tests/golden/templates.json`; `make check` passes, and its exit code is 0.
 
-- [ ] T038 Manual checks 1–7 of specs/017-evaluation-harness/quickstart.md on `anthropic/claude-haiku-5-5` (SC-002, SC-006, SC-007); record results in
+- [X] T038 Manual checks 1–7 of specs/017-evaluation-harness/quickstart.md on `anthropic/claude-haiku-5-5` (SC-002, SC-006, SC-007); record results in
   quickstart.md. Commit "M17 manual check results".
   - **Spends the owner's money**, and needs `ANTHROPIC_API_KEY`. Ask the owner before running it. Use a scratch database and backend, as in M16's checks,
     so the owner's village stays untouched. Any check not run is recorded as not run, with why.
