@@ -1,10 +1,11 @@
 // Builder state: a draft custom agent and the edits on it. Pure; components stay thin.
 // Field names match the API's, so a 422 `loc` is a path into the draft.
-import type { AgentConfig, AgentFields, AgentInfo, FieldErrorDetail, ModelRef } from "./api";
+import type { AgentConfig, AgentFields, AgentInfo, Budget, FieldErrorDetail, ModelRef } from "./api";
 import { blockAt, findBlock } from "./blocks";
 
 export type Draft = {
   casesFrom: string | null; // a new agent copies this agent's or template's test cases
+  budget?: Budget | null; // unset: a new agent gets the default; null: no budget
   agentId: string | null; // null until the first save
   templateId: string;
   name: string;
@@ -44,6 +45,8 @@ export function copyName(name: string, names: string[]): string {
 export function draftFrom(source: AgentInfo, agents: AgentInfo[]): Draft {
   return {
     casesFrom: source.id,
+    // A template's null means it has none to give; a saved agent's is a choice a copy keeps.
+    budget: source.kind === "template" ? undefined : source.budget,
     agentId: null,
     templateId: source.template_id,
     name: copyName(source.name, agents.map((a) => a.name)),
@@ -58,6 +61,7 @@ export function draftFrom(source: AgentInfo, agents: AgentInfo[]): Draft {
 export function draftFromAgent(agent: AgentInfo): Draft {
   return {
     casesFrom: null,
+    budget: agent.budget,
     agentId: agent.id,
     templateId: agent.template_id,
     name: agent.name,
@@ -69,8 +73,9 @@ export function draftFromAgent(agent: AgentInfo): Draft {
   };
 }
 
-export function draftFields({ name, description, sample_prompt, config, model }: Draft): AgentFields {
-  return { name, description, sample_prompt, config, model };
+export function draftFields({ name, description, sample_prompt, config, model, budget }: Draft): AgentFields {
+  const fields = { name, description, sample_prompt, config, model };
+  return budget === undefined ? fields : { ...fields, budget };
 }
 
 export function getField(draft: Draft, path: Path): unknown {

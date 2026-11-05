@@ -1,5 +1,6 @@
 import type { ModelInfo, ToolInfo } from "@/lib/api";
 import type { Path, Section } from "@/lib/builder";
+import { BudgetFields } from "./BudgetFields";
 import { ModelSelect, NumberField, TextField, Toggle, type Form } from "./fields";
 import { ItemList, ToolPicker } from "./ItemList";
 
@@ -28,6 +29,7 @@ export function AgentSettings({
       <TextField form={form} path={["description"]} label="Description" />
       <TextField form={form} path={["sample_prompt"]} label="Sample prompt" multiline />
       <ModelSelect form={form} models={models} />
+      <BudgetFields form={form} />
       <Toggle
         form={form}
         path={["config", "reasoning"]}

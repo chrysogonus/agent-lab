@@ -252,13 +252,13 @@ reason, and a link to each run.
 **Independent Test**: give an agent a budget of 3 model calls and a scripted fake model that keeps calling tools. The
 run stops after 3 model calls as over budget, and the trace shows 3 model calls and the reason.
 
-- [ ] T019 [US2] Counting in backend/src/agent_lab/harness/guard.py, tests in backend/tests/test_budget.py (FR-011;
+- [X] T019 [US2] Counting in backend/src/agent_lab/harness/guard.py, tests in backend/tests/test_budget.py (FR-011;
   research §4).
   - `before_model_call()` and `before_tool_call()` count on start and raise `OverBudget` if the call would pass its
     limit; no await between check and count. `after_model_call` adds `tokens_in + tokens_out`, missing as 0.
   - Before each step, tokens at or past the limit raise too. The first reason reached stays: later calls raise it again.
 
-- [ ] T020 [US2] Consulting the guard in backend/src/agent_lab/agents/steps.py and the fix in
+- [X] T020 [US2] Consulting the guard in backend/src/agent_lab/agents/steps.py and the fix in
   backend/src/agent_lab/workflows/orchestrator.py, tests in backend/tests/test_budget.py and
   backend/tests/test_workflow_orchestrator.py.
   - `chat` calls `before_model_call` before its span; `call_tool` calls `before_tool_call` before its span.
@@ -268,7 +268,7 @@ run stops after 3 model calls as over budget, and the trace shows 3 model calls 
     number, the extra calls never go out, those under way finish and appear, and then the run ends. `parallel.py`, which
     swallows failed reviews, still ends as `over_budget`. Golden tests are unchanged.
 
-- [ ] T021 [US2] Ending over budget in backend/src/agent_lab/runs.py, with the clock in
+- [X] T021 [US2] Ending over budget in backend/src/agent_lab/runs.py, with the clock in
   backend/src/agent_lab/harness/guard.py, tests in backend/tests/test_budget.py (research §4, §5).
   - `execute_run` wraps the agent in `asyncio.timeout(budget.seconds)` when there is a budget and binds it to the guard.
     `pause_clock()` and `resume_clock()` use `reschedule`, counting open waits.
@@ -277,7 +277,7 @@ run stops after 3 model calls as over budget, and the trace shows 3 model calls 
   - The answer is the guard's `last_text`, and `stop_reason` the `OverBudget` reason.
   - Tests: scenarios 1–3 and 5 of User Story 2; an inner `TimeoutError` is not a time budget; no budget runs as before.
 
-- [ ] T022 [US2] Budgets through the API in backend/src/agent_lab/api.py, and Stop and limits in
+- [X] T022 [US2] Budgets through the API in backend/src/agent_lab/api.py, and Stop and limits in
   backend/src/agent_lab/api_harness.py, tests in backend/tests/test_agents_api.py and backend/tests/test_stop.py (FR-010,
   FR-012; research §12; contracts "Budgets and ask-first tools").
   - `AgentInfo` gains `budget` and `ask_first`. `POST /agents`: absent budget means the default, `null` means none. `PUT`:
@@ -290,13 +290,13 @@ run stops after 3 model calls as over budget, and the trace shows 3 model calls 
   - Tests: which budget each way of making an agent starts with; agents the village creates have none; an older agent keeps
     none; a stored-agent update without the field keeps it.
 
-- [ ] T023 [US2] Budgets in evaluations in backend/src/agent_lab/evaluation/runner.py, tests in
+- [X] T023 [US2] Budgets in evaluations in backend/src/agent_lab/evaluation/runner.py, tests in
   backend/tests/test_evaluation_runner.py (FR-003a; Clarification 1).
   - Each attempt's guard uses the copy's budget, or the default when the agent has none, with the agent itself unchanged.
   - Tests: such an attempt fails as over budget with a reason naming the default; a check expecting `over_budget` makes it
     pass; a judge's call does not count (FR-005); results mark the default.
 
-- [ ] T024 [US2] Budgets and Stop on the page in frontend/src/components/builder/BudgetFields.tsx,
+- [X] T024 [US2] Budgets and Stop on the page in frontend/src/components/builder/BudgetFields.tsx,
   frontend/src/components/builder/AgentSettings.tsx, frontend/src/components/RunViewer.tsx and frontend/src/lib/builder.ts,
   tests in frontend/src/lib/builder.test.ts.
   - `BudgetFields`: add, change or remove a budget, with defaults and limits from `GET /budget-limits`, read-only for

@@ -34,5 +34,5 @@ class OverBudget(Exception):
         return cls(f"{what}: {used:,} of {limit:,}")
 
     @classmethod
-    def of_time(cls, seconds: int) -> "OverBudget":
+    def of_time(cls, seconds: float) -> "OverBudget":
         return cls(f"time: {seconds:,} s of {seconds:,} s")

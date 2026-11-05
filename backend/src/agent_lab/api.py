@@ -35,11 +35,14 @@ from agent_lab.agents.registry import (
 )
 from agent_lab.api_errors import field_error
 from agent_lab.api_evaluations import add_evaluation_routes, copy_cases
+from agent_lab.api_harness import add_harness_routes
 from agent_lab.blocks.convert import to_blocks
 from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
 from agent_lab.evaluation.runner import Evaluations
 from agent_lab.graph import Graph
+from agent_lab.harness.budget import DEFAULT_BUDGET, Budget, Harness
+from agent_lab.harness.guard import RunGuard
 from agent_lab.harness.live import LiveRuns
 from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
 from agent_lab.mcp import jsonrpc
@@ -74,6 +77,8 @@ class AgentInfo(BaseModel):
     config: dict[str, Any]  # the editable fields, without the model
     model: ModelRef | None  # None: follows the default model (templates always)
     graph: Graph
+    budget: Budget | None = None  # None: nothing limits its runs (templates always)
+    ask_first: list[str] = []
 
 
 class ModelInfo(BaseModel):
@@ -101,6 +106,7 @@ class AgentFields(BaseModel):
     ]
     config: dict[str, Any]
     model: ModelRef | None = None  # None: follow the default model
+    budget: Budget | None = None  # absent: the default on a new agent, unchanged on an update
 
 
 class NewAgent(AgentFields):
@@ -201,6 +207,7 @@ def create_app(
         store=store, models=models, host=host, bus=bus, secrets=secrets, live=live
     )
     add_evaluation_routes(app, store, evaluations, village)
+    add_harness_routes(app, store, live)
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
     def checked_config(template_id: str, raw: dict[str, Any]) -> BaseModel:
@@ -240,8 +247,12 @@ def create_app(
             raise field_error(("body", "model"), str(exc)) from None
         return {**editable(config), "model": model.model, "provider": model.provider}
 
+    def harness_of(agent: CustomAgent | None) -> Harness:
+        return Harness.model_validate(agent.harness if agent and agent.harness else {})
+
     def custom_info(agent: CustomAgent) -> AgentInfo:
         config = validate_config(agent.template_id, agent.config, models.default)
+        harness = harness_of(agent)
         return AgentInfo(
             id=agent.agent_id,
             kind="custom",
@@ -252,6 +263,8 @@ def create_app(
             config=editable(config),
             model=pinned(agent.config),
             graph=KINDS[agent.template_id].graph(config),
+            budget=harness.budget,
+            ask_first=harness.ask_first,
         )
 
     def saved(agent: CustomAgent | None) -> AgentInfo:
@@ -365,11 +378,13 @@ def create_app(
             config=editable(config),
             model=None,
             graph=BLOCKS.graph(config),
+            budget=DEFAULT_BUDGET,
         )
 
     @app.get("/agents/{agent_id}/blocks")
     async def open_as_blocks(agent_id: str) -> AgentInfo:
         """An unsaved block copy of a template or template-based agent ("Open as blocks")."""
+        harness = Harness(budget=DEFAULT_BUDGET)  # what a new agent starts with
         if agent_id in AGENTS:
             spec = AGENTS[agent_id]
             stored: dict[str, Any] = {}
@@ -382,6 +397,7 @@ def create_app(
                 raise HTTPException(status_code=409, detail="already a block agent")
             spec, stored = AGENTS[agent.template_id], agent.config
             name, description, sample_prompt = agent.name, agent.description, agent.sample_prompt
+            harness = harness_of(agent)
         model = pinned(stored)
         source = validate_config(spec.id, stored, models.default)
         pinned_keys = {"model": model.model, "provider": model.provider} if model else {}
@@ -402,6 +418,8 @@ def create_app(
             config=editable(config),
             model=model,
             graph=BLOCKS.graph(config),
+            budget=harness.budget,
+            ask_first=harness.ask_first,
         )
 
     @app.post("/agents", status_code=status.HTTP_201_CREATED)
@@ -410,6 +428,7 @@ def create_app(
         source = body.cases_from
         if source and source not in AGENTS and store.get_agent(source) is None:
             raise field_error(("body", "cases_from"), f"unknown agent {source!r}")
+        budget = body.budget if "budget" in body.model_fields_set else DEFAULT_BUDGET
         try:
             agent = store.create_agent(
                 template_id=body.template_id,
@@ -417,6 +436,7 @@ def create_app(
                 description=body.description,
                 sample_prompt=body.sample_prompt,
                 config=stored_config(config, body.model),
+                harness=Harness(budget=budget).model_dump(),
             )
         except NameInUse:
             raise field_error(("body", "name"), "name already in use") from None
@@ -430,6 +450,9 @@ def create_app(
         if current is None:
             raise HTTPException(status_code=404, detail="unknown custom agent")
         config = checked_config(current.template_id, body.config)
+        harness = harness_of(current)
+        if "budget" in body.model_fields_set:
+            harness = harness.model_copy(update={"budget": body.budget})
         try:
             return saved(
                 store.update_agent(
@@ -438,6 +461,7 @@ def create_app(
                     description=body.description,
                     sample_prompt=body.sample_prompt,
                     config=stored_config(config, body.model),
+                    harness=harness.model_dump(),
                 )
             )
         except NameInUse:
@@ -478,7 +502,10 @@ def create_app(
         run_secrets = (*secrets, *host.secrets())  # the servers file's keys too
         run.prompt = redact(run.prompt, run_secrets)
         run.config = redact(run.config, run_secrets)
+        harness = harness_of(store.get_agent(body.agent_id))
+        run.harness = {**harness.model_dump(), "default_budget": False}
         store.create_run(run)
+        guard = RunGuard(harness)
         task = asyncio.create_task(
             execute_run(
                 run=run,
@@ -490,10 +517,13 @@ def create_app(
                 bus=bus,
                 secrets=run_secrets,
                 tools=tools,
+                guard=guard,
             )
         )
         tasks.add(task)
         task.add_done_callback(tasks.discard)
+        live.add(run.run_id, task, guard)
+        task.add_done_callback(lambda _: live.remove(run.run_id))
         return run
 
     @app.get("/runs")

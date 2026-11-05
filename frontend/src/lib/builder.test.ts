@@ -23,6 +23,8 @@ const graph: Graph = { nodes: [], edges: [] };
 
 function agent(overrides: Partial<AgentInfo>): AgentInfo {
   return {
+    budget: null,
+    ask_first: [],
     id: "routing",
     kind: "template",
     template_id: "routing",
@@ -75,6 +77,7 @@ describe("drafts", () => {
       sample_prompt: "2**10?",
       config: draft.config,
       model: null,
+      budget: null, // M17: reopening an agent without a budget must not give it the default
     });
   });
 
@@ -241,5 +244,32 @@ describe("the cases a new agent starts with", () => {
 
   it("are left alone when an agent is reopened", () => {
     expect(draftFromAgent(agent({ id: "custom-1", kind: "custom" })).casesFrom).toBeNull();
+  });
+});
+
+describe("the budget a draft saves", () => {
+  const budget = { model_calls: 5, tokens: 1000, tool_calls: 5, seconds: 60 };
+
+  it("leaves a template's unset, so the server gives a new agent the default", () => {
+    const draft = draftFrom(agent({ kind: "template", budget: null }), []);
+    expect(draft.budget).toBeUndefined();
+    expect("budget" in draftFields(draft)).toBe(false);
+  });
+
+  it("copies a saved agent's, and also its having none", () => {
+    expect(draftFields(draftFrom(agent({ kind: "custom", budget }), [])).budget).toEqual(budget);
+    const none = draftFields(draftFrom(agent({ kind: "custom", budget: null }), []));
+    expect(none.budget).toBeNull(); // sent as null: "no budget", not "the default"
+  });
+
+  it("keeps an agent's when it is reopened", () => {
+    expect(draftFromAgent(agent({ kind: "custom", budget })).budget).toEqual(budget);
+  });
+
+  it("can be changed like any other field", () => {
+    const draft = draftFromAgent(agent({ kind: "custom", budget }));
+    const edited = setField(draft, ["budget", "tokens"], 2000);
+    expect(draftFields(edited).budget).toEqual({ ...budget, tokens: 2000 });
+    expect(draftFields(setField(draft, ["budget"], null)).budget).toBeNull();
   });
 });

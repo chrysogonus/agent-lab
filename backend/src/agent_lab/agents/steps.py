@@ -67,6 +67,9 @@ async def chat(
 ) -> ChatResponse:
     model = ctx.llm.model
     extra = {"gen_ai.request.response_format": response_format} if response_format else {}
+    guard = current_guard.get()
+    if guard:
+        guard.before_model_call()
     async with ctx.tracer.span(
         SpanKind.LLM,
         f"chat {model}",
@@ -104,7 +107,7 @@ async def chat(
                 "gen_ai.usage.cache_read.input_tokens": response.tokens_cache_read,
                 "gen_ai.usage.cache_creation.input_tokens": response.tokens_cache_write,
             }
-    if guard := current_guard.get():
+    if guard:
         guard.after_model_call(response)
     return response
 
@@ -124,6 +127,9 @@ async def call_tool(
     `tool:<config name>` node (a block agent's tool-call block).
     """
     tool = tools.get(call.name)
+    guard = current_guard.get()
+    if guard and tool:
+        guard.before_tool_call()  # before the span: a tool span means the tool was called
     async with ctx.tracer.span(
         SpanKind.TOOL,
         f"execute_tool {tool.config_name if tool else call.name}",

@@ -223,6 +223,12 @@ class Evaluations:
         spans = self.store.get_spans(run.run_id)
         results = [await self._check(check, done, spans, evaluation) for check in case.checks]
         outcome, reason = attempt_outcome(done, results)
+        if (
+            outcome == "fail"
+            and done.status == "over_budget"
+            and evaluation.harness["default_budget"]
+        ):
+            reason = f"{reason} (the default budget)"  # the agent itself has none: say whose it was
         totals = done.totals
         self.store.add_attempt(
             Attempt(

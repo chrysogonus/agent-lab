@@ -268,6 +268,8 @@ def test_templates_and_m3_agents_unchanged(store: Store) -> None:
             "config",
             "model",
             "graph",
+            "budget",  # M17
+            "ask_first",  # M17
         }
         for a in agents
     )

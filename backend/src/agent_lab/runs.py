@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from agent_lab.agents.registry import AGENTS, KINDS, AgentSpec, model_of, validate_config
 from agent_lab.agents.steps import config_version
 from agent_lab.bus import Bus
+from agent_lab.harness.budget import OverBudget
 from agent_lab.harness.guard import RunGuard, current_guard
 from agent_lab.llm.base import LLMClient
 from agent_lab.llm.models import ModelRef, Models
@@ -140,11 +141,23 @@ async def execute_run(
     status: RunStatus = "error"
     answer: str | None = None
     stop_reason: str | None = None
+    budget = guard.harness.budget if guard else None
+    clock = asyncio.timeout(budget.seconds if budget else None)
     token = current_guard.set(guard)  # also to None: a village run never inherits a guard
     try:
         agent = spec.create(llm, config, tracer, tools or {})
-        result = await agent.run(prompt)
+        async with clock:
+            if guard:
+                guard.bind_clock(clock)
+            result = await agent.run(prompt)
         status, answer = result.status, result.answer
+    except OverBudget:
+        pass  # the guard knows, and the open spans recorded it
+    except TimeoutError:
+        if budget and guard and clock.expired():
+            guard.over = guard.over or OverBudget.of_time(budget.seconds).reason
+        else:  # from inside the agent: a failure like any other
+            log.exception("run %s failed", run.run_id)
     except asyncio.CancelledError:
         if guard is None or not guard.stop_requested:
             raise  # not the owner's Stop: a shutting-down server must see its task end
@@ -157,6 +170,9 @@ async def execute_run(
         log.exception("run %s failed", run.run_id)
     finally:
         current_guard.reset(token)
+    if guard and guard.over and status != "stopped":
+        # The guard first: some workflows swallow a failed branch and report something else.
+        status, answer, stop_reason = "over_budget", answer or guard.last_text, guard.over
     store.finish_run(
         run.run_id, status, redact(answer, secrets), tracer.now(), stop_reason=stop_reason
     )

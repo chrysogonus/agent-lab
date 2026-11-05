@@ -2,6 +2,7 @@ import pytest
 from helpers import answer, assert_trace_valid, ended, json_answer, make_tracer
 
 from agent_lab.agents.steps import Outcome
+from agent_lab.llm.base import ChatResponse, LLMError, Message
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.tracing.span import Span
 from agent_lab.workflows.orchestrator import AGENT_ID, Config, OrchestratorWorkflow, build_graph
@@ -123,3 +124,27 @@ async def test_plan_above_limit_invalid() -> None:
 
     assert outcome.status == "error"
     assert not [s for s in spans if s.node_id == "worker"]
+
+
+@pytest.mark.anyio
+async def test_a_failing_worker_leaves_no_other_worker_running() -> None:
+    """A run must not end while a sibling call is still out (FR-011)."""
+
+    def fails_or_answers(messages: list[Message]) -> ChatResponse | Exception:
+        if "first" in (messages[-1]["content"] or ""):
+            return LLMError("HTTP 400: refused")
+        return answer("part")
+
+    llm = FakeLLM(
+        [json_answer({"subtasks": ["first", "second"]}), fails_or_answers, fails_or_answers],
+        delay=0.01,
+    )
+    tracer, events = make_tracer(AGENT_ID)
+    workflow = OrchestratorWorkflow(llm=llm, config=Config(model=llm.model), tracer=tracer)
+
+    with pytest.raises(LLMError):
+        await workflow.run("A note")
+
+    started = {s.span_id for e, s in events if e == "span_started"}
+    ended = {s.span_id for e, s in events if e == "span_ended"}
+    assert started == ended

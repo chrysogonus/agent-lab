@@ -103,7 +103,14 @@ class OrchestratorWorkflow:
         except DecisionError as exc:
             return Outcome("error", None, ["orchestrator"], str(exc))  # no safe default plan
         subtasks: list[str] = plan.model_dump()["subtasks"]
-        parts = await asyncio.gather(*(self._work(i, s, prompt) for i, s in enumerate(subtasks)))
+        results = await asyncio.gather(
+            *(self._work(i, s, prompt) for i, s in enumerate(subtasks)), return_exceptions=True
+        )
+        parts: list[str] = []
+        for result in results:  # every call has ended, so none outlives the run
+            if isinstance(result, BaseException):
+                raise result
+            parts.append(result)
         body = "\n\n".join(
             f"Part {i + 1}: {s}\n{p}" for i, (s, p) in enumerate(zip(subtasks, parts, strict=True))
         )

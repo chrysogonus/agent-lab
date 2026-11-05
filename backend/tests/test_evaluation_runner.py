@@ -342,3 +342,61 @@ async def test_the_default_budget_is_recorded_for_an_agent_without_one(tmp_path:
     run = store.get_run(attempt.run_id)
     assert run is not None
     assert run.harness == finished.harness
+
+
+BIG = ChatResponse(content="right", tokens_in=300_000, tokens_out=1)
+
+
+async def test_an_agent_without_a_budget_is_held_to_the_default_in_an_evaluation(
+    tmp_path: Path,
+) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = saved_agent(store)
+    store.create_case(agent.agent_id, fields("Good", "a good prompt"))
+
+    evaluation = await lab(store, fake_models(FakeLLM([BIG]))).start(agent.agent_id, repeats=1)
+    await done(store, evaluation)
+
+    attempt = store.attempts(evaluation.eval_id)[0]
+    assert attempt.outcome == "fail"
+    assert attempt.reason == (
+        "the run ended over_budget: tokens: 300,001 of 200,000 (the default budget)"
+    )
+    assert store.get_agent(agent.agent_id) is not None
+
+
+async def test_a_check_expecting_the_budget_to_run_out_makes_it_a_pass(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = saved_agent(store)
+    ends_over = {"kind": "end_state", "state": "over_budget"}
+    store.create_case(agent.agent_id, fields("Over", "a good prompt", checks=[ends_over]))
+
+    evaluation = await lab(store, fake_models(FakeLLM([BIG]))).start(agent.agent_id, repeats=1)
+    await done(store, evaluation)
+
+    assert store.attempts(evaluation.eval_id)[0].outcome == "pass"
+
+
+async def test_the_judges_call_does_not_count_against_the_agents_budget(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = store.create_agent(
+        template_id="react",
+        name="One call",
+        description="",
+        sample_prompt="hi",
+        config={"reasoning": False},
+        harness={
+            "budget": {"model_calls": 1, "tokens": 1000, "tool_calls": 1, "seconds": 60},
+            "ask_first": [],
+        },
+    )
+    judged = {"kind": "judge", "question": "Is it right?"}
+    store.create_case(agent.agent_id, fields("Judged", "a good prompt", checks=[judged]))
+    llm = FakeLLM([answer("right"), json_answer({"answer": "yes"})])
+
+    evaluation = await lab(store, fake_models(llm)).start(agent.agent_id, repeats=1)
+    finished = await done(store, evaluation)
+
+    assert store.attempts(evaluation.eval_id)[0].outcome == "pass"
+    assert finished.harness["default_budget"] is False
+    assert finished.harness["budget"]["model_calls"] == 1

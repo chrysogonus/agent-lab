@@ -188,6 +188,8 @@ describe("agentPreview and agentName", () => {
       config: {},
       model: null,
       graph,
+      budget: null,
+      ask_first: [],
     },
   ];
 

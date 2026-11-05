@@ -7,9 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from helpers import answer, fake_models, lab_tools, tool_call
+from test_api import BASE, ORIGIN, WS_BASE, read_until_run_ended
 
 from agent_lab.agents.registry import config_tools
+from agent_lab.api import create_app
 from agent_lab.bus import Bus
 from agent_lab.harness.budget import Harness
 from agent_lab.harness.guard import RunGuard, current_guard
@@ -20,8 +23,6 @@ from agent_lab.mcp.client import CallResult
 from agent_lab.mcp.host import HostTool
 from agent_lab.runs import execute_run, new_run
 from agent_lab.store import Run, Store
-
-pytestmark = pytest.mark.anyio
 
 
 class HangsAfter(FakeLLM):
@@ -76,6 +77,7 @@ def start(
     return run, task
 
 
+@pytest.mark.anyio
 async def test_stop_ends_parallel_branches_within_two_seconds_and_keeps_the_trace(
     tmp_path: Path,
 ) -> None:
@@ -100,6 +102,7 @@ async def test_stop_ends_parallel_branches_within_two_seconds_and_keeps_the_trac
     assert all(s.ended_at is not None for s in spans)
 
 
+@pytest.mark.anyio
 async def test_a_stopped_run_keeps_the_text_it_had(tmp_path: Path) -> None:
     store = Store(tmp_path / "lab.db")
     guard = RunGuard(Harness())
@@ -118,6 +121,7 @@ async def test_a_stopped_run_keeps_the_text_it_had(tmp_path: Path) -> None:
     assert stored.answer == "Let me work that out."
 
 
+@pytest.mark.anyio
 async def test_stop_during_a_tool_call_says_the_answer_was_not_awaited(tmp_path: Path) -> None:
     store = Store(tmp_path / "lab.db")
     guard = RunGuard(Harness())
@@ -141,6 +145,7 @@ async def test_stop_during_a_tool_call_says_the_answer_was_not_awaited(tmp_path:
     assert tool.error == "stopped; the tool's answer was not awaited"
 
 
+@pytest.mark.anyio
 async def test_a_cancel_nobody_asked_for_still_cancels(tmp_path: Path) -> None:
     """A server shutting down must not see its task swallow the cancellation."""
     store = Store(tmp_path / "lab.db")
@@ -156,6 +161,7 @@ async def test_a_cancel_nobody_asked_for_still_cancels(tmp_path: Path) -> None:
     assert stored.status == "running"
 
 
+@pytest.mark.anyio
 async def test_steps_see_the_runs_guard_and_a_run_without_one_sees_none(tmp_path: Path) -> None:
     store = Store(tmp_path / "lab.db")
     seen: list[RunGuard | None] = []
@@ -181,6 +187,7 @@ async def test_steps_see_the_runs_guard_and_a_run_without_one_sees_none(tmp_path
     assert seen == [guard, None]
 
 
+@pytest.mark.anyio
 async def test_only_a_live_run_can_be_stopped(tmp_path: Path) -> None:
     store = Store(tmp_path / "lab.db")
     guard = RunGuard(Harness())
@@ -192,3 +199,33 @@ async def test_only_a_live_run_can_be_stopped(tmp_path: Path) -> None:
     await task
     live.remove(run.run_id)
     assert live.stop(run.run_id) is False
+
+
+def test_the_owner_stops_a_live_run_through_the_api(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    app = create_app(store=store, models=fake_models(HangsAfter([])))
+    with TestClient(app, base_url=BASE) as client:
+        run = client.post("/runs", json={"prompt": "hi", "agent_id": "react"}).json()
+        with client.websocket_connect(
+            f"{WS_BASE}/runs/{run['run_id']}/stream", headers={"origin": ORIGIN}
+        ) as ws:
+            assert ws.receive_json()["type"] == "span_started"  # it is under way
+            began = time.monotonic()
+            stopped = client.post(f"/runs/{run['run_id']}/stop")
+            assert stopped.status_code == 202
+            ended = read_until_run_ended(ws)[-1]["run"]
+        assert time.monotonic() - began < 2
+        assert ended["status"] == "stopped"
+        assert ended["stop_reason"] == "stopped by the owner"
+        assert client.post(f"/runs/{run['run_id']}/stop").status_code == 409  # already ended
+
+
+def test_stopping_what_is_not_a_live_lab_run_is_refused(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    turn, _, _, _ = new_run("hi", "react", fake_models(FakeLLM([])), store, village_tick=3)
+    store.create_run(turn)
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM([]))), base_url=BASE
+    ) as client:
+        assert client.post("/runs/nobody/stop").status_code == 404
+        assert client.post(f"/runs/{turn.run_id}/stop").status_code == 409

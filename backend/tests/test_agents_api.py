@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from helpers import answer, fake_models
+from helpers import answer, fake_models, tool_call
 from test_api import BASE, ORIGIN, WS_BASE, GatedLLM, final_spans, read_until_run_ended
 from test_templates import CASES
 
@@ -528,3 +528,135 @@ def test_run_rejected_when_pinned_model_unusable(store: Store, removed: str, mes
     }
     assert runs == []
     assert listed["model"] == LUNA  # still listed with its model, shown as unavailable
+
+
+# --- budgets (M17, FR-010) ---
+
+DEFAULTS = {"model_calls": 30, "tokens": 200_000, "tool_calls": 30, "seconds": 600}
+SMALL = {"model_calls": 1, "tokens": 1000, "tool_calls": 1, "seconds": 60}
+
+
+def agent_body(name: str = "Budgeted", **fields: Any) -> dict[str, Any]:
+    return {
+        "template_id": "react",
+        "name": name,
+        "sample_prompt": "hi",
+        "config": {"reasoning": False},
+        **fields,
+    }
+
+
+@pytest.fixture
+def budget_client(tmp_path: Path) -> Any:
+    store = Store(tmp_path / "lab.db")
+    llm = FakeLLM([answer("done")] * 5)
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
+        yield client
+
+
+def test_a_new_agent_starts_with_the_default_budget(budget_client: TestClient) -> None:
+    assert budget_client.post("/agents", json=agent_body()).json()["budget"] == DEFAULTS
+
+
+def test_a_new_agent_can_ask_for_no_budget_or_its_own(budget_client: TestClient) -> None:
+    none = budget_client.post("/agents", json=agent_body("None", budget=None)).json()
+    own = budget_client.post("/agents", json=agent_body("Own", budget=SMALL)).json()
+    assert none["budget"] is None
+    assert own["budget"] == SMALL
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {**SMALL, "model_calls": 0},
+        {**SMALL, "tokens": 2_000_001},
+        {**SMALL, "seconds": 3_601},
+        {"model_calls": 1},
+    ],
+)
+def test_a_budget_outside_the_limits_is_refused(
+    budget_client: TestClient, bad: dict[str, int]
+) -> None:
+    assert budget_client.post("/agents", json=agent_body(budget=bad)).status_code == 422
+
+
+def test_an_update_without_a_budget_leaves_it_and_null_removes_it(
+    budget_client: TestClient,
+) -> None:
+    agent = budget_client.post("/agents", json=agent_body(budget=SMALL)).json()
+    fields = {k: agent_body()[k] for k in ("name", "sample_prompt", "config")}
+    url = f"/agents/{agent['id']}"
+    assert budget_client.put(url, json=fields).json()["budget"] == SMALL
+    assert budget_client.put(url, json={**fields, "budget": DEFAULTS}).json()["budget"] == DEFAULTS
+    assert budget_client.put(url, json={**fields, "budget": None}).json()["budget"] is None
+    assert budget_client.put(url, json=fields).json()["budget"] is None
+
+
+def test_templates_have_no_budget(budget_client: TestClient) -> None:
+    templates = [a for a in budget_client.get("/agents").json() if a["kind"] == "template"]
+    assert templates
+    assert all(a["budget"] is None and a["ask_first"] == [] for a in templates)
+
+
+def test_the_limits_are_served(budget_client: TestClient) -> None:
+    assert budget_client.get("/budget-limits").json() == {
+        "default": DEFAULTS,
+        "max": {"model_calls": 200, "tokens": 2_000_000, "tool_calls": 200, "seconds": 3_600},
+    }
+
+
+def test_unsaved_block_agents_carry_the_budget_a_save_should_keep(
+    budget_client: TestClient,
+) -> None:
+    assert budget_client.get("/blocks/new").json()["budget"] == DEFAULTS
+    assert budget_client.get("/agents/react/blocks").json()["budget"] == DEFAULTS
+    limited = budget_client.post("/agents", json=agent_body("L", budget=SMALL)).json()
+    unlimited = budget_client.post("/agents", json=agent_body("U", budget=None)).json()
+    assert budget_client.get(f"/agents/{limited['id']}/blocks").json()["budget"] == SMALL
+    assert budget_client.get(f"/agents/{unlimited['id']}/blocks").json()["budget"] is None
+
+
+def test_an_agent_saved_before_budgets_has_none_and_nothing_stops_it(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    old = store.create_agent(
+        template_id="react",
+        name="Old",
+        description="",
+        sample_prompt="hi",
+        config={"reasoning": False},
+    )
+    llm = FakeLLM([answer("done")])
+    with TestClient(create_app(store=store, models=fake_models(llm)), base_url=BASE) as client:
+        assert client.get("/agents").json()[-1]["budget"] is None
+        run = client.post("/runs", json={"prompt": "hi", "agent_id": old.agent_id}).json()
+        with client.websocket_connect(
+            f"{WS_BASE}/runs/{run['run_id']}/stream", headers={"origin": ORIGIN}
+        ) as ws:
+            ended = read_until_run_ended(ws)[-1]["run"]
+    assert ended["status"] == "completed"
+    assert ended["harness"]["budget"] is None
+
+
+def test_a_run_ends_at_its_agents_budget_and_records_it(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    script = [tool_call("calculator", '{"expression": "1"}')] * 5
+    with TestClient(
+        create_app(store=store, models=fake_models(FakeLLM(list(script)))), base_url=BASE
+    ) as client:
+        agent = client.post("/agents", json=agent_body(budget=SMALL)).json()
+        run = client.post("/runs", json={"prompt": "hi", "agent_id": agent["id"]}).json()
+        with client.websocket_connect(
+            f"{WS_BASE}/runs/{run['run_id']}/stream", headers={"origin": ORIGIN}
+        ) as ws:
+            ended = read_until_run_ended(ws)[-1]["run"]
+    assert ended["status"] == "over_budget"
+    assert ended["stop_reason"] == "model calls: 1 of 1"  # the tool call was within its limit
+    assert ended["harness"]["budget"] == SMALL
+
+
+def test_agents_the_village_makes_have_no_budget(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    app = create_app(store=store, models=fake_models(FakeLLM([])))
+    village = app.state.village
+    village.ensure_agents()
+    assert all(agent.harness is None for agent in store.list_agents())

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Run } from "@/lib/api";
+import { stopRun, type Run } from "@/lib/api";
 import { runModel } from "@/lib/models";
 import { activeNodes, formatTotals, isLive, runTotals, takenEdges } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
@@ -58,6 +58,15 @@ export function RunViewer({
             </span>
             {runModel(run) && <span className="text-sm text-ink">{runModel(run)}</span>}
             <span className="text-sm text-muted">{formatTotals(runTotals(view.spans, run, now))}</span>
+            {isLive(status) && run.village_tick == null && (
+              <button
+                type="button"
+                onClick={() => void stopRun(run.run_id).catch(() => {})} // it may have just ended
+                className="text-sm font-semibold text-fault hover:underline focus-visible:outline-2 focus-visible:outline-llm"
+              >
+                Stop
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"

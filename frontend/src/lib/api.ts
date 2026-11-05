@@ -281,6 +281,8 @@ export type AgentInfo = {
   config: AgentConfig;
   model: ModelRef | null; // null: follows the default model (templates always)
   graph: Graph;
+  budget: Budget | null; // null: nothing limits its runs (templates always)
+  ask_first: string[];
 };
 
 export type ToolInfo = {
@@ -354,6 +356,7 @@ export type AgentFields = {
   sample_prompt: string;
   config: AgentConfig;
   model: ModelRef | null;
+  budget?: Budget | null; // absent: the default on a new agent, unchanged on an update
 };
 
 export type FieldErrorDetail = { loc: (string | number)[]; msg: string };
@@ -637,3 +640,6 @@ export const compareEvaluations = (earlier: string, later: string): Promise<Comp
   );
 export const evaluationNotice = (provider: string): Promise<{ village_shares_provider: boolean }> =>
   send("GET", `/evaluations/notice?provider=${encodeURIComponent(provider)}`);
+
+export const budgetLimits = (): Promise<{ default: Budget; max: Budget }> => send("GET", "/budget-limits");
+export const stopRun = (runId: string): Promise<Run> => send("POST", `/runs/${encodeURIComponent(runId)}/stop`);

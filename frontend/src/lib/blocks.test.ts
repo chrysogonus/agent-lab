@@ -52,6 +52,8 @@ function draft(blocks: Block[]): Draft {
     config: { reasoning: false, blocks },
     model: null,
     graph: { nodes: [], edges: [] },
+    budget: null,
+    ask_first: [],
   };
   return draftFromAgent(agent);
 }
