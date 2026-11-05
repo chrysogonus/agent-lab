@@ -49,6 +49,30 @@ The roadmap after M17:
 - M18 agent memory for the lab's other agents;
 - M19 RAG.
 
+## Clarifications
+
+### Session 2026-11-05
+
+- Q: When an evaluation runs an agent that has no budget (any template, or an agent saved before
+  M17), what should limit each attempt? → A: Each attempt uses the default budget, and the
+  results say so. Ordinary runs stay unlimited, and an attempt that hits the limit fails as over
+  budget.
+- Q: What should happen to the example test cases that ship with each template when the owner
+  wants to change them, or saves a new agent from that template? → A: Examples on a template are
+  read-only and update with the lab, and the owner can add their own cases beside them. A new
+  agent saved from a template starts with its own editable copy of the examples, and copying a
+  saved agent copies its cases.
+- Q: When parts of a run work at the same time and the budget runs out, what should happen to the
+  calls already under way in the other branches? → A: Model and tool calls count when they
+  start, so a call that would pass the limit never goes out. Calls already under way finish and
+  appear in the trace, then the run ends as over budget. The time limit still abandons them.
+- Q: Which real model should the M17 manual checks use, now that SC-007 cannot pass as written on
+  `gpt-6-luna`? → A: `anthropic/claude-haiku-5-5`, with the ReAct template unchanged.
+- Q: While an evaluation runs, should the village and ordinary lab runs be allowed to use the same
+  model provider at the same time? → A: Everything keeps running. If the village is running on
+  the same provider when the owner starts an evaluation, the page warns that they share its rate
+  limits and that the village could lose turns or pause itself. The owner can pause it first.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is the project owner, who builds agents in the lab, changes their prompts, blocks,
@@ -101,6 +125,12 @@ check and its reason, and a link to each run.
    marked as a stopped evaluation.
 6. **Given** a template, **When** the owner opens its cases, **Then** it comes with at least two
    example cases that pass with the scripted fake model's sample behaviour.
+7. **Given** a template's example cases, **When** the owner saves a new agent from that template
+   and edits a case on the agent, **Then** the agent's copy changes, and the template's example
+   does not.
+8. **Given** a village running on the same provider as the chosen model, **When** the owner starts
+   an evaluation, **Then** the page warns that they share its rate limits and that the village
+   could lose turns or pause itself, and the evaluation can still start.
 
 ---
 
@@ -108,11 +138,14 @@ check and its reason, and a link to each run.
 
 An agent can have a budget: the most model calls, tokens, tool calls and time a run may use.
 The owner sets it in the agent's settings. A new agent starts with the default budget filled
-in; agents saved before this milestone, and the templates, have none and run as before, until
-the owner gives them one. (A builder agent may have up to 30 blocks, loops and parallel
+in. Agents saved before this milestone have none until the owner gives them one, and templates
+have none; both run as before. (A builder agent may have up to 30 blocks, loops and parallel
 branches, so no fixed default is safe for every existing agent.) When a run uses up any part
 of its budget, it stops before its next step, with the state "over budget" and a reason saying
 which limit it reached. Its trace up to that point is kept.
+
+An evaluation never runs without a budget: each attempt of an agent that has none uses the
+default budget, and the results say so. The agent's ordinary runs stay without one.
 
 The owner can stop any running run of a lab agent from its trace view. It ends with the state
 "stopped", and its trace up to that point is kept.
@@ -224,6 +257,11 @@ second run that is approved writes the note.
   counts as an error for that attempt.
 - **An attempt goes over budget**: it fails unless one of its checks expects that end (FR-004).
   Checks on the answer see whatever the run produced until then.
+- **An agent without a budget goes over the default budget in an evaluation**: the attempt fails
+  the same way, and its reason names the default budget. The owner can give a saved agent a
+  larger budget and evaluate it again; a template has to be saved as an agent first.
+- **A lab update changes a template's example case**: a comparison with an earlier evaluation
+  shows the case as changed.
 - **Every attempt of a case is an error**: the case shows no pass rate, only its errors, and adds
   nothing to the overall pass rate.
 - **The model for an evaluation is unavailable**: the evaluation does not start, and says why.
@@ -239,6 +277,10 @@ second run that is approved writes the note.
   The tool may still have done its work, and the trace says the answer was not awaited.
 - **Retries and budgets**: every attempt counts as a model call, and its tokens count, if the
   provider reports them.
+- **Branches working at the same time reach a limit**: a call that would pass the model call or
+  tool call limit does not go out. Calls already under way finish and appear in the trace, then
+  the run ends as over budget. Their tokens count, so several calls can together pass the token
+  limit. When the time budget runs out, calls under way are abandoned instead.
 - **An agent is deleted**: its cases and evaluation results are deleted with it.
 - **A pattern check with an invalid pattern**: refused when the case is saved, with the reason.
 
@@ -248,7 +290,8 @@ second run that is approved writes the note.
 
 - **FR-001**: The owner MUST be able to create, edit and delete test cases for any agent: a name,
   a prompt, one or more checks, and what to do with approval requests (approve or deny; default
-  deny). An agent MAY have at most 50 cases, and a case at most 10 checks.
+  deny). A template's example cases are the exception (FR-009). An agent MAY have at most 50
+  cases, and a case at most 10 checks.
 - **FR-002**: Checks MUST include: the answer contains a text, does not contain a text, or
   matches a pattern; a tool was called or was not called; the run ended in a given state; the
   run used at most a number of model calls or tokens; a judge model answers yes to a question
@@ -259,7 +302,8 @@ second run that is approved writes the note.
 - **FR-003a**: When an evaluation starts, it MUST take a copy of the agent's config (with its
   budget and ask-first tools), the chosen cases and the model. Every attempt MUST use that copy,
   so that editing the agent or a case while the evaluation runs changes only later
-  evaluations.
+  evaluations. When the agent has no budget, the copy MUST use the default budget of FR-010; the
+  agent itself MUST stay without one, and its ordinary runs MUST NOT change.
 - **FR-004**: Every check of every attempt MUST end as pass, fail or error, with a reason for a
   fail or an error. An attempt's outcome MUST be decided in this order:
   1. **error**, when the run was refused before its first step (for example a tool server not
@@ -277,22 +321,32 @@ second run that is approved writes the note.
   names another, and MUST NOT count against the agent's budget.
 - **FR-006**: An evaluation's results MUST show per case its pass rate, errors and failed checks
   with reasons and run links, and overall the pass rate, the average model calls, tokens and
-  time per attempt, the config version and the model. Results MUST be kept until the agent is
+  time per attempt, the config version, the model, and the budget the attempts ran under, marked
+  when it was the default because the agent has none. Results MUST be kept until the agent is
   deleted.
 - **FR-007**: The owner MUST be able to compare two evaluations of the same agent, case by case,
   with cases that exist in only one of them, or changed between them, shown as such.
 - **FR-008**: The owner MUST be able to stop an evaluation. Finished attempts MUST be kept. Only
-  one evaluation MAY run at a time.
+  one evaluation MAY run at a time. An evaluation MUST NOT hold back or pause the village or
+  ordinary runs. When the village is running on the same provider as the chosen model, the page
+  that starts an evaluation MUST warn that they share its rate limits and that the village could
+  lose turns or pause itself.
 - **FR-009**: Each template MUST come with at least two example cases that pass with the scripted
-  fake model's sample behaviour.
+  fake model's sample behaviour. These examples MUST be read-only on the template and MUST come
+  from the lab itself; the owner MAY add their own cases beside them. A new agent saved from a
+  template MUST start with its own editable copy of the examples, and copying a saved agent MUST
+  copy its cases. Later changes to either copy MUST NOT affect the other.
 - **FR-010**: The owner MUST be able to give any saved lab agent a budget of model calls,
   tokens, tool calls and time per run, in its settings, and to change or remove it. A new agent
   MUST start with the default budget: 30 model calls, 200,000 tokens, 30 tool calls and 10
-  minutes. An agent without a budget MUST run as before. Each limit MAY be raised to 200 model
-  calls, 2,000,000 tokens, 200 tool calls and 60 minutes.
+  minutes. Outside an evaluation, an agent without a budget MUST run as before. Each limit MAY
+  be raised to 200 model calls, 2,000,000 tokens, 200 tool calls and 60 minutes.
 - **FR-011**: A run that has used up any part of its budget MUST start no further step and MUST
-  end in the state "over budget", with the limit reached and the amount used. A step in progress
-  when the time budget runs out MUST be abandoned.
+  end in the state "over budget", with the limit reached and the amount used. Model calls and
+  tool calls MUST count when they start, so that a call that would pass its limit never goes
+  out, also when branches of a run work at the same time. Calls already under way when a limit
+  other than time is reached MUST finish and appear in the trace before the run ends. A step in
+  progress when the time budget runs out MUST be abandoned.
 - **FR-012**: The owner MUST be able to stop a running run of a lab agent. It MUST end in the
   state "stopped" within 2 seconds, with its trace kept.
 - **FR-013**: A model call that fails because the provider is rate limited or busy, times out, or
@@ -324,12 +378,13 @@ second run that is approved writes the note.
 ### Key Entities
 
 - **Test case**: belongs to one agent. A name, a prompt, its checks, and what to do with approval
-  requests.
+  requests. On a template, it is either a read-only example from the lab or the owner's own.
 - **Check**: one condition on an attempt: its kind (answer text, tools, end state, cost, judge)
   and what it expects.
 - **Evaluation**: one run of an agent's cases: the agent and its config version, a copy of the
-  config and the cases as they were at its start, the model, the repeat count, when it started
-  and ended, and its state (running, finished, stopped, interrupted).
+  config and the cases as they were at its start, the budget its attempts ran under and whether
+  that was the default, the model, the repeat count, when it started and ended, and its state
+  (running, finished, stopped, interrupted).
 - **Attempt**: one run of one case in an evaluation: the run, and each check's result (pass, fail
   or error) with its reason.
 - **Budget**: an agent's limits per run: model calls, tokens, tool calls and time.
@@ -354,8 +409,9 @@ second run that is approved writes the note.
   evaluation case (100% in the tests).
 - **SC-006**: After changing an agent, the owner can see which cases got better or worse by
   comparing two evaluations, without opening any single run.
-- **SC-007**: On the real model, an evaluation of the ReAct template's example cases with 5
-  attempts each finishes without a run ending in a provider error (manual check).
+- **SC-007**: On the model for manual checks (see Assumptions), an evaluation of the unchanged
+  ReAct template's example cases with 5 attempts each finishes without a run ending in a provider
+  error (manual check).
 
 ## Assumptions
 
@@ -365,19 +421,24 @@ second run that is approved writes the note.
 - **Lab agents only**: the six templates and the owner's saved agents. The village keeps its own
   checks and scenarios from M13 and gets no budgets or approvals yet.
 - **Cases live in the lab**: cases are written and edited on the agent's pages and stored with
-  the lab's data, not in files in the repo. The templates' example cases ship with the lab.
+  the lab's data, not in files in the repo. The templates' example cases ship with the lab and
+  are read-only there; a saved agent's copies are the owner's.
 - **Evaluations run in the lab**: started and watched from the lab's pages. Unlike the village's
   checks, no command line is needed.
 - **One at a time**: an evaluation runs its attempts one after another, and only one evaluation
-  runs at a time. This keeps the hosted model within its rate limits and keeps the results easy
-  to read.
+  runs at a time. This helps keep the hosted model within its rate limits and keeps the results
+  easy to read. The village and ordinary runs are not held back, so they can still share those
+  limits with an evaluation; the owner is warned about the village and can pause it first.
 - **Budgets are opt-in for existing agents**: existing agents are already bounded by their own
   loop limits (iterations, rounds, items), but a large builder agent can need more than any
   fixed default allows. So only new agents start with a budget; the owner adds one to an older
-  agent when wanted.
-- **Budgets are checked between steps**: a single model call can take a run past its token
-  budget, since the tokens are known only after the call. The run then stops before the next
-  step. Time is the only limit that ends a step in progress.
+  agent when wanted. Evaluations are the exception, because they repeat runs on a model that
+  costs money: an attempt of an agent without a budget uses the default budget.
+- **Budgets are checked before each step**: a single model call can take a run past its token
+  budget, since the tokens are known only after the call, and calls working at the same time can
+  do so together. The run then stops before the next step. Model calls and tool calls count when
+  they start, so those limits are never passed. Time is the only limit that ends a step in
+  progress.
 - **Retries cover model calls only**: tool errors already reach the model as the tool's result,
   and the model decides what to do. A tool server that went away is reconnected from the Tools
   page, as in M16.
@@ -385,5 +446,6 @@ second run that is approved writes the note.
   value). The servers file still decides which tools exist at all.
 - **Judge**: a judge check asks a plain yes-or-no question. Scores, rubrics and comparing two
   answers are out of scope.
-- **Model for manual checks**: the hosted model the owner named (`openai/gpt-6-luna`) until the
-  local model is back. Its tool calls need reasoning off.
+- **Model for manual checks**: `anthropic/claude-haiku-5-5`, which needs the owner's
+  `ANTHROPIC_API_KEY`. `openai/gpt-6-luna` refuses tools while thinking, so it cannot run the
+  ReAct template unchanged.
