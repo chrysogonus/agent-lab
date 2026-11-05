@@ -99,7 +99,7 @@ async def chat(
                     reasoning=ctx.reasoning,
                 )
             except PassingLLMError as exc:
-                span.error = str(exc)
+                span.error = f"LLMError: {exc}"  # as every other model failure reads
                 wait = guard.retry_wait(exc, attempt) if guard else None
                 if wait is None:
                     raise

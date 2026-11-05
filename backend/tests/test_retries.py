@@ -199,7 +199,8 @@ async def test_a_provider_busy_twice_then_answering_completes(tmp_path: Path) ->
     assert waits.seconds == [2, 8]  # each wait longer than the last
     tried = attempts(spans)
     assert len(tried) == 3  # every attempt visible in the trace
-    assert [s.error for s in tried] == ["HTTP 429: rate limited", "HTTP 429: rate limited", None]
+    busy = "LLMError: HTTP 429: rate limited"  # as every other model failure reads in a trace
+    assert [s.error for s in tried] == [busy, busy, None]
     assert tried[0].attributes["lab.retry.wait_s"] == 2
     assert tried[0].attributes["lab.retry.reason"] == "HTTP 429: rate limited"
     assert tried[1].attributes["lab.retry.attempt"] == 2
@@ -289,9 +290,10 @@ async def test_a_decision_is_retried_too(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_without_a_guard_nothing_is_retried(tmp_path: Path) -> None:
-    done, _, llm = await run_it(Store(tmp_path / "lab.db"), [BUSY, answer("no")], guarded=False)
+    done, spans, llm = await run_it(Store(tmp_path / "lab.db"), [BUSY, answer("no")], guarded=False)
     assert done.status == "error"
     assert len(llm.calls) == 1
+    assert attempts(spans)[0].error == "LLMError: HTTP 429: rate limited"  # as before M17
 
 
 @pytest.mark.anyio
