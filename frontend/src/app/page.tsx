@@ -240,7 +240,11 @@ export default function Home() {
   };
 
   const banner = (
-    <ApprovalsBanner approvals={approvals.open} current={current?.run_id ?? null} onOpen={openWaiting} />
+    <ApprovalsBanner
+      approvals={approvals.open}
+      current={view === "agents" ? (current?.run_id ?? null) : null} // other views hide the open run
+      onOpen={openWaiting}
+    />
   );
 
   const viewSwitch = (

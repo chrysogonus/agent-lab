@@ -403,17 +403,17 @@ it gives the model the denial as the tool's result; a second run that is approve
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T035 [P] Documentation in docs/evaluations.md (new), docs/agents.md, docs/api.md, docs/development.md, README.md and AGENTS.md.
+- [X] T035 [P] Documentation in docs/evaluations.md (new), docs/agents.md, docs/api.md, docs/development.md, README.md and AGENTS.md.
   - docs/evaluations.md: cases, checks, examples, reading results and comparisons, budgets, retries, approvals, and what an evaluation can cost.
   - docs/api.md: the new routes, and the `run_status` event. docs/agents.md: the new run states and spans.
   - README.md: the milestone, and what comes after it.
   - AGENTS.md: the `harness/` and `evaluation/` packages, the new routes modules, and "Current feature: `specs/017-evaluation-harness/`", plus
     contract 5's budget and approval rules.
 
-- [ ] T036 [P] Timing in specs/017-evaluation-harness/quickstart.md under "Results", measured once with a short script in the scratchpad: reading a
+- [X] T036 [P] Timing in specs/017-evaluation-harness/quickstart.md under "Results", measured once with a short script in the scratchpad: reading a
   500-attempt evaluation's results (under 1 s), and stopping a run (under 2 s).
 
-- [ ] T037 Review against the requirements in specs/017-evaluation-harness/tasks.md: every row of "Requirement → test" names a test that exists and
+- [X] T037 Review against the requirements in specs/017-evaluation-harness/tasks.md: every row of "Requirement → test" names a test that exists and
   passes; `git diff` shows no change to `backend/tests/golden/templates.json`; `make check` passes, and its exit code is 0.
 
 - [ ] T038 Manual checks 1–7 of specs/017-evaluation-harness/quickstart.md on `anthropic/claude-haiku-5-5` (SC-002, SC-006, SC-007); record results in

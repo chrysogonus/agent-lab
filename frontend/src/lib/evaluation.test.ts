@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Attempt, Check, Rates } from "./api";
-import { blankCheck, budgetText, caseProblems, changeText, checkLabel, failedChecks, rateText, CHECK_KINDS } from "./evaluation";
+import { blankCheck, budgetText, caseFields, caseProblems, changeText, checkLabel, failedChecks, rateText, CHECK_KINDS } from "./evaluation";
 
 const rates = (changes: Partial<Rates>): Rates => ({
   passed: 0,
@@ -140,5 +140,25 @@ describe("budgetText", () => {
 
   it("says when there was none", () => {
     expect(budgetText({ budget: null, ask_first: [], default_budget: false })).toBe("no budget");
+  });
+});
+
+describe("caseFields", () => {
+  it("keeps only what the server lets a client send, which refuses anything else", () => {
+    const stored = {
+      case_id: "case-1",
+      agent_id: "react",
+      read_only: false,
+      name: "Case",
+      prompt: "Say hi",
+      approvals: "approve" as const,
+      checks: [{ kind: "contains" as const, text: "hi" }],
+    };
+    expect(caseFields(stored)).toEqual({
+      name: "Case",
+      prompt: "Say hi",
+      approvals: "approve",
+      checks: [{ kind: "contains", text: "hi" }],
+    });
   });
 });

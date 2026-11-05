@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ValidationError, type CaseFields, type Check, type ToolInfo } from "@/lib/api";
+import { ValidationError, type CaseFields, type Check, type ModelInfo, type ToolInfo } from "@/lib/api";
 import { blankCheck, caseProblems, CHECK_KINDS, END_STATES } from "@/lib/evaluation";
+import { modelOptions, refFromValue, refValue } from "@/lib/models";
 import { FIELD } from "../builder/fields";
 
 const SMALL_BUTTON =
@@ -11,10 +12,12 @@ const SMALL_BUTTON =
 function CheckValue({
   check,
   label,
+  models,
   onChange,
 }: {
   check: Check;
   label: string;
+  models: ModelInfo[];
   onChange: (check: Check) => void;
 }) {
   switch (check.kind) {
@@ -77,13 +80,32 @@ function CheckValue({
       );
     case "judge":
       return (
-        <input
-          aria-label={label}
-          value={check.question}
-          placeholder="Does the answer give a temperature for Berlin?"
-          onChange={(e) => onChange({ ...check, question: e.target.value })}
-          className={FIELD}
-        />
+        <div className="flex flex-col gap-2">
+          <input
+            aria-label={label}
+            value={check.question}
+            placeholder="Does the answer give a temperature for Berlin?"
+            onChange={(e) => onChange({ ...check, question: e.target.value })}
+            className={FIELD}
+          />
+          <select
+            aria-label={`${label}: judge model`}
+            value={refValue(check.model ?? null)}
+            onChange={(e) => onChange({ ...check, model: refFromValue(e.target.value) })}
+            className={FIELD}
+          >
+            <option value="">The evaluation&apos;s model</option>
+            {modelOptions(models, check.model ?? null).groups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((o) => (
+                  <option key={o.value} value={o.value} disabled={o.disabled}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
       );
   }
 }
@@ -92,11 +114,13 @@ function CheckValue({
 export function CaseForm({
   initial,
   tools,
+  models,
   onSave,
   onCancel,
 }: {
   initial: CaseFields | null;
   tools: ToolInfo[];
+  models: ModelInfo[];
   onSave: (fields: CaseFields) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -171,7 +195,12 @@ export function CaseForm({
                 </option>
               ))}
             </select>
-            <CheckValue check={check} label={`Check ${i + 1}: value`} onChange={(c) => setCheck(i, c)} />
+            <CheckValue
+              check={check}
+              label={`Check ${i + 1}: value`}
+              models={models}
+              onChange={(c) => setCheck(i, c)}
+            />
             <button
               type="button"
               className={SMALL_BUTTON}

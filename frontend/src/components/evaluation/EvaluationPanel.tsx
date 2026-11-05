@@ -16,7 +16,7 @@ import {
   type TestCase,
   type ToolInfo,
 } from "@/lib/api";
-import { checkLabel, rateText } from "@/lib/evaluation";
+import { caseFields, checkLabel, rateText } from "@/lib/evaluation";
 import { modelLabel, modelOptions, refFromValue } from "@/lib/models";
 import { FIELD } from "../builder/fields";
 import { CaseForm } from "./CaseForm";
@@ -132,8 +132,9 @@ export function EvaluationPanel({
         {editing && (
           <CaseForm
             key={editing === "new" ? "new" : editing.case_id}
-            initial={editing === "new" ? null : editing}
+            initial={editing === "new" ? null : caseFields(editing)}
             tools={tools}
+            models={models}
             onSave={saveCase}
             onCancel={() => setEditing(null)}
           />

@@ -54,6 +54,30 @@ No test reaches a real model or an outside service.
 7. **A restart** (FR-022): start a long evaluation, stop the backend, and start it again. The evaluation
    shows as interrupted with the results it had.
 
-## Results
+## Results (2026-11-05)
 
-To be filled in after implementation.
+**Timing** (plan performance goals), measured once with a script:
+
+| Path | Goal | Measured |
+|---|---|---|
+| `GET /evaluations/{id}` at its largest: 500 attempts of 10 checks each | under 1 s | median 24 ms, max 61 ms (1.7 MB) |
+| Stop across three parallel branches | under 2 s | median 21 ms, max 24 ms |
+
+**Browser check with a scripted model**, in headless Chromium, against a scratch backend and database, so
+it cost nothing and touched nothing of the owner's. It passed, after two bugs were found and fixed: the
+approval notice did not show on another page when that run was the one left open, and saving an edited
+case was refused, since the form sent back fields only the server may set. The page's one 404 is the
+browser asking for `/favicon.ico`, as it did before M17.
+
+- Evaluate a template: examples listed, 2 of 2 passing, the default budget marked.
+- Add a failing case: 67% overall, the failed check with its reason, opening an attempt's run and coming
+  back, and comparing with the earlier evaluation, with the new case shown as new.
+- Save a new agent from the template: it has the default budget and its own copy of the examples.
+- Mark `calculator` ask first and run it: the run shows as waiting, the notice shows on the Tools page, its
+  link opens the card, and denying with a reason lets the run complete. The span shows the decision.
+- Edit a saved case, and see the judge's model choices.
+- Stop a slow run: it ends as stopped.
+- Lower the budget to 1 model call and approve a call: it ends over budget, "model calls: 1 of 1".
+
+**Manual checks 1–7 on a real model**: not run yet. They spend the owner's money and need
+`ANTHROPIC_API_KEY`, so they wait for the owner's go-ahead (T038).

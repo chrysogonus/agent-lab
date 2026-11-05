@@ -1,5 +1,5 @@
 // Pure view logic for test cases, results and comparisons (M17).
-import type { Attempt, CaseFields, Check, CheckResult, ComparisonRow, EvaluationHarness, Rates } from "./api";
+import type { Attempt, CaseFields, Check, CheckResult, ComparisonRow, EvaluationHarness, Rates, TestCase } from "./api";
 
 export const CHECK_KINDS: { kind: Check["kind"]; label: string }[] = [
   { kind: "contains", label: "The answer contains" },
@@ -76,6 +76,11 @@ function isBlank(check: Check): boolean {
     case "judge":
       return !check.question.trim();
   }
+}
+
+/** What a client may send back: the server refuses the fields it adds itself. */
+export function caseFields({ name, prompt, checks, approvals }: TestCase): CaseFields {
+  return { name, prompt, checks, approvals };
 }
 
 /** What to fix before sending; the server still has the last word, on patterns for one. */
