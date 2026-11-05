@@ -84,7 +84,7 @@ browser asking for `/favicon.ico`, as it did before M17.
 
 On `anthropic/claude-haiku-5-5`, through the real pages in headless Chromium unless noted. They ran against
 a scratch backend, database, servers file and notes folder, so the owner's village was not touched. In all:
-46 model calls, 27,665 input and 1,818 output tokens (2 cancelled calls report none), no run ended in a
+48 model calls, 28,883 input and 1,880 output tokens (2 cancelled calls report none), no run ended in a
 provider error, and no call needed a retry.
 
 | Check | Result |
