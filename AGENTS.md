@@ -2,9 +2,9 @@
 
 Glasshouse: hand-built agent fundamentals (ReAct, five workflow patterns, a template and block
 builder, per-agent models) with a live trace view, plus a village of four villager agents
-(M6–M15), with tools over hand-written MCP (M16). Rules for every change:
-`.specify/memory/constitution.md`. Current feature: `specs/016-mcp-tools/`; earlier milestones in
-`specs/001-…` to `specs/015-…`. Human
+(M6–M15), with tools over hand-written MCP (M16) and an evaluation harness (M17). Rules for every
+change: `.specify/memory/constitution.md`. Current feature: `specs/017-evaluation-harness/`; earlier
+milestones in `specs/001-…` to `specs/016-…`. Human
 documentation: `README.md` and `docs/` (keep both in step with user-visible changes).
 
 ## Commands
@@ -50,6 +50,11 @@ report; keep every gate at its current strictness.
   `mcp/` (hand-written MCP, docs/tools.md: `jsonrpc.py`, `server.py` one server core for both
   protocol eras, `transports.py` in-process/stdio/HTTP, `client.py` one connection,
   `servers_file.py`, `host.py` connections and `HostTool`s, `lab_server.py`, `notes.py`),
+  `harness/` (`budget.py` limits; `guard.py` one run's `RunGuard`, a `ContextVar` that `steps` consults;
+  `approvals.py` open requests and who decides; `live.py` runs that can be stopped),
+  `evaluation/` (`model.py` cases, checks, attempts; `checks.py`; `results.py` outcomes, rates,
+  comparisons; `judge.py` a judge's own run; `examples.py` each template's cases; `runner.py`),
+  `store_evaluations.py` (a mixin of `Store`), `api_harness.py` and `api_evaluations.py` (their routes),
   `tools/` (calculator and weather, served by `mcp/lab_server.py`), `llm/` (client seam, `openai_compat.py` and `anthropic.py` clients, `models.py`: the configured models, `FakeLLM`),
   `tracing/` (span, tracer, redaction), `store.py` (SQLite: runs, spans, custom agents),
   `bus.py`, `runs.py`, `api.py`.
@@ -77,7 +82,7 @@ report; keep every gate at its current strictness.
    servers file's `env` and `headers` values as secrets too. Every tool is an MCP tool reached
    through `mcp/host.py`; the servers file is the grant (local programs get only `PATH`, `HOME`
    and named variables; addresses stay on this computer unless allowed). The API checks `Host`,
-   CORS origin, WebSocket `Origin` and the `/mcp` `Origin`.
+   CORS origin, WebSocket `Origin`, the `/mcp` `Origin` and the `POST /approvals/{id}` `Origin`.
 5. **Templates and custom agents.** Each template's pydantic `Config` is the only definition of
    its editable fields, defaults and limits; graphs and decision schemas are derived from it.
    A custom agent is a stored (template id, config) that the server validates with that model;
@@ -102,7 +107,13 @@ report; keep every gate at its current strictness.
    the shared chronicler agent, tagged with `village_tick` and no villager, once a night for the
    day its record began; it never counts as a decision. Calendar, light and weather are derived
    from the day, never stored.
-6. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
+6. **The harness.** A lab run's limits, retries and approvals live in its `RunGuard`, which `execute_run`
+   sets and `steps` consults; agents and workflows never see it. The village passes no guard, so none of
+   this reaches its turns. Budgets and ask-first tools are stored beside the config (`agents.harness`), not
+   in it, so they change no `config_version`. A tool span means the tool was called: a denied call has only
+   its `approval <tool>` span. Each model call attempt is its own LLM span. Evaluation attempts and judge
+   calls are ordinary runs tagged with `eval_id`; a judge's run is outside the agent's budget.
+7. **Phase 2 seams**: `agent_id`, `config_version` (hash of agent config) and
    `ReActAgent.step()` (one iteration, so a tick runner can drive it). Add no other
    forward-looking abstractions.
 

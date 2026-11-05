@@ -99,15 +99,16 @@ specs/                   one folder per milestone: spec, plan, tasks (Spec Kit)
 | | | ✅ M13 | Measuring the village: village health, turn checks, scenarios |
 | | | ✅ M14 | Better villagers: intentions, what you can do here, memory by season |
 | ✅ M16 | Tools over MCP: host, the lab's server, notes | ✅ M15 | Daily happenings, boat trips, whispers |
+| ✅ M17 | [The evaluation harness](docs/evaluations.md): test cases, budgets, retries, approvals | | |
 
-After M16 come an evaluation harness for the lab's other agents, memory for the lab's other
-agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
+After M17 come memory for the lab's other agents, and RAG. Each milestone's spec, plan and tasks live in `specs/`.
 
 ## More
 
 - [docs/agents.md](docs/agents.md) — the six agents and how to read a trace
 - [docs/builder.md](docs/builder.md) — customizing templates and building block agents
 - [docs/village.md](docs/village.md) — how the villagers think, move, remember and live through the year
+- [docs/evaluations.md](docs/evaluations.md) — test cases, budgets, retries and approvals
 - [docs/models.md](docs/models.md) — local models, Ollama and OpenAI
 - [docs/api.md](docs/api.md) — HTTP and WebSocket endpoints
 - [docs/development.md](docs/development.md) — layout, rules every change follows, the Spec Kit workflow

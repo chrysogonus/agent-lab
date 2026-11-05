@@ -52,6 +52,11 @@ and the JSON-RPC request and response.
 4. **Span detail** (click a span): the exact messages sent to the model, its answer, tokens,
    latency and the config version it ran with.
 
+A run that is still going has a **Stop** button. A run can also end **over budget**, **stopped** or
+**interrupted**, or wait for your approval of a tool call: see
+[Evaluations and the harness](evaluations.md). A retried model call shows one span per attempt, and an
+approval decision has its own span.
+
 Past runs (left) replay from the database exactly like a live run, because the live view and
 the replay read the same stream of stored spans.
 

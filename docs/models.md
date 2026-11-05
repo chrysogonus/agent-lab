@@ -82,7 +82,8 @@ what replaces it.
     price, a newly cached one 1.25 times it; prompts under 512 tokens are not cached. Tokens in
     counts cached tokens too; the span attributes `gen_ai.usage.cache_read.input_tokens` and
     `…cache_creation.input_tokens` show how many were read and written.
-- There are no retries yet: a rate limit or busy server ends the run with an error (M17).
+- A rate limit or a busy server is retried, for lab agents: see [Evaluations](evaluations.md#retries).
+  The village's turns are not retried.
 - Keys stay in `.env` (ignored by git), are removed from every span and are never returned by
   the API.
 - Some models refuse tools while thinking (`gpt-6-luna`: "Function tools with reasoning_effort

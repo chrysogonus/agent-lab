@@ -35,6 +35,10 @@ flowchart TB
 The village sits beside it: `village/runner.py` runs the step loop and starts each villager
 decision through the same `runs.py`, so every village turn is traced like any other run.
 
+A lab run also has a `RunGuard` (`harness/guard.py`), which `execute_run` sets for its length and
+`steps.py` consults on every call: budgets, retries and approvals live there, so no agent knows about
+them. The village passes no guard, so none of this applies to its turns.
+
 ## Rules every change follows
 
 The full set is in the [constitution](../.specify/memory/constitution.md); the short version:
@@ -75,5 +79,7 @@ there under "Manual check results".
 | the village view | `frontend/src/components/village/`, `lib/village.ts` |
 | MCP: the protocol, servers file, host | `backend/src/agent_lab/mcp/`; the default servers file `backend/mcp.json`, your own `backend/data/mcp.json` or `MCP_SERVERS_FILE` |
 | the Tools page | `frontend/src/components/ToolsView.tsx`, `lib/tools.ts` |
+| budgets, retries, approvals, Stop | `backend/src/agent_lab/harness/`, `agents/steps.py`, `api_harness.py`; `llm/base.py` for what counts as passing |
+| test cases and evaluations | `backend/src/agent_lab/evaluation/`, `store_evaluations.py`, `api_evaluations.py`; `frontend/src/components/evaluation/`, `lib/evaluation.ts` |
 
 Next.js 16 differs from older versions: read `frontend/AGENTS.md` before editing the frontend.
