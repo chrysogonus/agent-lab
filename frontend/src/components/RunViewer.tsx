@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Run } from "@/lib/api";
 import { runModel } from "@/lib/models";
-import { activeNodes, formatTotals, runTotals, takenEdges } from "@/lib/run-state";
+import { activeNodes, formatTotals, isLive, runTotals, takenEdges } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import { useRunStream } from "@/lib/use-run-stream";
 import { GraphView } from "./GraphView";
@@ -12,8 +12,12 @@ import { Waterfall } from "./Waterfall";
 
 const STATUS_TEXT: Record<Run["status"], string> = {
   running: "Running",
+  waiting_approval: "Waiting for approval",
   completed: "Completed",
   max_iterations: "Stopped at the iteration or round cap",
+  over_budget: "Over budget",
+  stopped: "Stopped",
+  interrupted: "Interrupted: the lab stopped during this run",
   error: "Failed",
 };
 
@@ -30,7 +34,8 @@ export function RunViewer({
   const view = useRunStream(initial.run_id);
   const run = view.run ?? initial;
   const [selected, setSelected] = useState<string | null>(null);
-  const now = useNow(run.status === "running");
+  const status = view.run?.status ?? view.status ?? initial.status;
+  const now = useNow(isLive(status));
 
   useEffect(() => {
     if (view.run) onEnded(view.run);
@@ -48,8 +53,8 @@ export function RunViewer({
             <h2 className="line-clamp-3 text-base font-semibold text-ink" title={run.prompt}>
               {run.prompt}
             </h2>
-            <span className={`text-sm ${run.status === "running" ? "text-signal-ink" : run.status === "completed" ? "text-tool" : "text-fault"}`}>
-              {STATUS_TEXT[run.status]}
+            <span className={`text-sm ${isLive(status) ? "text-signal-ink" : status === "completed" ? "text-tool" : "text-fault"}`}>
+              {STATUS_TEXT[status]}
             </span>
             {runModel(run) && <span className="text-sm text-ink">{runModel(run)}</span>}
             <span className="text-sm text-muted">{formatTotals(runTotals(view.spans, run, now))}</span>
@@ -63,6 +68,7 @@ export function RunViewer({
               </button>
             )}
           </div>
+          {run.stop_reason && <p className="px-4 pt-3 text-sm text-fault">{run.stop_reason}</p>}
           {run.answer && <p className="px-4 py-3 text-sm text-ink">{run.answer}</p>}
           {view.error && <p role="alert" className="px-4 py-3 text-sm text-fault">{view.error}</p>}
         </section>

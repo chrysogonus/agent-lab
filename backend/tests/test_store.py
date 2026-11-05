@@ -283,3 +283,105 @@ def test_the_prompt_of_a_days_chronicle(tmp_path: Path) -> None:
     assert store.chronicle_prompt_of(3, since=0) == "prompt c2"  # the newest one counts
     assert store.chronicle_prompt_of(4, since=0) is None  # failed
     assert store.chronicle_prompt_of(3, since=5.0) is None
+
+
+def test_a_run_keeps_its_reason_and_harness(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    run = make_run("r1", 1.0)
+    run.harness = {"budget": None, "ask_first": ["notes/write_note"], "default_budget": False}
+    store.create_run(run)
+    store.finish_run("r1", "over_budget", "so far", 2.0, stop_reason="model calls: 3 of 3")
+    stored = store.get_run("r1")
+    assert stored is not None
+    assert stored.status == "over_budget"
+    assert stored.answer == "so far"
+    assert stored.stop_reason == "model calls: 3 of 3"
+    assert stored.harness == run.harness
+
+
+def test_a_status_change_keeps_the_run_open(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_run(make_run("r1", 1.0))
+    store.set_run_status("r1", "waiting_approval")
+    stored = store.get_run("r1")
+    assert stored is not None
+    assert stored.status == "waiting_approval"
+    assert stored.ended_at is None
+
+
+def test_an_agent_keeps_its_harness_apart_from_its_config(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    fields = {"template_id": "react", "description": "", "sample_prompt": "hi", "config": {"a": 1}}
+    plain = store.create_agent(name="plain", **fields)
+    harnessed = store.create_agent(name="limited", harness={"ask_first": ["x/y"]}, **fields)
+    assert plain.harness is None
+    got = store.get_agent(harnessed.agent_id)
+    assert got is not None
+    assert got.harness == {"ask_first": ["x/y"]}
+    assert got.config == {"a": 1}
+    store.update_agent(
+        harnessed.agent_id,
+        name="limited",
+        description="",
+        sample_prompt="hi",
+        config={"a": 2},
+        harness=None,
+    )
+    updated = store.get_agent(harnessed.agent_id)
+    assert updated is not None
+    assert updated.harness is None
+    assert updated.config == {"a": 2}
+
+
+def test_a_database_from_before_m17_opens_and_keeps_its_rows(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    Store(path).close()
+    db = sqlite3.connect(path)
+    db.execute("ALTER TABLE runs DROP COLUMN harness")
+    db.execute("ALTER TABLE runs DROP COLUMN stop_reason")
+    db.execute("ALTER TABLE agents DROP COLUMN harness")
+    db.execute(
+        "INSERT INTO runs (run_id, agent_id, config_version, prompt, status, graph, config,"
+        " started_at) VALUES ('old', 'react', 'v', 'hi', 'completed', ?, '{}', 1.0)",
+        (build_graph([]).model_dump_json(),),
+    )
+    db.execute(
+        "INSERT INTO agents (agent_id, template_id, name, name_key, description, sample_prompt,"
+        " config, created_at, updated_at) VALUES ('a', 'react', 'A', 'a', '', 'hi', '{}', 1, 1)"
+    )
+    db.commit()
+    db.close()
+
+    store = Store(path)
+    run = store.get_run("old")
+    assert run is not None
+    assert run.stop_reason is None
+    assert run.harness is None
+    agent = store.get_agent("a")
+    assert agent is not None
+    assert agent.harness is None
+
+
+def test_a_restart_interrupts_live_lab_runs_only(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_run(make_run("running", 1.0))
+    store.create_run(make_run("waiting", 1.0))
+    store.set_run_status("waiting", "waiting_approval")
+    store.create_run(make_run("done", 1.0))
+    store.finish_run("done", "completed", "yo", 2.0)
+    turn = make_run("turn", 1.0)
+    turn.village_tick = 7
+    store.create_run(turn)
+
+    assert sorted(store.mark_interrupted()) == ["running", "waiting"]
+
+    statuses = {r: store.get_run(r) for r in ("running", "waiting", "done", "turn")}
+    assert {k: v.status for k, v in statuses.items() if v} == {
+        "running": "interrupted",
+        "waiting": "interrupted",
+        "done": "completed",
+        "turn": "running",
+    }
+    interrupted = statuses["running"]
+    assert interrupted is not None
+    assert interrupted.ended_at is not None

@@ -42,7 +42,7 @@ from agent_lab.mcp import jsonrpc
 from agent_lab.mcp.host import Host, ToolsUnavailable
 from agent_lab.mcp.lab_server import LAB
 from agent_lab.runs import UnknownAgent, execute_run, new_run
-from agent_lab.store import CustomAgent, NameInUse, Run, Store
+from agent_lab.store import LIVE_STATUSES, CustomAgent, NameInUse, Run, Store
 from agent_lab.tracing.redact import redact
 from agent_lab.tracing.span import Span
 from agent_lab.village.happening_runs import WhisperError
@@ -177,6 +177,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        store.mark_interrupted()  # nothing can finish a run the last process left live (FR-022)
         await host.start()
         yield
         await host.close()
@@ -513,9 +514,13 @@ def create_app(
                 kind = "span_started" if span.ended_at is None else "span_ended"
                 await ws.send_json({"type": kind, "span": span.model_dump(mode="json")})
             run = store.get_run(run_id)
-            if run is not None and run.status != "running":
+            if run is not None and run.status not in LIVE_STATUSES:
                 await ws.send_json({"type": "run_ended", "run": run.model_dump(mode="json")})
             else:
+                if run is not None and run.status != "running":
+                    await ws.send_json(
+                        {"type": "run_status", "run_id": run_id, "status": run.status}
+                    )
                 while True:
                     event = await queue.get()
                     await ws.send_json(event)

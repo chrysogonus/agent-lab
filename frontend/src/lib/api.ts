@@ -33,7 +33,15 @@ export type GraphNode = {
 
 export type Graph = { nodes: GraphNode[]; edges: { source: string; target: string }[] };
 
-export type RunStatus = "running" | "completed" | "max_iterations" | "error";
+export type RunStatus =
+  | "running"
+  | "waiting_approval"
+  | "completed"
+  | "max_iterations"
+  | "over_budget"
+  | "stopped"
+  | "interrupted"
+  | "error";
 
 export type RunTotals = {
   llm_calls: number;
@@ -60,6 +68,7 @@ export type Run = {
   village_tick: number | null; // set on a villager's turn (M6)
   villager: string | null;
   village_action: VillageAction | null;
+  stop_reason: string | null; // M17: why it ended early, e.g. "model calls: 3 of 3"
 };
 
 // The village (M6, M7). See specs/007-village-life/contracts/http-api.md.
@@ -358,6 +367,7 @@ export class ValidationError extends Error {
 export type StreamEvent =
   | { type: "span_started" | "span_ended"; span: Span }
   | { type: "run_ended"; run: Run }
+  | { type: "run_status"; run_id: string; status: RunStatus }
   | { type: "error"; message: string };
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";

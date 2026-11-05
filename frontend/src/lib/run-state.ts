@@ -1,9 +1,18 @@
 // Pure view logic shared by live runs and replays: both are built from the same stream events.
-import type { AgentInfo, Graph, Run, RunTotals, Span, StreamEvent } from "./api";
+import type { AgentInfo, Graph, Run, RunStatus, RunTotals, Span, StreamEvent } from "./api";
 
-export type RunView = { run: Run | null; spans: Record<string, Span>; error: string | null };
+export type RunView = {
+  run: Run | null; // set when the run has ended
+  status: RunStatus | null; // the latest status while it is live
+  spans: Record<string, Span>;
+  error: string | null;
+};
 
-export const emptyView: RunView = { run: null, spans: {}, error: null };
+export const emptyView: RunView = { run: null, status: null, spans: {}, error: null };
+
+export function isLive(status: RunStatus): boolean {
+  return status === "running" || status === "waiting_approval";
+}
 
 export function applyEvent(view: RunView, event: StreamEvent): RunView {
   switch (event.type) {
@@ -16,6 +25,8 @@ export function applyEvent(view: RunView, event: StreamEvent): RunView {
     }
     case "run_ended":
       return { ...view, run: event.run };
+    case "run_status":
+      return { ...view, status: event.status };
     case "error":
       return { ...view, error: event.message };
   }

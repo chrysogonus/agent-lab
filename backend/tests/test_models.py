@@ -1,12 +1,18 @@
 """Settings → the model catalog: providers, availability and the default (FR-001, FR-002)."""
 
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers import fake_models
 
+from agent_lab.agents.registry import model_of
 from agent_lab.config import Settings, renamed_settings
+from agent_lab.llm.fake import FakeLLM
 from agent_lab.llm.models import ModelRef, models_from_settings, parse_ref
+from agent_lab.runs import new_run
+from agent_lab.store import Store
 
 
 def settings(**changes: Any) -> Settings:
@@ -191,3 +197,19 @@ def test_old_names_are_reported() -> None:
         "LLM_MODEL is now LOCAL_MODELS",
     ]
     assert renamed_settings({"LOCAL_MODELS": "q"}) == []
+
+
+def test_a_run_can_replace_the_agents_model(tmp_path: Path) -> None:
+    local, hosted = FakeLLM([], model="local-m"), FakeLLM([], model="hosted-m")
+    models = fake_models(local, hosted)
+    store = Store(tmp_path / "lab.db")
+
+    usual, _, _, usual_llm = new_run("hi", "react", models, store)
+    chosen = ModelRef(provider="openai", model="hosted-m")
+    run, config, _, llm = new_run("hi", "react", models, store, model=chosen)
+
+    assert usual_llm is local
+    assert llm is hosted
+    assert model_of(config) == chosen
+    assert run.config["model"] == "hosted-m"
+    assert run.config_version != usual.config_version

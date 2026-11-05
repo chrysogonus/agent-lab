@@ -4,6 +4,7 @@
 gets a span. `lab.came_from` on the first span of a node visit records the graph edge taken.
 """
 
+import asyncio
 import hashlib
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -12,6 +13,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 
+from agent_lab.harness.guard import current_guard
 from agent_lab.llm.base import ChatResponse, LLMClient, Message, ToolCall
 from agent_lab.mcp.host import HostTool
 from agent_lab.store import RunStatus
@@ -102,6 +104,8 @@ async def chat(
                 "gen_ai.usage.cache_read.input_tokens": response.tokens_cache_read,
                 "gen_ai.usage.cache_creation.input_tokens": response.tokens_cache_write,
             }
+    if guard := current_guard.get():
+        guard.after_model_call(response)
     return response
 
 
@@ -142,7 +146,12 @@ async def call_tool(
             span.error = str(exc)
             span.output = f"error: {exc}"
             return span.output
-        result = await tool.call(arguments)
+        try:
+            result = await tool.call(arguments)
+        except asyncio.CancelledError:
+            # The tool may still have done its work; only its answer is lost.
+            span.error = "stopped; the tool's answer was not awaited"
+            raise
         span.attributes |= {
             "mcp.method.name": "tools/call",
             "mcp.protocol.version": tool.connection.protocol_version,

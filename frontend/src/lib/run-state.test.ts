@@ -14,6 +14,7 @@ import {
   runTotals,
   spanRows,
   takenEdges,
+  isLive,
 } from "./run-state";
 
 // Same shape as the backend's build_graph(["calculator", "get_weather"]).
@@ -384,5 +385,21 @@ describe("runAgentLabel", () => {
       custom: false,
     });
     expect(runAgentLabel(run({}), agents)).toEqual({ name: "ReAct agent", custom: false });
+  });
+});
+
+describe("a run's status while it lives", () => {
+  it("records a status change without treating the run as ended", () => {
+    const view = applyEvent(emptyView, { type: "run_status", run_id: "r", status: "waiting_approval" });
+    expect(view.status).toBe("waiting_approval");
+    expect(view.run).toBeNull(); // RunViewer calls onEnded only once `run` is set
+  });
+
+  it("counts waiting for an approval as live and every end as not", () => {
+    expect(isLive("running")).toBe(true);
+    expect(isLive("waiting_approval")).toBe(true);
+    for (const status of ["completed", "max_iterations", "over_budget", "stopped", "interrupted", "error"] as const) {
+      expect(isLive(status)).toBe(false);
+    }
   });
 });

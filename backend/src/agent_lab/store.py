@@ -13,7 +13,17 @@ from pydantic import BaseModel
 from agent_lab.graph import Graph
 from agent_lab.tracing.span import Span
 
-RunStatus = Literal["running", "completed", "max_iterations", "error"]
+RunStatus = Literal[
+    "running",
+    "waiting_approval",
+    "completed",
+    "max_iterations",
+    "over_budget",
+    "stopped",
+    "interrupted",
+    "error",
+]
+LIVE_STATUSES: tuple[RunStatus, ...] = ("running", "waiting_approval")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -79,7 +89,9 @@ _RUN_COLUMNS_SINCE_M3 = {
     "village_tick": "INTEGER",  # M6: a villager's turn belongs to this tick
     "villager": "TEXT",
     "village_action": "TEXT",  # JSON: the action applied for the turn, with any wait reason
-    "eval_id": "TEXT",  # M13: a run made by a turn check, kept out of the run and turn lists
+    "eval_id": "TEXT",  # M13: a run made by a check; M17: by an evaluation. Kept out of the lists
+    "stop_reason": "TEXT",  # M17: why it ended early, e.g. "model calls: 3 of 3"
+    "harness": "TEXT",  # M17: JSON: the budget and ask-first tools it ran under
 }
 
 _SPAN_JSON = ("input", "output", "attributes")
@@ -120,7 +132,9 @@ class Run(BaseModel):
     village_tick: int | None = None  # set on a villager's turn (M6)
     villager: str | None = None
     village_action: dict[str, Any] | None = None
-    eval_id: str | None = None  # M13: made by a turn check
+    eval_id: str | None = None  # made by a turn check (M13) or an evaluation (M17)
+    stop_reason: str | None = None  # M17: why it ended early
+    harness: dict[str, Any] | None = None  # M17: what it ran under; None: nothing, or older
 
 
 class NameInUse(Exception):
@@ -136,6 +150,7 @@ class CustomAgent(BaseModel):
     config: dict[str, Any]  # the template's config without `model`
     created_at: float
     updated_at: float
+    harness: dict[str, Any] | None = None  # M17: budget and ask-first tools; None: neither
 
 
 class Store:
@@ -151,6 +166,9 @@ class Store:
         for column, kind in _RUN_COLUMNS_SINCE_M3.items():
             if column not in columns:
                 self._db.execute(f"ALTER TABLE runs ADD COLUMN {column} {kind}")
+        agent_columns = {r["name"] for r in self._db.execute("PRAGMA table_info(agents)")}
+        if "harness" not in agent_columns:
+            self._db.execute("ALTER TABLE agents ADD COLUMN harness TEXT")
         self._db.execute("CREATE INDEX IF NOT EXISTS runs_by_tick ON runs(village_tick)")
 
     def close(self) -> None:
@@ -161,7 +179,7 @@ class Store:
             self._db.execute(
                 "INSERT INTO runs (run_id, agent_id, config_version, prompt, status, answer, graph,"
                 " config, started_at, ended_at, agent_name, template_id, village_tick, villager,"
-                " eval_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " eval_id, harness) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     run.run_id,
                     run.agent_id,
@@ -178,17 +196,43 @@ class Store:
                     run.village_tick,
                     run.villager,
                     run.eval_id,
+                    json.dumps(run.harness) if run.harness is not None else None,
                 ),
             )
 
     def finish_run(
-        self, run_id: str, status: RunStatus, answer: str | None, ended_at: float
+        self,
+        run_id: str,
+        status: RunStatus,
+        answer: str | None,
+        ended_at: float,
+        *,
+        stop_reason: str | None = None,
     ) -> None:
         with self._lock:
             self._db.execute(
-                "UPDATE runs SET status=?, answer=?, ended_at=? WHERE run_id=?",
-                (status, answer, ended_at, run_id),
+                "UPDATE runs SET status=?, answer=?, ended_at=?, stop_reason=? WHERE run_id=?",
+                (status, answer, ended_at, stop_reason, run_id),
             )
+
+    def set_run_status(self, run_id: str, status: RunStatus) -> None:
+        with self._lock:
+            self._db.execute("UPDATE runs SET status=? WHERE run_id=?", (status, run_id))
+
+    def mark_interrupted(self) -> list[str]:
+        """Lab runs a stopped lab left live. Nothing can finish them; the village minds its own."""
+        marks = ",".join("?" for _ in LIVE_STATUSES)
+        where = f"status IN ({marks}) AND village_tick IS NULL"
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT run_id FROM runs WHERE {where}",  # noqa: S608
+                LIVE_STATUSES,
+            ).fetchall()
+            self._db.execute(
+                f"UPDATE runs SET status='interrupted', ended_at=? WHERE {where}",  # noqa: S608
+                (time.time(), *LIVE_STATUSES),
+            )
+        return [r["run_id"] for r in rows]
 
     def save_span(self, span: Span) -> None:
         """Insert or replace: called when a span starts and again when it ends."""
@@ -355,6 +399,7 @@ class Store:
         description: str,
         sample_prompt: str,
         config: dict[str, Any],
+        harness: dict[str, Any] | None = None,
     ) -> CustomAgent:
         now = time.time()
         agent = CustomAgent(
@@ -366,10 +411,11 @@ class Store:
             config=config,
             created_at=now,
             updated_at=now,
+            harness=harness,
         )
         self._write_agent(
             "INSERT INTO agents (name, name_key, description, sample_prompt, config, created_at,"
-            " updated_at, agent_id, template_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            " updated_at, harness, agent_id, template_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             agent,
         )
         return agent
@@ -382,6 +428,7 @@ class Store:
         description: str,
         sample_prompt: str,
         config: dict[str, Any],
+        harness: dict[str, Any] | Literal["keep"] | None = "keep",
     ) -> CustomAgent | None:
         current = self.get_agent(agent_id)
         if current is None:
@@ -393,11 +440,12 @@ class Store:
                 "sample_prompt": sample_prompt,
                 "config": config,
                 "updated_at": time.time(),
+                "harness": current.harness if harness == "keep" else harness,
             }
         )
         self._write_agent(
             "UPDATE agents SET name=?, name_key=?, description=?, sample_prompt=?, config=?,"
-            " created_at=?, updated_at=? WHERE agent_id=? AND template_id=?",
+            " created_at=?, updated_at=?, harness=? WHERE agent_id=? AND template_id=?",
             agent,
         )
         return agent
@@ -412,6 +460,7 @@ class Store:
             json.dumps(agent.config),
             agent.created_at,
             agent.updated_at,
+            json.dumps(agent.harness) if agent.harness is not None else None,
             agent.agent_id,
             agent.template_id,
         )
@@ -442,6 +491,7 @@ def _agent(row: sqlite3.Row) -> CustomAgent:
     data = dict(row)
     del data["name_key"]
     data["config"] = json.loads(data["config"])
+    data["harness"] = json.loads(data["harness"]) if data["harness"] is not None else None
     return CustomAgent.model_validate(data)
 
 
@@ -451,6 +501,8 @@ def _run(row: sqlite3.Row) -> Run:
     data["config"] = json.loads(data["config"])
     if data.get("village_action") is not None:
         data["village_action"] = json.loads(data["village_action"])
+    if data.get("harness") is not None:
+        data["harness"] = json.loads(data["harness"])
     ended = data["ended_at"]
     data["totals"] = RunTotals(
         llm_calls=data.pop("llm_calls"),

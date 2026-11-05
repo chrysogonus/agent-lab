@@ -38,7 +38,7 @@ phase, with a short message. Read `frontend/AGENTS.md` before frontend work.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create backend/src/agent_lab/harness/__init__.py (naming budget, guard, approvals, live) and
+- [X] T001 Create backend/src/agent_lab/harness/__init__.py (naming budget, guard, approvals, live) and
   backend/src/agent_lab/evaluation/__init__.py (naming model, checks, judge, results, examples,
   runner), each with only a module docstring.
   - Run `make check` first and note the baseline. It was 1,167 backend and 117 frontend tests at
@@ -51,7 +51,7 @@ phase, with a short message. Read `frontend/AGENTS.md` before frontend work.
 
 Every story needs these. No budget, retry or approval applies yet, and existing runs behave as before.
 
-- [ ] T002 Run states and new columns in backend/src/agent_lab/store.py, tests in
+- [X] T002 Run states and new columns in backend/src/agent_lab/store.py, tests in
   backend/tests/test_store.py (data-model.md, "Run: changed", "Agent: changed").
   - `RunStatus` adds `waiting_approval`, `over_budget`, `stopped` and `interrupted`. Add
     `LIVE_STATUSES = ("running", "waiting_approval")`.
@@ -66,7 +66,7 @@ Every story needs these. No budget, retry or approval applies yet, and existing 
   - Tests: a database made before M17 opens and keeps its rows; `copy_agents_from` still works; village
     runs are left alone by `mark_interrupted`.
 
-- [ ] T003 [P] `Budget`, `Harness` and `OverBudget` in backend/src/agent_lab/harness/budget.py, tests in
+- [X] T003 [P] `Budget`, `Harness` and `OverBudget` in backend/src/agent_lab/harness/budget.py, tests in
   backend/tests/test_budget.py (data-model.md, "Budget").
   - `Budget`: `model_calls` default 30, range 1–200; `tokens` default 200,000, range 1–2,000,000;
     `tool_calls` default 30, range 1–200; `seconds` default 600, range 1–3,600. "All four are required
@@ -75,7 +75,7 @@ Every story needs these. No budget, retry or approval applies yet, and existing 
   - `OverBudget(Exception)` with `reason`, formatted `model calls: 3 of 3`, `tokens: 205,120 of 200,000`,
     `tool calls: 30 of 30`, `time: 600 s of 600 s`.
 
-- [ ] T004 `RunGuard` and live runs in backend/src/agent_lab/harness/guard.py and
+- [X] T004 `RunGuard` and live runs in backend/src/agent_lab/harness/guard.py and
   backend/src/agent_lab/harness/live.py, tests in backend/tests/test_stop.py.
   - `current_guard: ContextVar[RunGuard | None]`, default `None`.
   - `RunGuard(harness, *, sleep=asyncio.sleep)`: for now `stop_requested`, `last_text` and
@@ -83,7 +83,7 @@ Every story needs these. No budget, retry or approval applies yet, and existing 
   - `LiveRuns`: `add(run_id, task, guard)`, `remove(run_id)`, and `stop(run_id) -> bool`, which sets
     `stop_requested` and cancels the task, False when the id is not live.
 
-- [ ] T005 `execute_run(guard=None)` in backend/src/agent_lab/runs.py and the model override in `new_run`,
+- [X] T005 `execute_run(guard=None)` in backend/src/agent_lab/runs.py and the model override in `new_run`,
   tests in backend/tests/test_stop.py (research §6, §9).
   - `execute_run` sets `current_guard` to its guard, also to `None`, and resets it in a `finally`.
   - It catches `CancelledError`: with `guard.stop_requested`, it finishes the run as `stopped`, with the
@@ -99,7 +99,7 @@ Every story needs these. No budget, retry or approval applies yet, and existing 
   - Tests: stopping a run across parallel branches within 2 s with its spans kept; a stop during a tool
     call; a plain cancellation with no stop mark re-raises; no guard behaves as before.
 
-- [ ] T006 The stream and the lab's start in backend/src/agent_lab/api.py, tests in
+- [X] T006 The stream and the lab's start in backend/src/agent_lab/api.py, tests in
   backend/tests/test_interrupted.py and backend/tests/test_api.py (contracts "Stream events").
   - `WS /runs/{id}/stream` keeps open for `LIVE_STATUSES`, and sends
     `{"type": "run_status", "run_id", "status"}` in the snapshot of a waiting run.
@@ -107,7 +107,7 @@ Every story needs these. No budget, retry or approval applies yet, and existing 
   - Tests: an orphaned running run shows as interrupted after a start; a village run does not; a
     `TestClient` used without `with` still works.
 
-- [ ] T007 [P] Run states in the view: frontend/src/lib/api.ts, frontend/src/lib/run-state.ts,
+- [X] T007 [P] Run states in the view: frontend/src/lib/api.ts, frontend/src/lib/run-state.ts,
   frontend/src/components/RunList.tsx and frontend/src/components/RunViewer.tsx, tests in
   frontend/src/lib/run-state.test.ts.
   - `RunStatus` grows; `Run` gains `stop_reason` and `harness`. `STATUS_TEXT`: "Waiting for approval", "Over

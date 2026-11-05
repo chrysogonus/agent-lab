@@ -4,8 +4,12 @@ import { formatTotals, runAgentLabel } from "@/lib/run-state";
 
 const STATUS_DOT: Record<Run["status"], string> = {
   running: "bg-signal",
+  waiting_approval: "bg-signal",
   completed: "bg-tool",
   max_iterations: "bg-fault",
+  over_budget: "bg-fault",
+  stopped: "bg-fault",
+  interrupted: "bg-fault",
   error: "bg-fault",
 };
 
