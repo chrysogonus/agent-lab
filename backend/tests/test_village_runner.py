@@ -13,7 +13,7 @@ from helpers import answer, fake_models
 from test_village_happenings import happening
 
 from agent_lab.bus import Bus
-from agent_lab.llm.base import ChatResponse, Message
+from agent_lab.llm.base import ChatResponse, Message, PassingLLMError
 from agent_lab.llm.fake import FakeLLM, ScriptItem
 from agent_lab.store import Store
 from agent_lab.village import runner
@@ -3562,3 +3562,25 @@ class _AnyId:
 
 
 ANY_ID: Any = _AnyId()
+
+
+@pytest.mark.anyio
+async def test_a_villagers_turn_is_not_retried_and_still_counts_as_failed(tmp_path: Path) -> None:
+    """M17 retries are for lab agents: the village behaves as it always has (FR-023)."""
+    busy = PassingLLMError("HTTP 429: busy")
+    v, _ = village_for(tmp_path, {n: [busy] * 20 for n in VILLAGERS})
+    morning(v)
+    for x in v.world["villagers"]:
+        x["triggers"] = ["woke"]
+    v.world["interval"] = 0
+    v.viewer_joined()
+    v.start()
+    assert v.task is not None
+    await asyncio.wait_for(v.task, 5)  # a retry wait would take far longer than this
+
+    assert v.world["paused_reason"] == "every decision failed 3 steps in a row"
+    assert villager(v, "Hilde")["last_action"]["reason"].startswith("turn failed")
+    for turn in v.store.list_turns("Hilde"):
+        spans = v.store.get_spans(turn.run_id)
+        assert sum(s.kind == "llm" for s in spans) == 1  # one try, and no retry
+        assert not any(k.startswith("lab.retry") for s in spans for k in s.attributes)

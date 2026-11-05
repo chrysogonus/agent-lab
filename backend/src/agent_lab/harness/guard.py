@@ -10,7 +10,11 @@ from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 
 from agent_lab.harness.budget import Harness, OverBudget
-from agent_lab.llm.base import ChatResponse
+from agent_lab.llm.base import ChatResponse, PassingLLMError
+
+_ATTEMPTS = 3  # a model call and up to 2 retries
+_WAITS = (2, 8)  # seconds before each retry, longer each time
+_LONGEST_HINT = 30  # the most a provider's own wait hint is honoured
 
 
 class RunGuard:
@@ -62,6 +66,21 @@ class RunGuard:
             self.over = OverBudget.of("tool calls", self.tool_calls, budget.tool_calls).reason
             raise OverBudget(self.over)
         self.tool_calls += 1
+
+    def retry_wait(self, error: PassingLLMError, attempt: int) -> float | None:
+        """Seconds before trying again, or None to give up. A wait past the time budget ends the
+        run instead of being waited out."""
+        if attempt >= _ATTEMPTS:
+            return None
+        wait = (
+            _WAITS[attempt - 1] if error.wait_hint is None else min(error.wait_hint, _LONGEST_HINT)
+        )
+        budget = self.harness.budget
+        left = self._clock.when() if self._clock else None
+        if budget and left is not None and wait > left - asyncio.get_running_loop().time():
+            self.over = self.over or OverBudget.of_time(budget.seconds).reason
+            raise OverBudget(self.over)
+        return wait
 
     def bind_clock(self, clock: asyncio.Timeout) -> None:
         self._clock = clock

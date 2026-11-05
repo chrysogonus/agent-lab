@@ -4,7 +4,15 @@ from typing import Any
 
 import httpx
 
-from agent_lab.llm.base import ChatResponse, LLMError, Message, ToolCall, strict_schema
+from agent_lab.llm.base import (
+    ChatResponse,
+    LLMError,
+    Message,
+    PassingLLMError,
+    ToolCall,
+    http_failure,
+    strict_schema,
+)
 
 # Thinking off on the local server: Ollama reads reasoning_effort; vLLM passes
 # chat_template_kwargs to the Qwen template.
@@ -59,10 +67,12 @@ class OpenAICompatClient:
             body |= self._reasoning_off
         try:
             response = await self._http.post(self._url, json=body, headers=self._headers)
+        except httpx.TransportError as exc:
+            raise PassingLLMError(f"request failed: {exc!r}") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"request failed: {exc!r}") from exc
         if response.status_code != 200:
-            raise LLMError(f"HTTP {response.status_code}: {response.text[:500]}")
+            raise http_failure(response)
         try:
             return _parse(response.json())
         except (ValueError, KeyError, IndexError, TypeError) as exc:

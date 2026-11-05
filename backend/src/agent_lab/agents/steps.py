@@ -14,7 +14,7 @@ from typing import Any, cast
 from pydantic import BaseModel, ValidationError
 
 from agent_lab.harness.guard import current_guard
-from agent_lab.llm.base import ChatResponse, LLMClient, Message, ToolCall
+from agent_lab.llm.base import ChatResponse, LLMClient, Message, PassingLLMError, ToolCall
 from agent_lab.mcp.host import HostTool
 from agent_lab.store import RunStatus
 from agent_lab.tools.base import ToolError
@@ -68,48 +68,69 @@ async def chat(
     model = ctx.llm.model
     extra = {"gen_ai.request.response_format": response_format} if response_format else {}
     guard = current_guard.get()
-    if guard:
-        guard.before_model_call()
-    async with ctx.tracer.span(
-        SpanKind.LLM,
-        f"chat {model}",
-        node_id=node_id,
-        input=list(messages),
-        attributes={
-            "gen_ai.operation.name": "chat",
-            "gen_ai.provider.name": ctx.llm.provider,
-            "gen_ai.request.model": model,
-            "lab.reasoning": ctx.reasoning,
-            **extra,
-            **_came_from(came_from),
-            **(attributes or {}),
-        },
-    ) as span:
-        response = await ctx.llm.chat(
-            messages,
-            [t.schema(name) for name, t in (tools or {}).items()],
-            response_format=response_format,
-            reasoning=ctx.reasoning,
-        )
-        span.output = response.as_message()
-        if response.reasoning:
-            span.output["reasoning"] = response.reasoning
-        span.model = response.model or model
-        span.tokens_in = response.tokens_in
-        span.tokens_out = response.tokens_out
-        span.attributes |= {
-            "gen_ai.response.model": span.model,
-            "gen_ai.usage.input_tokens": response.tokens_in,
-            "gen_ai.usage.output_tokens": response.tokens_out,
-        }
-        if response.tokens_cache_read is not None:
-            span.attributes |= {
-                "gen_ai.usage.cache_read.input_tokens": response.tokens_cache_read,
-                "gen_ai.usage.cache_creation.input_tokens": response.tokens_cache_write,
-            }
-    if guard:
-        guard.after_model_call(response)
-    return response
+    attempt = 0
+    while True:
+        attempt += 1
+        if guard:
+            guard.before_model_call()  # every attempt counts (FR-014)
+        wait: float | None = None
+        response: ChatResponse | None = None
+        async with ctx.tracer.span(
+            SpanKind.LLM,
+            f"chat {model}",
+            node_id=node_id,
+            input=list(messages),
+            attributes={
+                "gen_ai.operation.name": "chat",
+                "gen_ai.provider.name": ctx.llm.provider,
+                "gen_ai.request.model": model,
+                "lab.reasoning": ctx.reasoning,
+                **extra,
+                **_came_from(came_from),
+                **(attributes or {}),
+                **({"lab.retry.attempt": attempt} if attempt > 1 else {}),
+            },
+        ) as span:
+            try:
+                response = await ctx.llm.chat(
+                    messages,
+                    [t.schema(name) for name, t in (tools or {}).items()],
+                    response_format=response_format,
+                    reasoning=ctx.reasoning,
+                )
+            except PassingLLMError as exc:
+                span.error = str(exc)
+                wait = guard.retry_wait(exc, attempt) if guard else None
+                if wait is None:
+                    raise
+                span.attributes |= {
+                    "lab.retry.attempt": attempt,
+                    "lab.retry.reason": str(exc).splitlines()[0],
+                    "lab.retry.wait_s": wait,
+                }
+            if response is not None:
+                span.output = response.as_message()
+                if response.reasoning:
+                    span.output["reasoning"] = response.reasoning
+                span.model = response.model or model
+                span.tokens_in = response.tokens_in
+                span.tokens_out = response.tokens_out
+                span.attributes |= {
+                    "gen_ai.response.model": span.model,
+                    "gen_ai.usage.input_tokens": response.tokens_in,
+                    "gen_ai.usage.output_tokens": response.tokens_out,
+                }
+                if response.tokens_cache_read is not None:
+                    span.attributes |= {
+                        "gen_ai.usage.cache_read.input_tokens": response.tokens_cache_read,
+                        "gen_ai.usage.cache_creation.input_tokens": response.tokens_cache_write,
+                    }
+        if response is not None:
+            if guard:
+                guard.after_model_call(response)
+            return response
+        assert guard is not None and wait is not None, "only a guard asks for another try"
+        await guard.sleep(wait)
 
 
 async def call_tool(

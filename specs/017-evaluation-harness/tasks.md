@@ -316,7 +316,7 @@ run stops after 3 model calls as over budget, and the trace shows 3 model calls 
 **Independent Test**: a fake provider answers "rate limited" twice, then normally. The run completes, and its trace shows the
 two failed attempts with their reasons and waits.
 
-- [ ] T025 [P] [US3] `PassingLLMError` in backend/src/agent_lab/llm/base.py, backend/src/agent_lab/llm/openai_compat.py and
+- [X] T025 [P] [US3] `PassingLLMError` in backend/src/agent_lab/llm/base.py, backend/src/agent_lab/llm/openai_compat.py and
   backend/src/agent_lab/llm/anthropic.py, tests in backend/tests/test_retries.py (research §7).
   - Raised for any `httpx.TransportError`, and HTTP 408, 429, 500, 502, 503, 504 and 529, except a 429 whose body says
     `insufficient_quota`. Everything else stays a plain `LLMError`, and the text does not change.
@@ -324,7 +324,7 @@ two failed attempts with their reasons and waits.
   - Tests with `MockTransport` for both clients: each status, a timeout, a dropped connection, hints, a wrong key (401), a refused
     request (400) and an unknown model.
 
-- [ ] T026 [US3] The retry loop in backend/src/agent_lab/agents/steps.py and `retry_wait` in
+- [X] T026 [US3] The retry loop in backend/src/agent_lab/agents/steps.py and `retry_wait` in
   backend/src/agent_lab/harness/guard.py, tests in backend/tests/test_retries.py (FR-013, FR-014).
   - With a guard, `chat` tries up to 3 times, with one LLM span per attempt, each counted by `before_model_call`. A retried
     attempt's span carries `lab.retry.attempt`, `lab.retry.reason` and `lab.retry.wait_s`.
@@ -332,12 +332,12 @@ two failed attempts with their reasons and waits.
   - Tests: all four scenarios of User Story 3; a retry at the model call limit ends over budget; `decide` retries too; no guard
     means no retry; a run's totals count every attempt.
 
-- [ ] T027 [P] [US3] Showing attempts in frontend/src/lib/run-state.ts and frontend/src/components/SpanDetail.tsx, tests in
+- [X] T027 [P] [US3] Showing attempts in frontend/src/lib/run-state.ts and frontend/src/components/SpanDetail.tsx, tests in
   frontend/src/lib/run-state.test.ts.
   - `spanFacts(span)`: today's facts, plus "Attempt" and "Waited before the next try" when `lab.retry.*` is set. `SpanDetail` shows
     no attributes today, so without this the wait stays invisible (FR-014).
 
-- [ ] T028 [US3] The village stays as it was, in backend/tests/test_village_runner.py (FR-023).
+- [X] T028 [US3] The village stays as it was, in backend/tests/test_village_runner.py (FR-023).
   - A village turn with a provider failing with `PassingLLMError` once: no retry, no guard, and the failure counts as it does today.
     `test_pauses_after_three_failed_steps` still passes.
 

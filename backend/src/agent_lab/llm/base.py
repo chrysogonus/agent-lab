@@ -2,6 +2,7 @@
 
 from typing import Any, Literal, Protocol, cast
 
+import httpx
 from pydantic import BaseModel
 
 # The model providers; model refs and agent configs both use this one list.
@@ -51,6 +52,35 @@ class ChatResponse(BaseModel):
 
 class LLMError(Exception):
     """The model endpoint failed (transport, HTTP status or unparseable response)."""
+
+
+class PassingLLMError(LLMError):
+    """A failure that may pass by waiting: rate limited, busy, timed out, connection lost."""
+
+    def __init__(self, message: str, *, wait_hint: float | None = None) -> None:
+        super().__init__(message)
+        self.wait_hint = wait_hint  # seconds the provider asked for
+
+
+_PASSING_STATUSES = {408, 429, 500, 502, 503, 504, 529}
+
+
+def _wait_hint(headers: httpx.Headers) -> float | None:
+    """`retry-after-ms`, else `retry-after` in seconds; a date in it is not worth parsing."""
+    for name, per_second in (("retry-after-ms", 1000), ("retry-after", 1)):
+        try:
+            return float(headers[name]) / per_second
+        except (KeyError, ValueError):
+            continue
+    return None
+
+
+def http_failure(response: httpx.Response) -> LLMError:
+    """The error for a response other than 200."""
+    text = f"HTTP {response.status_code}: {response.text[:500]}"
+    if response.status_code not in _PASSING_STATUSES or "insufficient_quota" in response.text:
+        return LLMError(text)
+    return PassingLLMError(text, wait_hint=_wait_hint(response.headers))
 
 
 class LLMClient(Protocol):

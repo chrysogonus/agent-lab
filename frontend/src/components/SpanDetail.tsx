@@ -1,5 +1,5 @@
 import type { Span } from "@/lib/api";
-import { durationMs } from "@/lib/run-state";
+import { spanFacts } from "@/lib/run-state";
 
 function Payload({ title, value }: { title: string; value: unknown }) {
   if (value == null) return null;
@@ -18,15 +18,7 @@ export function SpanDetail({ span }: { span: Span | null }) {
   if (!span) {
     return <p className="text-sm text-muted">Select a span to see its input and output.</p>;
   }
-  const facts: [string, string][] = [
-    ["Kind", span.kind],
-    ["Node", span.node_id],
-    ["Latency", span.ended_at == null ? "running" : `${durationMs(span, span.ended_at)} ms`],
-    ["Provider", String(span.attributes["gen_ai.provider.name"] ?? "–")],
-    ["Model", span.model ?? "–"],
-    ["Tokens in / out", span.tokens_in == null ? "–" : `${span.tokens_in} / ${span.tokens_out ?? "–"}`],
-    ["Config", span.config_version],
-  ];
+  const facts = spanFacts(span);
   return (
     <div>
       <h2 className="text-base font-semibold break-words text-ink">{span.name}</h2>

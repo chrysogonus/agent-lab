@@ -152,3 +152,21 @@ export function formatTotals(t: RunTotals): string {
   if (t.wall_ms != null) parts.push(`${(t.wall_ms / 1000).toFixed(1)} s`);
   return parts.join(" · ");
 }
+
+/** What SpanDetail lists about a span; spans keep the rest in `attributes`. */
+export function spanFacts(span: Span): [string, string][] {
+  const facts: [string, string][] = [
+    ["Kind", span.kind],
+    ["Node", span.node_id],
+    ["Latency", span.ended_at == null ? "running" : `${durationMs(span, span.ended_at)} ms`],
+    ["Provider", String(span.attributes["gen_ai.provider.name"] ?? "–")],
+    ["Model", span.model ?? "–"],
+    ["Tokens in / out", span.tokens_in == null ? "–" : `${span.tokens_in} / ${span.tokens_out ?? "–"}`],
+    ["Config", span.config_version],
+  ];
+  const attempt = span.attributes["lab.retry.attempt"];
+  if (attempt != null) facts.push(["Attempt", `${String(attempt)} of 3`]);
+  const wait = span.attributes["lab.retry.wait_s"];
+  if (wait != null) facts.push(["Waited before the next try", `${String(wait)} s`]);
+  return facts;
+}

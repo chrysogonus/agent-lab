@@ -12,6 +12,7 @@ import {
   formatTotals,
   isBackEdge,
   runTotals,
+  spanFacts,
   spanRows,
   takenEdges,
   isLive,
@@ -403,5 +404,43 @@ describe("a run's status while it lives", () => {
     for (const status of ["completed", "max_iterations", "over_budget", "stopped", "interrupted", "error"] as const) {
       expect(isLive(status)).toBe(false);
     }
+  });
+});
+
+describe("spanFacts", () => {
+  const span = (attributes: Record<string, unknown>) =>
+    ({
+      span_id: "s",
+      parent_span_id: null,
+      node_id: "llm",
+      kind: "llm",
+      name: "chat m",
+      config_version: "v",
+      started_at: 1,
+      ended_at: 2,
+      tokens_in: 1,
+      tokens_out: 2,
+      model: "m",
+      attributes,
+    }) as unknown as Span;
+  const fact = (facts: [string, string][], label: string) => facts.find(([l]) => l === label)?.[1];
+
+  it("shows the plain facts of a span with no extras", () => {
+    const facts = spanFacts(span({ "gen_ai.provider.name": "local" }));
+    expect(fact(facts, "Provider")).toBe("local");
+    expect(fact(facts, "Tokens in / out")).toBe("1 / 2");
+    expect(fact(facts, "Attempt")).toBeUndefined();
+  });
+
+  it("shows which attempt this was and how long the lab waited after it", () => {
+    const facts = spanFacts(span({ "lab.retry.attempt": 2, "lab.retry.wait_s": 8 }));
+    expect(fact(facts, "Attempt")).toBe("2 of 3");
+    expect(fact(facts, "Waited before the next try")).toBe("8 s");
+  });
+
+  it("shows an attempt that was not retried", () => {
+    const facts = spanFacts(span({ "lab.retry.attempt": 3 }));
+    expect(fact(facts, "Attempt")).toBe("3 of 3");
+    expect(fact(facts, "Waited before the next try")).toBeUndefined();
   });
 });

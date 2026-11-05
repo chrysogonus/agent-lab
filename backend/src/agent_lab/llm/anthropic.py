@@ -13,7 +13,15 @@ from typing import Any, cast
 
 import httpx
 
-from agent_lab.llm.base import ChatResponse, LLMError, Message, ToolCall, strict_schema
+from agent_lab.llm.base import (
+    ChatResponse,
+    LLMError,
+    Message,
+    PassingLLMError,
+    ToolCall,
+    http_failure,
+    strict_schema,
+)
 
 API_VERSION = "2026-10-21"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -105,10 +113,12 @@ class AnthropicClient:
             body["messages"] = [_without_thinking(turn) for turn in turns]
         try:
             response = await self._http.post(self._url, json=body, headers=self._headers)
+        except httpx.TransportError as exc:
+            raise PassingLLMError(f"request failed: {exc!r}") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"request failed: {exc!r}") from exc
         if response.status_code != 200:
-            raise LLMError(f"HTTP {response.status_code}: {response.text[:500]}")
+            raise http_failure(response)
         try:
             data = response.json()
             parsed = _parse(data)
