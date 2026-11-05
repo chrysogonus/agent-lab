@@ -1,6 +1,7 @@
 import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -311,7 +312,12 @@ def test_a_status_change_keeps_the_run_open(tmp_path: Path) -> None:
 
 def test_an_agent_keeps_its_harness_apart_from_its_config(tmp_path: Path) -> None:
     store = Store(tmp_path / "lab.db")
-    fields = {"template_id": "react", "description": "", "sample_prompt": "hi", "config": {"a": 1}}
+    fields: dict[str, Any] = {
+        "template_id": "react",
+        "description": "",
+        "sample_prompt": "hi",
+        "config": {"a": 1},
+    }
     plain = store.create_agent(name="plain", **fields)
     harnessed = store.create_agent(name="limited", harness={"ask_first": ["x/y"]}, **fields)
     assert plain.harness is None
