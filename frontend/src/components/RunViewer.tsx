@@ -64,7 +64,7 @@ export function RunViewer({
                 onClick={onEdit}
                 className="ml-auto text-sm font-semibold text-llm hover:underline focus-visible:outline-2 focus-visible:outline-llm"
               >
-                Back to editing
+                {run.eval_id ? "Back to the results" : "Back to editing"}
               </button>
             )}
           </div>

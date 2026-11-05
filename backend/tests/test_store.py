@@ -6,6 +6,15 @@ from typing import Any
 import pytest
 
 from agent_lab.agents.react import build_graph
+from agent_lab.evaluation.model import (
+    Attempt,
+    CaseFields,
+    CheckResult,
+    Evaluation,
+    EvaluationState,
+)
+from agent_lab.evaluation.results import frozen_case
+from agent_lab.llm.models import ModelRef
 from agent_lab.store import CustomAgent, NameInUse, Run, RunTotals, Store
 from agent_lab.tracing.span import Span, SpanKind
 
@@ -391,3 +400,145 @@ def test_a_restart_interrupts_live_lab_runs_only(tmp_path: Path) -> None:
     interrupted = statuses["running"]
     assert interrupted is not None
     assert interrupted.ended_at is not None
+
+
+def fields(name: str = "Multiplies", prompt: str = "17*23?") -> CaseFields:
+    return CaseFields.model_validate(
+        {"name": name, "prompt": prompt, "checks": [{"kind": "contains", "text": "391"}]}
+    )
+
+
+def test_cases_round_trip_per_agent_by_name(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    second = store.create_case("a1", fields("Zebra"))
+    first = store.create_case("a1", fields("Apple"))
+    store.create_case("a2", fields("Other"))
+
+    assert [c.name for c in store.list_cases("a1")] == ["Apple", "Zebra"]
+    assert store.get_case(first.case_id) == first
+    assert first.agent_id == "a1"
+    assert first.checks == fields().checks
+
+    changed = store.update_case(second.case_id, fields("Zebra", prompt="other"))
+    assert changed is not None
+    assert changed.prompt == "other"
+    assert store.delete_case(first.case_id) is True
+    assert store.delete_case(first.case_id) is False
+    assert store.update_case(first.case_id, fields()) is None
+
+
+def test_a_case_name_is_unique_per_agent_ignoring_case(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_case("a1", fields("Multiplies"))
+    store.create_case("a2", fields("Multiplies"))  # another agent may use it
+    with pytest.raises(NameInUse):
+        store.create_case("a1", fields(" multiplies "))
+
+
+def evaluation(
+    eval_id: str, agent_id: str = "a1", state: EvaluationState = "running"
+) -> Evaluation:
+    return Evaluation(
+        eval_id=eval_id,
+        agent_id=agent_id,
+        agent_name="A",
+        config_version="v",
+        config={"model": "m"},
+        harness={"budget": None, "ask_first": [], "default_budget": True},
+        model=ModelRef(provider="local", model="m"),
+        repeats=2,
+        cases=[frozen_case("c1", fields())],
+        state=state,
+        started_at=1.0,
+    )
+
+
+def test_an_evaluation_and_its_attempts_round_trip(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_evaluation(evaluation("e1"))
+    attempt = Attempt(
+        eval_id="e1",
+        case_id="c1",
+        number=1,
+        run_id="r1",
+        outcome="fail",
+        reason="nope",
+        checks=[CheckResult(kind="contains", expected="x", result="fail", reason="nope")],
+        llm_calls=2,
+        tool_calls=1,
+        tokens=30,
+        wall_ms=5,
+    )
+    store.add_attempt(attempt)
+
+    assert store.get_evaluation("e1") == evaluation("e1")
+    assert store.attempts("e1") == [attempt]
+    store.finish_evaluation("e1", "stopped", 2.0)
+    stored = store.get_evaluation("e1")
+    assert stored is not None
+    assert (stored.state, stored.ended_at) == ("stopped", 2.0)
+
+
+def test_evaluations_list_per_agent_newest_first(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_evaluation(evaluation("old", state="finished"))
+    newer = evaluation("new", state="finished")
+    newer.started_at = 5.0
+    store.create_evaluation(newer)
+    store.create_evaluation(evaluation("other", agent_id="a2", state="finished"))
+    assert [e.eval_id for e in store.list_evaluations("a1")] == ["new", "old"]
+
+
+def test_a_restart_interrupts_a_running_evaluation_and_keeps_its_attempts(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    store.create_evaluation(evaluation("e1"))
+    store.create_evaluation(evaluation("e2", state="finished"))
+    store.add_attempt(Attempt(eval_id="e1", case_id="c1", number=1, outcome="pass"))
+
+    store.mark_evaluations_interrupted()
+
+    first, second = store.get_evaluation("e1"), store.get_evaluation("e2")
+    assert first is not None
+    assert second is not None
+    assert (first.state, second.state) == ("interrupted", "finished")
+    assert first.ended_at is not None
+    assert len(store.attempts("e1")) == 1
+
+
+def test_deleting_an_agent_takes_its_cases_results_and_attempt_runs_only(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = store.create_agent(
+        template_id="react", name="A", description="", sample_prompt="hi", config={}
+    )
+    mine = store.create_case(agent.agent_id, fields())
+    other_case = store.create_case("other", fields())
+    store.create_evaluation(evaluation("mine", agent_id=agent.agent_id))
+    store.add_attempt(Attempt(eval_id="mine", case_id="c1", number=1, outcome="pass", run_id="r1"))
+    store.create_evaluation(evaluation("theirs", agent_id="other"))
+
+    attempt_run = make_run("r1", 1.0)
+    attempt_run.eval_id = "mine"
+    store.create_run(attempt_run)
+    store.save_span(make_span("s1", 2.0))
+    judge_run = make_run("judge", 1.0)
+    judge_run.eval_id = "mine"
+    store.create_run(judge_run)
+    plain = make_run("plain", 1.0)
+    plain.agent_id = agent.agent_id
+    store.create_run(plain)
+    kept_attempt = make_run("kept", 1.0)
+    kept_attempt.eval_id = "theirs"
+    store.create_run(kept_attempt)
+
+    assert store.delete_agent(agent.agent_id) is True
+
+    assert store.get_case(mine.case_id) is None
+    assert store.get_evaluation("mine") is None
+    assert store.attempts("mine") == []
+    assert store.get_run("r1") is None
+    assert store.get_run("judge") is None
+    assert store.get_spans("r1") == []
+    assert store.get_run("plain") is not None  # its other runs stay, as they always have
+    assert store.get_run("kept") is not None
+    assert store.get_case(other_case.case_id) is not None
+    assert store.get_evaluation("theirs") is not None

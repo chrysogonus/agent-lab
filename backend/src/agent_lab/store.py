@@ -11,6 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from agent_lab.graph import Graph
+from agent_lab.store_evaluations import EVALUATION_SCHEMA, EvaluationTables, NameInUse
 from agent_lab.tracing.span import Span
 
 RunStatus = Literal[
@@ -137,10 +138,6 @@ class Run(BaseModel):
     harness: dict[str, Any] | None = None  # M17: what it ran under; None: nothing, or older
 
 
-class NameInUse(Exception):
-    """Another custom agent already has this name (ignoring case and surrounding spaces)."""
-
-
 class CustomAgent(BaseModel):
     agent_id: str
     template_id: str
@@ -153,7 +150,7 @@ class CustomAgent(BaseModel):
     harness: dict[str, Any] | None = None  # M17: budget and ask-first tools; None: neither
 
 
-class Store:
+class Store(EvaluationTables):
     def __init__(self, path: str | Path) -> None:
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -170,6 +167,8 @@ class Store:
         if "harness" not in agent_columns:
             self._db.execute("ALTER TABLE agents ADD COLUMN harness TEXT")
         self._db.execute("CREATE INDEX IF NOT EXISTS runs_by_tick ON runs(village_tick)")
+        self._db.execute("CREATE INDEX IF NOT EXISTS runs_by_eval ON runs(eval_id)")
+        self._db.executescript(EVALUATION_SCHEMA)
 
     def close(self) -> None:
         self._db.close()
@@ -471,9 +470,11 @@ class Store:
             raise NameInUse(agent.name) from exc
 
     def delete_agent(self, agent_id: str) -> bool:
-        """Runs of the agent keep their own snapshot and stay."""
+        """Runs of the agent keep their own snapshot and stay; its evaluations go with it."""
         with self._lock:
             cursor = self._db.execute("DELETE FROM agents WHERE agent_id=?", (agent_id,))
+            if cursor.rowcount > 0:
+                self._delete_evaluation_data(agent_id)
         return cursor.rowcount > 0
 
     def get_agent(self, agent_id: str) -> CustomAgent | None:

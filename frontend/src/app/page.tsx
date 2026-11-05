@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AgentBuilder } from "@/components/AgentBuilder";
 import { VillageView } from "@/components/village/VillageView";
 import { AgentPicker } from "@/components/AgentPicker";
+import { EvaluationPanel } from "@/components/evaluation/EvaluationPanel";
 import { PromptForm } from "@/components/PromptForm";
 import { RunList } from "@/components/RunList";
 import { RunViewer } from "@/components/RunViewer";
@@ -11,6 +12,7 @@ import { ToolsView } from "@/components/ToolsView";
 import {
   createAgent,
   deleteAgent,
+  getRun,
   listAgents,
   listRuns,
   blocksFrom,
@@ -46,6 +48,8 @@ export default function Home() {
   // Bumped when an agent is picked: the prompt box then shows that agent's sample prompt.
   const [picks, setPicks] = useState(0);
   const [view, setView] = useState<View>("agents");
+  const [tab, setTab] = useState<"build" | "evaluate">("build");
+  const [openEval, setOpenEval] = useState<string | null>(null); // the evaluation shown
   const refreshTools = useCallback(() => {
     listTools().then(setTools, () => {});
   }, []);
@@ -98,7 +102,12 @@ export default function Home() {
       setBlockSource(source);
       const names = agents.map((a) => a.name);
       const name = names.includes(source.name) ? copyName(source.name, names) : source.name;
-      setDraft(fromId ? draftFrom(source, agents) : { ...draftFromAgent(source), agentId: null, dirty: true, name });
+      setTab("build");
+      setDraft(
+        fromId
+          ? { ...draftFrom(source, agents), casesFrom: fromId } // a block draft has no id of its own
+          : { ...draftFromAgent(source), agentId: null, dirty: true, name },
+      );
       setPicks((n) => n + 1);
     } catch (e) {
       setSaveErrors({
@@ -112,6 +121,7 @@ export default function Home() {
     if (!mayLeave()) return;
     setAgentId(id);
     setPicks((n) => n + 1);
+    setOpenEval(null);
     setCurrent(null); // show the picked agent instead of the open run
     edit(agentPreview(agents, id));
   };
@@ -139,7 +149,7 @@ export default function Home() {
     try {
       const saved = draft.agentId
         ? await updateAgent(draft.agentId, draftFields(draft))
-        : await createAgent(draft.templateId, draftFields(draft));
+        : await createAgent(draft.templateId, draftFields(draft), draft.casesFrom);
       setAgents(await listAgents());
       setAgentId(saved.id);
       setDraft(draftFromAgent(saved));
@@ -191,7 +201,13 @@ export default function Home() {
     setRuns((r) => [started, ...r]);
   };
 
+  const openRun = (runId: string) => {
+    getRun(runId).then(setCurrent, () => {});
+  };
+
   const runAgent = current && agentPreview(agents, current.agent_id);
+  // Only a saved agent can be measured: a draft has nothing stored to copy from.
+  const canEvaluate = Boolean(preview) && !blockSource && !draft?.dirty && !(draft && !draft.agentId);
 
   const switchTo = (next: View) => {
     if (next === view || (next !== "agents" && !mayLeave())) return;
@@ -225,6 +241,26 @@ export default function Home() {
           }`}
         >
           {VIEW_LABELS[v]}
+        </button>
+      ))}
+    </nav>
+  );
+
+  const tabSwitch = (
+    <nav aria-label="Agent view" className="flex shrink-0 gap-1 self-start rounded-full border border-rule bg-panel p-0.5">
+      {(["build", "evaluate"] as const).map((t) => (
+        <button
+          key={t}
+          type="button"
+          aria-pressed={tab === t}
+          disabled={t === "evaluate" && !canEvaluate}
+          title={t === "evaluate" && !canEvaluate ? "Save the agent first" : undefined}
+          onClick={() => setTab(t)}
+          className={`rounded-full px-3 py-1 text-sm focus-visible:outline-2 focus-visible:outline-llm disabled:opacity-40 ${
+            tab === t ? "bg-ink text-panel" : "text-ink hover:bg-paper"
+          }`}
+        >
+          {t === "build" ? "Build" : "Evaluate"}
         </button>
       ))}
     </nav>
@@ -292,10 +328,29 @@ export default function Home() {
               initial={current}
               onEnded={refresh}
               onEdit={
-                runAgent?.kind === "custom" ? () => editAgain(runAgent.id) : undefined
+                current.eval_id
+                  ? () => setCurrent(null) // back to the results it came from
+                  : runAgent?.kind === "custom"
+                    ? () => editAgain(runAgent.id)
+                    : undefined
               }
             />
+          ) : tab === "evaluate" && canEvaluate && preview ? (
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              {tabSwitch}
+              <EvaluationPanel
+                key={preview.id}
+                agent={preview}
+                models={models}
+                tools={tools}
+                openEval={openEval}
+                onOpenEval={setOpenEval}
+                onOpenRun={openRun}
+              />
+            </div>
           ) : builderAgent ? (
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              {tabSwitch}
             <AgentBuilder
               key={`${builderAgent.id}:${draft?.agentId ?? (draft ? "new" : "view")}:${blockSource ? "blocks" : ""}`}
               agent={builderAgent}
@@ -319,6 +374,7 @@ export default function Home() {
                   : undefined
               }
             />
+            </div>
           ) : (
             <p className="text-sm text-muted">
               Pick an agent and run it, or open a past run to replay it.

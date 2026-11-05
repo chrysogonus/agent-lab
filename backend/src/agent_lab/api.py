@@ -33,10 +33,14 @@ from agent_lab.agents.registry import (
     pinned,
     validate_config,
 )
+from agent_lab.api_errors import field_error
+from agent_lab.api_evaluations import add_evaluation_routes, copy_cases
 from agent_lab.blocks.convert import to_blocks
 from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
+from agent_lab.evaluation.runner import Evaluations
 from agent_lab.graph import Graph
+from agent_lab.harness.live import LiveRuns
 from agent_lab.llm.models import LABELS, ModelRef, Models, UnavailableModel
 from agent_lab.mcp import jsonrpc
 from agent_lab.mcp.host import Host, ToolsUnavailable
@@ -101,6 +105,7 @@ class AgentFields(BaseModel):
 
 class NewAgent(AgentFields):
     template_id: str
+    cases_from: str | None = None  # a template's examples or an agent's cases to start with
 
 
 class GraphRequest(BaseModel):
@@ -128,11 +133,6 @@ def config_loc(loc: tuple[str | int, ...]) -> tuple[str | int, ...]:
         for i, part in enumerate(loc)
         if not (i and isinstance(loc[i - 1], int) and part in KIND_NAMES)
     )
-
-
-def field_error(loc: tuple[str | int, ...], msg: str) -> RequestValidationError:
-    """A 422 in FastAPI's own shape, so every rejection names its field the same way."""
-    return RequestValidationError([{"loc": loc, "msg": msg, "type": "value_error"}])
 
 
 def _modern_version(message: object) -> str | None:
@@ -177,7 +177,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
-        store.mark_interrupted()  # nothing can finish a run the last process left live (FR-022)
+        # Nothing can finish what the last process left live (FR-022).
+        store.mark_interrupted()
+        store.mark_evaluations_interrupted()
         await host.start()
         yield
         await host.close()
@@ -194,6 +196,11 @@ def create_app(
     bus = Bus()
     village = Village(store=store, models=models, bus=bus, secrets=secrets, host=host)
     app.state.village = village  # for tests that set up a scene
+    live = LiveRuns()
+    evaluations = Evaluations(
+        store=store, models=models, host=host, bus=bus, secrets=secrets, live=live
+    )
+    add_evaluation_routes(app, store, evaluations, village)
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
     def checked_config(template_id: str, raw: dict[str, Any]) -> BaseModel:
@@ -400,18 +407,22 @@ def create_app(
     @app.post("/agents", status_code=status.HTTP_201_CREATED)
     async def create_agent(body: NewAgent) -> AgentInfo:
         config = checked_config(body.template_id, body.config)
+        source = body.cases_from
+        if source and source not in AGENTS and store.get_agent(source) is None:
+            raise field_error(("body", "cases_from"), f"unknown agent {source!r}")
         try:
-            return saved(
-                store.create_agent(
-                    template_id=body.template_id,
-                    name=body.name,
-                    description=body.description,
-                    sample_prompt=body.sample_prompt,
-                    config=stored_config(config, body.model),
-                )
+            agent = store.create_agent(
+                template_id=body.template_id,
+                name=body.name,
+                description=body.description,
+                sample_prompt=body.sample_prompt,
+                config=stored_config(config, body.model),
             )
         except NameInUse:
             raise field_error(("body", "name"), "name already in use") from None
+        if source:
+            copy_cases(store, source, agent.agent_id)
+        return saved(agent)
 
     @app.put("/agents/{agent_id}")
     async def update_agent(agent_id: str, body: AgentFields) -> AgentInfo:
@@ -435,6 +446,8 @@ def create_app(
     @app.delete("/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_agent(agent_id: str) -> None:
         """Runs of the agent keep their own snapshot (name, config, graph) and stay listed."""
+        if evaluations.running_for(agent_id):
+            raise HTTPException(status.HTTP_409_CONFLICT, "an evaluation of it is running")
         if not store.delete_agent(agent_id):
             raise HTTPException(status_code=404, detail="unknown custom agent")
 

@@ -69,6 +69,7 @@ export type Run = {
   villager: string | null;
   village_action: VillageAction | null;
   stop_reason: string | null; // M17: why it ended early, e.g. "model calls: 3 of 3"
+  eval_id: string | null; // M17: an attempt of this evaluation
 };
 
 // The village (M6, M7). See specs/007-village-life/contracts/http-api.md.
@@ -493,8 +494,12 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
-export function createAgent(templateId: string, fields: AgentFields): Promise<AgentInfo> {
-  return send("POST", "/agents", { template_id: templateId, ...fields });
+export function createAgent(
+  templateId: string,
+  fields: AgentFields,
+  casesFrom: string | null = null,
+): Promise<AgentInfo> {
+  return send("POST", "/agents", { template_id: templateId, cases_from: casesFrom, ...fields });
 }
 
 export function updateAgent(agentId: string, fields: AgentFields): Promise<AgentInfo> {
@@ -508,3 +513,127 @@ export function deleteAgent(agentId: string): Promise<void> {
 export function previewGraph(templateId: string, config: AgentConfig): Promise<Graph> {
   return send("POST", "/graph", { template_id: templateId, config });
 }
+
+// M17: test cases and evaluations. See specs/017-evaluation-harness/contracts/interfaces.md.
+export type Check =
+  | { kind: "contains" | "not_contains"; text: string }
+  | { kind: "matches"; pattern: string }
+  | { kind: "tool_called" | "tool_not_called"; tool: string }
+  | { kind: "end_state"; state: "completed" | "max_iterations" | "over_budget" | "stopped" | "error" }
+  | { kind: "max_model_calls" | "max_tokens"; limit: number }
+  | { kind: "judge"; question: string; model?: ModelRef | null };
+
+export type CaseFields = {
+  name: string;
+  prompt: string;
+  checks: Check[];
+  approvals: "approve" | "deny";
+};
+
+export type TestCase = CaseFields & { case_id: string; agent_id: string; read_only: boolean };
+
+export type CheckResult = {
+  kind: string;
+  expected: string;
+  result: "pass" | "fail" | "error";
+  reason: string | null;
+  judge_run_id: string | null;
+};
+
+export type Attempt = {
+  eval_id: string;
+  case_id: string;
+  number: number;
+  run_id: string | null; // null: the run was refused before it started
+  outcome: "pass" | "fail" | "error";
+  reason: string | null;
+  checks: CheckResult[];
+  llm_calls: number | null;
+  tool_calls: number | null;
+  tokens: number | null;
+  wall_ms: number | null;
+};
+
+export type Rates = {
+  passed: number;
+  failed: number;
+  errors: number;
+  pass_rate: number | null; // null when every attempt was an error
+  avg_llm_calls: number | null;
+  avg_tokens: number | null;
+  avg_wall_ms: number | null;
+};
+
+export type Budget = { model_calls: number; tokens: number; tool_calls: number; seconds: number };
+
+export type EvaluationHarness = {
+  budget: Budget | null;
+  ask_first: string[];
+  default_budget: boolean; // the agent has none, so the attempts ran under the default
+};
+
+export type Evaluation = {
+  eval_id: string;
+  agent_id: string;
+  agent_name: string;
+  config_version: string;
+  harness: EvaluationHarness;
+  model: ModelRef;
+  repeats: number;
+  cases: (CaseFields & { case_id: string; fingerprint: string })[];
+  state: "running" | "finished" | "stopped" | "interrupted";
+  started_at: number;
+  ended_at: number | null;
+};
+
+export type EvaluationSummary = {
+  evaluation: Evaluation;
+  summary: { cases: Record<string, Rates>; overall: Rates };
+};
+
+export type EvaluationDetail = EvaluationSummary & { attempts: Attempt[] };
+
+export type ComparisonRow = {
+  case_id: string;
+  name: string;
+  change: "new" | "removed" | "changed" | "up" | "down" | "same" | "no_rate";
+  earlier_rate: number | null;
+  later_rate: number | null;
+};
+
+export type ComparisonSide = {
+  eval_id: string;
+  config_version: string;
+  model: ModelRef;
+  harness: EvaluationHarness;
+  started_at: number;
+  overall: Rates;
+};
+
+export type Comparison = { earlier: ComparisonSide; later: ComparisonSide; rows: ComparisonRow[] };
+
+const agentPath = (agentId: string) => `/agents/${encodeURIComponent(agentId)}`;
+const evaluationPath = (evalId: string) => `/evaluations/${encodeURIComponent(evalId)}`;
+
+export const listCases = (agentId: string): Promise<TestCase[]> => send("GET", `${agentPath(agentId)}/cases`);
+export const createCase = (agentId: string, fields: CaseFields): Promise<TestCase> =>
+  send("POST", `${agentPath(agentId)}/cases`, fields);
+export const updateCase = (caseId: string, fields: CaseFields): Promise<TestCase> =>
+  send("PUT", `/cases/${encodeURIComponent(caseId)}`, fields);
+export const deleteCase = (caseId: string): Promise<void> => send("DELETE", `/cases/${encodeURIComponent(caseId)}`);
+
+export const listEvaluations = (agentId: string): Promise<EvaluationSummary[]> =>
+  send("GET", `${agentPath(agentId)}/evaluations`);
+export const startEvaluation = (
+  agentId: string,
+  body: { repeats: number; case_ids?: string[]; model?: ModelRef | null },
+): Promise<Evaluation> => send("POST", `${agentPath(agentId)}/evaluations`, body);
+export const getEvaluation = (evalId: string): Promise<EvaluationDetail> => send("GET", evaluationPath(evalId));
+export const stopEvaluation = (evalId: string): Promise<Evaluation> => send("POST", `${evaluationPath(evalId)}/stop`);
+export const compareEvaluations = (earlier: string, later: string): Promise<Comparison> =>
+  send(
+    "GET",
+    `/evaluations/compare?earlier=${encodeURIComponent(earlier)}&later=${encodeURIComponent(later)}`,
+  );
+export const evaluationNotice = (provider: string): Promise<{ village_shares_provider: boolean }> =>
+  send("GET", `/evaluations/notice?provider=${encodeURIComponent(provider)}`);

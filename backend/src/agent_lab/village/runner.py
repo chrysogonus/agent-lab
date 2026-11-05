@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from agent_lab.agents.registry import config_tools
+from agent_lab.agents.registry import config_tools, pinned
 from agent_lab.blocks.model import LayoutError
 from agent_lab.bus import Bus
 from agent_lab.llm.models import Models, UnavailableModel
@@ -293,6 +293,17 @@ class Village(MeetingRuns, HappeningRuns):
         if v["working"]:
             return "working"
         return "walking" if v["goal"] else "idle"
+
+    def running_on(self) -> set[str]:
+        """The providers a running village is calling; an evaluation warns about sharing them."""
+        if not self.world["running"]:
+            return set()
+        shared = ("reflection_agent_id", "chronicler_agent_id", "planner_agent_id")
+        ids = [v["agent_id"] for v in self.world["villagers"]]
+        ids += [self.world[key] for key in (*shared, "meeting_agent_id")]
+        agents = [self.store.get_agent(agent_id or "") for agent_id in ids]
+        refs = [(pinned(a.config) or self.models.default) for a in agents if a]
+        return {ref.provider for ref in refs}
 
     def state(self) -> dict[str, Any]:
         world = copy.deepcopy(self.world)

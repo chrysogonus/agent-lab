@@ -129,7 +129,7 @@ Every story needs these. No budget, retry or approval applies yet, and existing 
 whose answers pass one case and fail the other. The results show 100% and 0%, the failed check and its
 reason, and a link to each run.
 
-- [ ] T008 [P] [US1] Cases and checks as data in backend/src/agent_lab/evaluation/model.py, tests in
+- [X] T008 [P] [US1] Cases and checks as data in backend/src/agent_lab/evaluation/model.py, tests in
   backend/tests/test_evaluation_checks.py (data-model.md, "Test case", "Check").
   - `Check`, a union on `kind`: `contains` and `not_contains` (`text`, 1–500), `matches` (`pattern`, 1–500,
     "must compile": an invalid pattern is refused with its reason), `tool_called` and `tool_not_called`
@@ -139,7 +139,7 @@ reason, and a link to each run.
     `approve` or `deny`, default `deny`. Unknown fields are refused.
   - `Case` adds `case_id`, `agent_id` and `read_only`. `Evaluation`, `Attempt`, `CheckResult`.
 
-- [ ] T009 [US1] Running checks in backend/src/agent_lab/evaluation/checks.py, tests in
+- [X] T009 [US1] Running checks in backend/src/agent_lab/evaluation/checks.py, tests in
   backend/tests/test_evaluation_checks.py (data-model.md, "Check"; research §13).
   - `run_check(check, run, spans) -> CheckResult` for all kinds but `judge`, pure.
   - A missing answer reads as empty, "so `contains` fails and `not_contains` passes". Tool checks read tool
@@ -147,7 +147,7 @@ reason, and a link to each run.
   - `max_tokens` is an **error** ("the provider reported no tokens") when any LLM span has no tokens.
   - A result's `reason` says what it expected and what the run did.
 
-- [ ] T010 [P] [US1] Outcomes, rates and comparison in backend/src/agent_lab/evaluation/results.py, tests in
+- [X] T010 [P] [US1] Outcomes, rates and comparison in backend/src/agent_lab/evaluation/results.py, tests in
   backend/tests/test_evaluation_results.py (FR-004, FR-004a, FR-006, FR-007).
   - `attempt_outcome(run, results)`, in FR-004's order:
     1. **error**: no run (refused), or the run ended `error` or `stopped`;
@@ -162,7 +162,7 @@ reason, and a link to each run.
   - `compare(earlier, later)`: per case `new`, `removed`, `changed`, `up`, `down`, `same` or `no_rate`, as in
     data-model.md, plus both sides' config version, budget and model.
 
-- [ ] T011 [P] [US1] The judge in backend/src/agent_lab/evaluation/judge.py, tests in
+- [X] T011 [P] [US1] The judge in backend/src/agent_lab/evaluation/judge.py, tests in
   backend/tests/test_evaluation_judge.py (research §10; contracts "Trace").
   - `judge(question, answer, *, model, eval_id, ...) -> CheckResult`: its own run with `agent_id` `judge`, the
     graph `start → judge → end`, `steps.invoke` and `steps.decide` with `answer: Literal["yes", "no"]`, and a
@@ -172,7 +172,7 @@ reason, and a link to each run.
   - Tests: the call is traced and valid against the graph; it adds nothing to the attempt's totals; a judge
     run stays out of `GET /runs`.
 
-- [ ] T012 [P] [US1] Example cases in backend/src/agent_lab/evaluation/examples.py, tests in
+- [X] T012 [P] [US1] Example cases in backend/src/agent_lab/evaluation/examples.py, tests in
   backend/tests/test_evaluation_examples.py (FR-009; research §11).
   - At least two cases for each of the six templates, with fixed ids such as `example-react-1`, as data.
   - ReAct, also used on the real model (SC-007): "What is 17 times 23?" (`contains` 391, `tool_called`
@@ -182,7 +182,7 @@ reason, and a link to each run.
   - Tests: every example passes with a scripted `FakeLLM` through the real agent, in the style of
     `test_templates.py`.
 
-- [ ] T013 [US1] Tables in backend/src/agent_lab/store_evaluations.py as the mixin `EvaluationTables` of
+- [X] T013 [US1] Tables in backend/src/agent_lab/store_evaluations.py as the mixin `EvaluationTables` of
   `Store`, deletion in backend/src/agent_lab/store.py, tests in backend/tests/test_store.py
   (data-model.md, "Test case", "Evaluation", "Attempt", "Deleting").
   - Tables `eval_cases`, `evaluations` and `eval_attempts`, with indexes on `agent_id`, plus `runs(eval_id)`.
@@ -192,7 +192,7 @@ reason, and a link to each run.
   - `delete_agent` also deletes its cases, evaluations and attempts, and the runs and spans with those
     evaluations' `eval_id`. Its other runs stay, as today.
 
-- [ ] T014 [US1] The evaluation task in backend/src/agent_lab/evaluation/runner.py, tests in
+- [X] T014 [US1] The evaluation task in backend/src/agent_lab/evaluation/runner.py, tests in
   backend/tests/test_evaluation_runner.py (FR-003, FR-003a, FR-008, FR-022; research §9).
   - `Evaluations(store, models, host, bus, secrets, live)`.
   - `start(agent_id, repeats, case_ids, model) -> Evaluation`: refuses a second evaluation (`repeats` 1–10;
@@ -208,7 +208,7 @@ reason, and a link to each run.
     attempts; a second start is refused; an unavailable tool is an error, not a fail; every attempt's run is
     stored, traced and absent from `GET /runs`.
 
-- [ ] T015 [US1] Routes in backend/src/agent_lab/api_evaluations.py, wired in backend/src/agent_lab/api.py, tests in
+- [X] T015 [US1] Routes in backend/src/agent_lab/api_evaluations.py, wired in backend/src/agent_lab/api.py, tests in
   backend/tests/test_evaluation_api.py (contracts "Test cases", "Evaluations").
   - `GET` and `POST /agents/{id}/cases` (409 at 50), `PUT` and `DELETE /cases/{id}` (409 for an example), with a
     template's examples listed first as `read_only: true`.
@@ -219,12 +219,12 @@ reason, and a link to each run.
   - `POST /agents` takes `cases_from` (a template's examples or a saved agent's cases, under new ids).
     `DELETE /agents/{id}` answers 409 during that agent's evaluation. The lifespan marks evaluations interrupted.
 
-- [ ] T016 [P] [US1] View logic in frontend/src/lib/evaluation.ts and calls in frontend/src/lib/api.ts, tests in
+- [X] T016 [P] [US1] View logic in frontend/src/lib/evaluation.ts and calls in frontend/src/lib/api.ts, tests in
   frontend/src/lib/evaluation.test.ts.
   - Check labels, `blankCheck(kind)`, the case form's rules before sending, `rateText` (none when `null`, with the
     error count), `changeText`, and which failed checks to show for an attempt.
 
-- [ ] T017 [US1] Components in frontend/src/components/evaluation/EvaluationPanel.tsx, CaseForm.tsx,
+- [X] T017 [US1] Components in frontend/src/components/evaluation/EvaluationPanel.tsx, CaseForm.tsx,
   EvaluationResults.tsx and EvaluationCompare.tsx.
   - `EvaluationPanel`: the agent's cases (examples read-only), its evaluations, and the start form with repeats, a
     choice of cases and a model picker from `modelOptions`. Includes the notice from `GET /evaluations/notice`, warning
@@ -234,7 +234,7 @@ reason, and a link to each run.
     averages, config version, model and budget, marked when default. Polls every 2 s while running, with Stop.
   - `EvaluationCompare`: per case both rates and the change, plus both versions, budgets and models.
 
-- [ ] T018 [US1] The switch in frontend/src/app/page.tsx and copying cases in frontend/src/lib/builder.ts, tests in
+- [X] T018 [US1] The switch in frontend/src/app/page.tsx and copying cases in frontend/src/lib/builder.ts, tests in
   frontend/src/lib/builder.test.ts.
   - A Build / Evaluate switch for a listed agent in the main area. An unsaved draft cannot be evaluated. An attempt's
     run link opens it in `RunViewer`.

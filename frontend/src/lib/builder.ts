@@ -4,6 +4,7 @@ import type { AgentConfig, AgentFields, AgentInfo, FieldErrorDetail, ModelRef } 
 import { blockAt, findBlock } from "./blocks";
 
 export type Draft = {
+  casesFrom: string | null; // a new agent copies this agent's or template's test cases
   agentId: string | null; // null until the first save
   templateId: string;
   name: string;
@@ -42,6 +43,7 @@ export function copyName(name: string, names: string[]): string {
 /** A new, unsaved custom agent starting from an agent's settings (a template or a duplicate). */
 export function draftFrom(source: AgentInfo, agents: AgentInfo[]): Draft {
   return {
+    casesFrom: source.id,
     agentId: null,
     templateId: source.template_id,
     name: copyName(source.name, agents.map((a) => a.name)),
@@ -55,6 +57,7 @@ export function draftFrom(source: AgentInfo, agents: AgentInfo[]): Draft {
 
 export function draftFromAgent(agent: AgentInfo): Draft {
   return {
+    casesFrom: null,
     agentId: agent.id,
     templateId: agent.template_id,
     name: agent.name,

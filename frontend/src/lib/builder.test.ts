@@ -233,3 +233,13 @@ describe("structural edits", () => {
     expect(toggleTool(react, "get_weather").config.tools).toEqual(["calculator", "get_weather"]);
   });
 });
+
+describe("the cases a new agent starts with", () => {
+  it("come from the agent or template a draft was made from", () => {
+    expect(draftFrom(agent({ id: "react" }), []).casesFrom).toBe("react");
+  });
+
+  it("are left alone when an agent is reopened", () => {
+    expect(draftFromAgent(agent({ id: "custom-1", kind: "custom" })).casesFrom).toBeNull();
+  });
+});
