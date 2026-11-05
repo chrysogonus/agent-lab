@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AgentBuilder } from "@/components/AgentBuilder";
 import { VillageView } from "@/components/village/VillageView";
 import { AgentPicker } from "@/components/AgentPicker";
+import { ApprovalsBanner } from "@/components/ApprovalsBanner";
 import { EvaluationPanel } from "@/components/evaluation/EvaluationPanel";
 import { PromptForm } from "@/components/PromptForm";
 import { RunList } from "@/components/RunList";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/api";
 import { copyName, draftFields, draftFrom, draftFromAgent, fieldErrors, type Draft } from "@/lib/builder";
 import { agentPreview } from "@/lib/run-state";
+import { useApprovals } from "@/lib/use-approvals";
 
 type View = "agents" | "village" | "tools";
 const VIEW_LABELS: Record<View, string> = { agents: "Agents", village: "Village", tools: "Tools" };
@@ -50,6 +52,7 @@ export default function Home() {
   const [view, setView] = useState<View>("agents");
   const [tab, setTab] = useState<"build" | "evaluate">("build");
   const [openEval, setOpenEval] = useState<string | null>(null); // the evaluation shown
+  const approvals = useApprovals();
   const refreshTools = useCallback(() => {
     listTools().then(setTools, () => {});
   }, []);
@@ -205,6 +208,14 @@ export default function Home() {
     getRun(runId).then(setCurrent, () => {});
   };
 
+  /** From any page: the run waiting for the owner, in the Agents view where runs are shown. */
+  const openWaiting = (runId: string) => {
+    if (!mayLeave()) return;
+    if (draft?.dirty) edit(preview); // the changes were discarded
+    setView("agents");
+    openRun(runId);
+  };
+
   const runAgent = current && agentPreview(agents, current.agent_id);
   // Only a saved agent can be measured: a draft has nothing stored to copy from.
   const canEvaluate = Boolean(preview) && !blockSource && !draft?.dirty && !(draft && !draft.agentId);
@@ -227,6 +238,10 @@ export default function Home() {
       edit(agentPreview(list, id));
     }, () => {});
   };
+
+  const banner = (
+    <ApprovalsBanner approvals={approvals.open} current={current?.run_id ?? null} onOpen={openWaiting} />
+  );
 
   const viewSwitch = (
     <nav aria-label="View" className="flex shrink-0 gap-1 rounded-full border border-rule bg-panel p-0.5 sm:mt-1.5">
@@ -273,6 +288,7 @@ export default function Home() {
           <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Glasshouse</h1>
           {viewSwitch}
         </header>
+        {banner}
         <ToolsView onChanged={refreshTools} />
       </div>
     );
@@ -285,6 +301,7 @@ export default function Home() {
           <h1 className="pt-2 text-xl font-semibold tracking-tight text-ink">Glasshouse</h1>
           {viewSwitch}
         </header>
+        {banner}
         <VillageView onEditAgent={editVillagerAgent} />
       </div>
     );
@@ -309,6 +326,7 @@ export default function Home() {
           />
         </div>
       </header>
+      {banner}
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         <nav
           className="max-h-60 shrink-0 overflow-auto rounded-lg border border-rule bg-panel lg:max-h-none lg:w-64"
@@ -326,6 +344,8 @@ export default function Home() {
             <RunViewer
               key={current.run_id}
               initial={current}
+              approvals={approvals.open}
+              onAnswered={approvals.refresh}
               onEnded={refresh}
               onEdit={
                 current.eval_id

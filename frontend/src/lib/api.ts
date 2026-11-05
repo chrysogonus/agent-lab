@@ -357,6 +357,7 @@ export type AgentFields = {
   config: AgentConfig;
   model: ModelRef | null;
   budget?: Budget | null; // absent: the default on a new agent, unchanged on an update
+  ask_first?: string[];
 };
 
 export type FieldErrorDetail = { loc: (string | number)[]; msg: string };
@@ -643,3 +644,22 @@ export const evaluationNotice = (provider: string): Promise<{ village_shares_pro
 
 export const budgetLimits = (): Promise<{ default: Budget; max: Budget }> => send("GET", "/budget-limits");
 export const stopRun = (runId: string): Promise<Run> => send("POST", `/runs/${encodeURIComponent(runId)}/stop`);
+
+export type OpenApproval = {
+  approval_id: string;
+  run_id: string;
+  agent_name: string;
+  prompt: string;
+  tool: string;
+  server: string;
+  arguments: Record<string, unknown>;
+  asked_at: number;
+  expires_at: number;
+};
+
+export const listApprovals = (): Promise<OpenApproval[]> => send("GET", "/approvals");
+export const answerApproval = (
+  approvalId: string,
+  decision: "approve" | "deny",
+  reason: string | null,
+): Promise<void> => send("POST", `/approvals/${encodeURIComponent(approvalId)}`, { decision, reason });

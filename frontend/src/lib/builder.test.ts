@@ -7,6 +7,7 @@ import {
   draftFields,
   draftFrom,
   draftFromAgent,
+  draftTools,
   fieldErrors,
   getField,
   moveItem,
@@ -15,6 +16,7 @@ import {
   renameItem,
   sectionNode,
   setField,
+  toggleAskFirst,
   toggleTool,
   type Draft,
 } from "./builder";
@@ -78,6 +80,7 @@ describe("drafts", () => {
       config: draft.config,
       model: null,
       budget: null, // M17: reopening an agent without a budget must not give it the default
+      ask_first: [],
     });
   });
 
@@ -271,5 +274,69 @@ describe("the budget a draft saves", () => {
     const edited = setField(draft, ["budget", "tokens"], 2000);
     expect(draftFields(edited).budget).toEqual({ ...budget, tokens: 2000 });
     expect(draftFields(setField(draft, ["budget"], null)).budget).toBeNull();
+  });
+});
+
+describe("the tools an agent can mark ask first", () => {
+  const block = (config: Record<string, unknown>, templateId: string) =>
+    draftFromAgent(agent({ kind: "custom", template_id: templateId, config: config as never }));
+
+  it("lists a ReAct agent's tools", () => {
+    expect(draftTools(block({ tools: ["calculator", "notes/write_note"] }, "react"))).toEqual([
+      "calculator",
+      "notes/write_note",
+    ]);
+  });
+
+  it("lists a routing agent's route tools once each", () => {
+    const routes = [
+      { name: "a", tool: "calculator" },
+      { name: "b", tool: null },
+      { name: "c", tool: "calculator" },
+    ];
+    expect(draftTools(block({ routes }, "routing"))).toEqual(["calculator"]);
+  });
+
+  it("lists a block agent's tools at any depth", () => {
+    const blocks = [
+      { kind: "model", name: "m", tools: ["get_weather"] },
+      { kind: "tool", name: "t", tool: "calculator" },
+      {
+        kind: "parallel",
+        name: "p",
+        mode: "branches",
+        branches: [{ name: "x", blocks: [{ kind: "tool", name: "deep", tool: "notes/read_note" }] }],
+      },
+      { kind: "loop", name: "l", body: [{ kind: "tool", name: "inner", tool: "calculator" }] },
+      {
+        kind: "router",
+        name: "r",
+        routes: [{ name: "q", blocks: [{ kind: "model", name: "n", tools: ["notes/write_note"] }] }],
+      },
+    ];
+    expect(draftTools(block({ blocks }, "blocks"))).toEqual([
+      "calculator",
+      "get_weather",
+      "notes/read_note",
+      "notes/write_note",
+    ]);
+  });
+
+  it("has nothing for a template without tools", () => {
+    expect(draftTools(block({}, "chain"))).toEqual([]);
+  });
+
+  it("toggles a mark, and a save sends it", () => {
+    const draft = draftFromAgent(agent({ kind: "custom", ask_first: ["calculator"] }));
+    expect(draft.askFirst).toEqual(["calculator"]);
+    const none = toggleAskFirst(draft, "calculator");
+    expect(none.askFirst).toEqual([]);
+    expect(none.dirty).toBe(true);
+    expect(draftFields(toggleAskFirst(none, "get_weather")).ask_first).toEqual(["get_weather"]);
+  });
+
+  it("a copy keeps its source's marks, and a template has none to give", () => {
+    expect(draftFrom(agent({ kind: "custom", ask_first: ["calculator"] }), []).askFirst).toEqual(["calculator"]);
+    expect(draftFrom(agent({ kind: "template" }), []).askFirst).toEqual([]);
   });
 });

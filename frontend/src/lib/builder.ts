@@ -1,11 +1,12 @@
 // Builder state: a draft custom agent and the edits on it. Pure; components stay thin.
 // Field names match the API's, so a 422 `loc` is a path into the draft.
 import type { AgentConfig, AgentFields, AgentInfo, Budget, FieldErrorDetail, ModelRef } from "./api";
-import { blockAt, findBlock } from "./blocks";
+import { allBlocks, blockAt, findBlock } from "./blocks";
 
 export type Draft = {
   casesFrom: string | null; // a new agent copies this agent's or template's test cases
   budget?: Budget | null; // unset: a new agent gets the default; null: no budget
+  askFirst: string[]; // tools that wait for the owner's approval before each call
   agentId: string | null; // null until the first save
   templateId: string;
   name: string;
@@ -47,6 +48,7 @@ export function draftFrom(source: AgentInfo, agents: AgentInfo[]): Draft {
     casesFrom: source.id,
     // A template's null means it has none to give; a saved agent's is a choice a copy keeps.
     budget: source.kind === "template" ? undefined : source.budget,
+    askFirst: source.ask_first,
     agentId: null,
     templateId: source.template_id,
     name: copyName(source.name, agents.map((a) => a.name)),
@@ -62,6 +64,7 @@ export function draftFromAgent(agent: AgentInfo): Draft {
   return {
     casesFrom: null,
     budget: agent.budget,
+    askFirst: agent.ask_first,
     agentId: agent.id,
     templateId: agent.template_id,
     name: agent.name,
@@ -73,9 +76,30 @@ export function draftFromAgent(agent: AgentInfo): Draft {
   };
 }
 
-export function draftFields({ name, description, sample_prompt, config, model, budget }: Draft): AgentFields {
-  const fields = { name, description, sample_prompt, config, model };
+export function draftFields({ name, description, sample_prompt, config, model, budget, askFirst }: Draft): AgentFields {
+  const fields = { name, description, sample_prompt, config, model, ask_first: askFirst };
   return budget === undefined ? fields : { ...fields, budget };
+}
+
+/** Every tool this draft's agent can call: the ones it can mark ask first. */
+export function draftTools({ templateId, config }: Draft): string[] {
+  if (templateId === "react") return (config.tools as string[] | undefined) ?? [];
+  if (templateId === "routing") {
+    const routes = (config.routes as { tool?: string | null }[] | undefined) ?? [];
+    return [...new Set(routes.flatMap((r) => (r.tool ? [r.tool] : [])))];
+  }
+  if (templateId !== "blocks") return [];
+  const names = allBlocks(config).flatMap(({ block }) =>
+    block.kind === "model" ? block.tools : block.kind === "tool" ? [block.tool] : [],
+  );
+  return [...new Set(names)].sort();
+}
+
+export function toggleAskFirst(draft: Draft, tool: string): Draft {
+  const askFirst = draft.askFirst.includes(tool)
+    ? draft.askFirst.filter((t) => t !== tool)
+    : [...draft.askFirst, tool];
+  return { ...draft, askFirst, dirty: true };
 }
 
 export function getField(draft: Draft, path: Path): unknown {

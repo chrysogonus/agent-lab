@@ -660,3 +660,31 @@ def test_agents_the_village_makes_have_no_budget(tmp_path: Path) -> None:
     village = app.state.village
     village.ensure_agents()
     assert all(agent.harness is None for agent in store.list_agents())
+
+
+# --- ask-first tools (M17, FR-015) ---
+
+
+def test_ask_first_is_kept_and_pruned_to_the_agents_tools(budget_client: TestClient) -> None:
+    config = {"reasoning": False, "tools": ["calculator", "get_weather"]}
+    agent = budget_client.post(
+        "/agents",
+        json=agent_body(config=config, ask_first=["calculator", "notes/not_this_agents"]),
+    ).json()
+    assert agent["ask_first"] == ["calculator"]
+
+    fields = {"name": "Budgeted", "sample_prompt": "hi", "config": config}
+    url = f"/agents/{agent['id']}"
+    assert budget_client.put(url, json=fields).json()["ask_first"] == ["calculator"]
+    changed = budget_client.put(url, json={**fields, "ask_first": ["get_weather"]})
+    assert changed.json()["ask_first"] == ["get_weather"]
+
+    fewer = {**fields, "config": {"reasoning": False, "tools": ["calculator"]}}
+    assert budget_client.put(url, json=fewer).json()["ask_first"] == []  # that tool is gone
+
+
+def test_a_saved_agents_ask_first_tools_follow_it_into_a_block_copy(
+    budget_client: TestClient,
+) -> None:
+    agent = budget_client.post("/agents", json=agent_body(ask_first=["calculator"])).json()
+    assert budget_client.get(f"/agents/{agent['id']}/blocks").json()["ask_first"] == ["calculator"]

@@ -8,7 +8,9 @@ direct agent tests) means `steps` behaves as if the harness did not exist.
 import asyncio
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
+from typing import Any
 
+from agent_lab.harness.approvals import CaseDecider, Decider, Decision
 from agent_lab.harness.budget import Harness, OverBudget
 from agent_lab.llm.base import ChatResponse, PassingLLMError
 
@@ -22,10 +24,17 @@ class RunGuard:
     cannot both take the last call. The first limit reached stays reached."""
 
     def __init__(
-        self, harness: Harness, *, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+        self,
+        harness: Harness,
+        *,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        decider: Decider | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> None:
         self.harness = harness
         self.sleep = sleep  # injected so that tests of retry waits do not wait
+        self.decider: Decider = decider or CaseDecider("deny")  # nobody to ask: do not call it
+        self.on_status = on_status  # told when the run starts and stops waiting for the owner
         self.stop_requested = False
         self.last_text: str | None = None  # what the run has said so far, if it ends early
         self.over: str | None = None  # the limit reached, once one is
@@ -81,6 +90,24 @@ class RunGuard:
             self.over = self.over or OverBudget.of_time(budget.seconds).reason
             raise OverBudget(self.over)
         return wait
+
+    def asks_first(self, tool: str) -> bool:
+        return tool in self.harness.ask_first
+
+    async def decide(self, tool: str, server: str, arguments: dict[str, Any]) -> Decision:
+        """Whether a tool marked ask first may be called. Parallel branches may wait at once."""
+        self._raise_if_over()
+        if self.decider.immediate:
+            return await self.decider.decide(tool, server, arguments)
+        self.pause_clock()
+        if self._paused == 1 and self.on_status:
+            self.on_status("waiting_approval")
+        try:
+            return await self.decider.decide(tool, server, arguments)
+        finally:
+            self.resume_clock()
+            if self._paused == 0 and self.on_status:
+                self.on_status("running")
 
     def bind_clock(self, clock: asyncio.Timeout) -> None:
         self._clock = clock

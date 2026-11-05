@@ -400,3 +400,40 @@ async def test_the_judges_call_does_not_count_against_the_agents_budget(tmp_path
     assert store.attempts(evaluation.eval_id)[0].outcome == "pass"
     assert finished.harness["default_budget"] is False
     assert finished.harness["budget"]["model_calls"] == 1
+
+
+async def test_a_case_says_what_happens_to_approval_requests(tmp_path: Path) -> None:
+    store = Store(tmp_path / "lab.db")
+    agent = store.create_agent(
+        template_id="react",
+        name="Asks first",
+        description="",
+        sample_prompt="hi",
+        config={"reasoning": False, "tools": ["calculator"]},
+        harness={"budget": None, "ask_first": ["calculator"]},
+    )
+    calls = {"kind": "tool_called", "tool": "calculator"}
+    store.create_case(agent.agent_id, fields("Denied", "first", checks=[calls]))
+    store.create_case(
+        agent.agent_id, fields("Approved", "second", checks=[calls], approvals="approve")
+    )
+    add = '{"expression": "1+1"}'
+    script: list[ScriptItem] = [
+        tool_call("calculator", add),  # Approved, by name
+        answer("2"),
+        tool_call("calculator", add),  # Denied
+        answer("All right."),
+    ]
+
+    evaluation = await lab(store, fake_models(FakeLLM(script))).start(agent.agent_id, repeats=1)
+    await done(store, evaluation)
+
+    outcomes = {a.case_id: a for a in store.attempts(evaluation.eval_id)}
+    by_name = {c.name: outcomes[c.case_id] for c in store.list_cases(agent.agent_id)}
+    assert by_name["Approved"].outcome == "pass"
+    assert by_name["Denied"].outcome == "fail"  # the tool was not called
+    assert by_name["Denied"].tool_calls == 0
+    run_id = by_name["Denied"].run_id
+    assert run_id is not None
+    decision = next(s for s in store.get_spans(run_id) if s.name.startswith("approval "))
+    assert decision.attributes["lab.approval.by"] == "case"

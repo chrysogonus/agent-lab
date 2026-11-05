@@ -41,6 +41,7 @@ from agent_lab.blocks.model import DEFAULT_BLOCKS, KIND_NAMES, LayoutError
 from agent_lab.bus import Bus
 from agent_lab.evaluation.runner import Evaluations
 from agent_lab.graph import Graph
+from agent_lab.harness.approvals import Approvals, OwnerDecider
 from agent_lab.harness.budget import DEFAULT_BUDGET, Budget, Harness
 from agent_lab.harness.guard import RunGuard
 from agent_lab.harness.live import LiveRuns
@@ -49,7 +50,7 @@ from agent_lab.mcp import jsonrpc
 from agent_lab.mcp.host import Host, ToolsUnavailable
 from agent_lab.mcp.lab_server import LAB
 from agent_lab.runs import UnknownAgent, execute_run, new_run
-from agent_lab.store import LIVE_STATUSES, CustomAgent, NameInUse, Run, Store
+from agent_lab.store import LIVE_STATUSES, CustomAgent, NameInUse, Run, RunStatus, Store
 from agent_lab.tracing.redact import redact
 from agent_lab.tracing.span import Span
 from agent_lab.village.happening_runs import WhisperError
@@ -107,6 +108,7 @@ class AgentFields(BaseModel):
     config: dict[str, Any]
     model: ModelRef | None = None  # None: follow the default model
     budget: Budget | None = None  # absent: the default on a new agent, unchanged on an update
+    ask_first: list[str] = []  # absent: none on a new agent, unchanged on an update
 
 
 class NewAgent(AgentFields):
@@ -207,7 +209,8 @@ def create_app(
         store=store, models=models, host=host, bus=bus, secrets=secrets, live=live
     )
     add_evaluation_routes(app, store, evaluations, village)
-    add_harness_routes(app, store, live)
+    approvals = Approvals()
+    add_harness_routes(app, store, live, approvals, ALLOWED_ORIGINS)
     tasks: set[asyncio.Task[None]] = set()  # strong refs so running runs are not collected
 
     def checked_config(template_id: str, raw: dict[str, Any]) -> BaseModel:
@@ -249,6 +252,12 @@ def create_app(
 
     def harness_of(agent: CustomAgent | None) -> Harness:
         return Harness.model_validate(agent.harness if agent and agent.harness else {})
+
+    def stored_harness(harness: Harness, config: BaseModel) -> dict[str, Any]:
+        """Only tools the config has can be marked: a tool taken out of it loses its mark."""
+        tools = config_tools(config)
+        kept = [tool for tool in harness.ask_first if tool in tools]
+        return harness.model_copy(update={"ask_first": kept}).model_dump()
 
     def custom_info(agent: CustomAgent) -> AgentInfo:
         config = validate_config(agent.template_id, agent.config, models.default)
@@ -436,7 +445,7 @@ def create_app(
                 description=body.description,
                 sample_prompt=body.sample_prompt,
                 config=stored_config(config, body.model),
-                harness=Harness(budget=budget).model_dump(),
+                harness=stored_harness(Harness(budget=budget, ask_first=body.ask_first), config),
             )
         except NameInUse:
             raise field_error(("body", "name"), "name already in use") from None
@@ -453,6 +462,8 @@ def create_app(
         harness = harness_of(current)
         if "budget" in body.model_fields_set:
             harness = harness.model_copy(update={"budget": body.budget})
+        if "ask_first" in body.model_fields_set:
+            harness = harness.model_copy(update={"ask_first": body.ask_first})
         try:
             return saved(
                 store.update_agent(
@@ -461,7 +472,7 @@ def create_app(
                     description=body.description,
                     sample_prompt=body.sample_prompt,
                     config=stored_config(config, body.model),
-                    harness=harness.model_dump(),
+                    harness=stored_harness(harness, config),
                 )
             )
         except NameInUse:
@@ -505,7 +516,23 @@ def create_app(
         harness = harness_of(store.get_agent(body.agent_id))
         run.harness = {**harness.model_dump(), "default_budget": False}
         store.create_run(run)
-        guard = RunGuard(harness)
+        run_id = run.run_id
+
+        def status_changed(new_status: str) -> None:
+            store.set_run_status(run_id, cast(RunStatus, new_status))
+            bus.publish(run_id, {"type": "run_status", "run_id": run_id, "status": new_status})
+
+        guard = RunGuard(
+            harness,
+            decider=OwnerDecider(
+                approvals,
+                run_id=run_id,
+                agent_name=run.agent_name or run.agent_id,
+                prompt=run.prompt,
+                secrets=run_secrets,
+            ),
+            on_status=status_changed,
+        )
         task = asyncio.create_task(
             execute_run(
                 run=run,

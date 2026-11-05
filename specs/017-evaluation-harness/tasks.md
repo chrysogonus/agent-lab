@@ -352,7 +352,7 @@ two failed attempts with their reasons and waits.
 **Independent Test**: mark `notes/write_note` as ask first and run an agent whose scripted fake model calls it. The run waits; denying
 it gives the model the denial as the tool's result; a second run that is approved writes the note.
 
-- [ ] T029 [P] [US4] Pending requests in backend/src/agent_lab/harness/approvals.py, tests in backend/tests/test_approvals.py
+- [X] T029 [P] [US4] Pending requests in backend/src/agent_lab/harness/approvals.py, tests in backend/tests/test_approvals.py
   (data-model.md, "Approval request"; research §8).
   - `Approvals`: `ask(...)` awaits a future, with `asked_at` and `expires_at` 10 minutes apart, and removes it in a `finally`;
     `open()`, oldest first; `answer(id, approve, reason) -> bool`.
@@ -360,7 +360,7 @@ it gives the model the denial as the tool's result; a second run that is approve
     (`owner`, `timeout`, `case`).
   - No answer in time: denied, reason "no answer from the owner", `by` `timeout`.
 
-- [ ] T030 [US4] Asking first in backend/src/agent_lab/agents/steps.py and backend/src/agent_lab/harness/guard.py, tests in
+- [X] T030 [US4] Asking first in backend/src/agent_lab/agents/steps.py and backend/src/agent_lab/harness/guard.py, tests in
   backend/tests/test_approvals.py (FR-016, FR-017, FR-019, FR-021).
   - In `call_tool`, after the arguments parse and for a known tool in `ask_first`, before the tool span: an `approval <tool>` step span
     on the tool's node, with `lab.came_from`, redacted arguments as input, and the `lab.approval.*` attributes from the contract.
@@ -371,7 +371,7 @@ it gives the model the denial as the tool's result; a second run that is approve
   - Tests: all six scenarios of User Story 4 but the page's; a block agent's tool block; two calls decided in order; a wait longer than the
     time budget (FR-019); a Stop during a wait; a denied call counted by no tool span; `assert_trace_valid`.
 
-- [ ] T031 [US4] Marking tools and answering in backend/src/agent_lab/api.py and backend/src/agent_lab/api_harness.py, tests in
+- [X] T031 [US4] Marking tools and answering in backend/src/agent_lab/api.py and backend/src/agent_lab/api_harness.py, tests in
   backend/tests/test_approvals.py and backend/tests/test_agents_api.py (FR-015; contracts "Approvals").
   - `ask_first` on `POST` and `PUT /agents`: absent on `PUT` means unchanged; pruned on save to `config_tools`.
   - `start_run`'s guard gets `OwnerDecider`.
@@ -379,12 +379,12 @@ it gives the model the denial as the tool's result; a second run that is approve
     longer open; **403 for a foreign `Origin`**, as `/mcp` does.
   - Tests: arguments are redacted, including a servers-file secret; a restart leaves no tool call to go out (FR-022).
 
-- [ ] T032 [US4] Cases decide in backend/src/agent_lab/evaluation/runner.py, tests in backend/tests/test_evaluation_runner.py (FR-020).
+- [X] T032 [US4] Cases decide in backend/src/agent_lab/evaluation/runner.py, tests in backend/tests/test_evaluation_runner.py (FR-020).
   - Each attempt's guard gets `CaseDecider(case.approvals)`.
   - Tests: deny, the default, leaves the tool uncalled and marks the span `by` `case`; approve calls it; a saved agent's ask-first tools come from
     the copy.
 
-- [ ] T033 [P] [US4] Approvals on the page in frontend/src/lib/use-approvals.ts, frontend/src/components/ApprovalsBanner.tsx,
+- [X] T033 [P] [US4] Approvals on the page in frontend/src/lib/use-approvals.ts, frontend/src/components/ApprovalsBanner.tsx,
   frontend/src/components/ApprovalCard.tsx, frontend/src/components/RunViewer.tsx, frontend/src/app/page.tsx and
   frontend/src/lib/run-state.ts, tests in frontend/src/lib/run-state.test.ts.
   - `useApprovals` polls `GET /approvals` every 2 s. `ApprovalsBanner` shows on all three views (FR-018), and opens the waiting run, switching to
@@ -392,7 +392,7 @@ it gives the model the denial as the tool's result; a second run that is approve
   - `ApprovalCard`, in `RunViewer` for that run's requests: the tool, arguments, a reason box, Approve and Deny.
   - `spanFacts` adds "Decision" and "Decided by" from `lab.approval.*` (FR-021).
 
-- [ ] T034 [P] [US4] Ask-first choices in frontend/src/components/builder/AgentSettings.tsx and frontend/src/lib/builder.ts, tests in
+- [X] T034 [P] [US4] Ask-first choices in frontend/src/components/builder/AgentSettings.tsx and frontend/src/lib/builder.ts, tests in
   frontend/src/lib/builder.test.ts.
   - `Draft` gains `askFirst`, copied like `budget`. `draftTools(draft)` lists the tools of a ReAct, routing or block config, in any block depth.
   - One checkbox per tool, read-only for templates.

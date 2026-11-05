@@ -30,6 +30,7 @@ from agent_lab.evaluation.model import (
     Judge,
 )
 from agent_lab.evaluation.results import attempt_outcome, frozen_case
+from agent_lab.harness.approvals import CaseDecider
 from agent_lab.harness.budget import DEFAULT_BUDGET, Harness
 from agent_lab.harness.guard import RunGuard
 from agent_lab.harness.live import LiveRuns
@@ -194,7 +195,7 @@ class Evaluations:
         )
         run.harness = evaluation.harness
         self.store.create_run(run)
-        guard = RunGuard(copy.harness)
+        guard = RunGuard(copy.harness, decider=CaseDecider(case.approvals))
         task = asyncio.create_task(
             execute_run(
                 run=run,

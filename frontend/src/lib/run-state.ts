@@ -153,6 +153,12 @@ export function formatTotals(t: RunTotals): string {
   return parts.join(" · ");
 }
 
+const DECIDED_BY: Record<string, string> = {
+  owner: "the owner",
+  case: "the test case",
+  timeout: "nobody: the time ran out",
+};
+
 /** What SpanDetail lists about a span; spans keep the rest in `attributes`. */
 export function spanFacts(span: Span): [string, string][] {
   const facts: [string, string][] = [
@@ -168,5 +174,9 @@ export function spanFacts(span: Span): [string, string][] {
   if (attempt != null) facts.push(["Attempt", `${String(attempt)} of 3`]);
   const wait = span.attributes["lab.retry.wait_s"];
   if (wait != null) facts.push(["Waited before the next try", `${String(wait)} s`]);
+  const decision = span.attributes["lab.approval.decision"];
+  if (decision != null) facts.push(["Decision", String(decision).replace("_", " ")]);
+  const by = span.attributes["lab.approval.by"];
+  if (by != null) facts.push(["Decided by", DECIDED_BY[String(by)] ?? String(by)]);
   return facts;
 }

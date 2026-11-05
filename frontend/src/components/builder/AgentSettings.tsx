@@ -1,5 +1,5 @@
 import type { ModelInfo, ToolInfo } from "@/lib/api";
-import type { Path, Section } from "@/lib/builder";
+import { draftTools, toggleAskFirst, type Path, type Section } from "@/lib/builder";
 import { BudgetFields } from "./BudgetFields";
 import { ModelSelect, NumberField, TextField, Toggle, type Form } from "./fields";
 import { ItemList, ToolPicker } from "./ItemList";
@@ -30,6 +30,23 @@ export function AgentSettings({
       <TextField form={form} path={["sample_prompt"]} label="Sample prompt" multiline />
       <ModelSelect form={form} models={models} />
       <BudgetFields form={form} />
+      {draftTools(form.draft).length > 0 && (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1 text-sm font-medium text-ink">Ask me before calling</legend>
+          {draftTools(form.draft).map((tool) => (
+            <label key={tool} className="flex items-start gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={form.draft.askFirst.includes(tool)}
+                disabled={form.readOnly}
+                onChange={() => form.update((d) => toggleAskFirst(d, tool))}
+              />
+              {tool}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <Toggle
         form={form}
         path={["config", "reasoning"]}

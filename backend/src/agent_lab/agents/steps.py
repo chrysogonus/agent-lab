@@ -13,7 +13,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 
-from agent_lab.harness.guard import current_guard
+from agent_lab.harness.guard import RunGuard, current_guard
 from agent_lab.llm.base import ChatResponse, LLMClient, Message, PassingLLMError, ToolCall
 from agent_lab.mcp.host import HostTool
 from agent_lab.store import RunStatus
@@ -150,6 +150,10 @@ async def call_tool(
     tool = tools.get(call.name)
     guard = current_guard.get()
     if guard and tool:
+        if guard.asks_first(tool.config_name):
+            denied = await _ask_first(ctx, guard, tool, call, came_from, node_id)
+            if denied is not None:
+                return denied  # where the tool's result would go: the model or the next block
         guard.before_tool_call()  # before the span: a tool span means the tool was called
     async with ctx.tracer.span(
         SpanKind.TOOL,
@@ -190,6 +194,37 @@ async def call_tool(
         span.error = result.error
         span.output = result.text
     return result.text
+
+
+async def _ask_first(
+    ctx: StepContext,
+    guard: RunGuard,
+    tool: HostTool,
+    call: ToolCall,
+    came_from: Sequence[str] | None,
+    node_id: str | None,
+) -> str | None:
+    """The denial text, or None when the call may go. Its own span, before any tool span, so a
+    denied call has none (research §8). Arguments it cannot read reach no tool: nothing to ask."""
+    try:
+        arguments = _parse_arguments(call.arguments)
+    except ToolError:
+        return None
+    async with ctx.tracer.span(
+        SpanKind.STEP,
+        f"approval {tool.config_name}",
+        node_id=node_id or f"tool:{tool.config_name}",
+        input=arguments,
+        attributes={"gen_ai.tool.name": tool.config_name, **_came_from(came_from)},
+    ) as span:
+        decision = await guard.decide(tool.config_name, tool.server, arguments)
+        span.output = decision.text
+        span.attributes |= {
+            "lab.approval.decision": decision.outcome,
+            "lab.approval.by": decision.by,
+            **({"lab.approval.reason": decision.reason} if decision.reason else {}),
+        }
+    return None if decision.approved else decision.text
 
 
 async def decide[T: BaseModel](

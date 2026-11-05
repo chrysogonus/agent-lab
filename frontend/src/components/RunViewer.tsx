@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { stopRun, type Run } from "@/lib/api";
+import { stopRun, type OpenApproval, type Run } from "@/lib/api";
 import { runModel } from "@/lib/models";
 import { activeNodes, formatTotals, isLive, runTotals, takenEdges } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import { useRunStream } from "@/lib/use-run-stream";
+import { ApprovalCard } from "./ApprovalCard";
 import { GraphView } from "./GraphView";
 import { SpanDetail } from "./SpanDetail";
 import { Waterfall } from "./Waterfall";
@@ -24,10 +25,14 @@ const STATUS_TEXT: Record<Run["status"], string> = {
 /** Live view and replay of one run; both render the same stream. Mount with key={run_id}. */
 export function RunViewer({
   initial,
+  approvals = [],
+  onAnswered = () => {},
   onEnded,
   onEdit,
 }: {
   initial: Run;
+  approvals?: OpenApproval[]; // every run's: this run shows its own; the village's never ask
+  onAnswered?: () => void;
   onEnded: (run: Run) => void;
   onEdit?: () => void; // set while the run's custom agent still exists
 }) {
@@ -80,6 +85,11 @@ export function RunViewer({
           {run.stop_reason && <p className="px-4 pt-3 text-sm text-fault">{run.stop_reason}</p>}
           {run.answer && <p className="px-4 py-3 text-sm text-ink">{run.answer}</p>}
           {view.error && <p role="alert" className="px-4 py-3 text-sm text-fault">{view.error}</p>}
+          {approvals
+            .filter((a) => a.run_id === run.run_id)
+            .map((a) => (
+              <ApprovalCard key={a.approval_id} approval={a} onAnswered={onAnswered} />
+            ))}
         </section>
         <section className="h-72 rounded-lg border border-rule bg-panel" aria-label="Agent graph">
           <GraphView

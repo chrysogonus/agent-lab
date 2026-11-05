@@ -443,4 +443,16 @@ describe("spanFacts", () => {
     expect(fact(facts, "Attempt")).toBe("3 of 3");
     expect(fact(facts, "Waited before the next try")).toBeUndefined();
   });
+
+  it("shows who decided an approval, and what", () => {
+    const facts = spanFacts(span({ "lab.approval.decision": "timed_out", "lab.approval.by": "timeout" }));
+    expect(fact(facts, "Decision")).toBe("timed out");
+    expect(fact(facts, "Decided by")).toBe("nobody: the time ran out");
+    expect(fact(spanFacts(span({ "lab.approval.decision": "denied", "lab.approval.by": "case" })), "Decided by")).toBe(
+      "the test case",
+    );
+    expect(fact(spanFacts(span({ "lab.approval.decision": "approved", "lab.approval.by": "owner" })), "Decided by")).toBe(
+      "the owner",
+    );
+  });
 });
