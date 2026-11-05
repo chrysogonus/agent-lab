@@ -134,7 +134,10 @@ The rules behind each choice are in [research.md](research.md), and the shapes a
 ### Frontend
 
 - `lib/api.ts`: the new types and calls. `RunStatus` grows, so `tsc` finds every status table.
-- `lib/run-state.ts` (+ test): `applyEvent` handles `run_status`; `RunView` gains `status`.
+- `lib/run-state.ts` (+ test): `applyEvent` handles `run_status`; `RunView` gains `status`;
+  `spanFacts(span)` adds retry and approval facts.
+- `components/SpanDetail.tsx`: shows `spanFacts`, since it shows no attributes today and FR-014 and
+  FR-021 need waits and decisions visible.
 - `lib/builder.ts` (+ test): `Draft` gains `budget`, `askFirst` and `casesFrom`; `draftFrom` copies a saved agent's, and leaves a template's budget unset so the server fills in the default;
   `draftTools(draft)` lists the tools the agent can mark.
 - `lib/evaluation.ts` (+ test):
