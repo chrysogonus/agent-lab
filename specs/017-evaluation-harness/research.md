@@ -76,7 +76,8 @@ Items 4, 5 and 6 rest on a throwaway probe under Python 3.12: cancelling through
 
 ## 5. The time budget, and the clock during approvals (FR-019)
 
-- **Decision**: `asyncio.timeout` around `agent.run`. `TimeoutError` becomes `over_budget`. While
+- **Decision**: `asyncio.timeout` around `agent.run`. A `TimeoutError` becomes `over_budget` only when
+  the timeout's `expired()` says the budget caused it; one raised inside the agent stays a failure. While
   **any** call in the run waits for approval, the clock is paused with `reschedule(None)`; it
   resumes with the time that was left when the last wait ends.
 - **Rationale**: the spec does not say what happens when one branch waits while another works.
@@ -193,6 +194,11 @@ Items 4, 5 and 6 rest on a throwaway probe under Python 3.12: cancelling through
   nothing. The village creates agents through the store and gets none (FR-023).
 - **Copies keep their source's budget and ask-first tools**, also no budget: a large old agent is the
   reason budgets are opt-in. A new agent from a template has no source budget, so it gets the default.
+- **Unsaved drafts must not turn a template's `null` into "no budget"**: `draftFrom` leaves `budget`
+  unset for a template, so the save omits it and the server fills in the default. `GET /blocks/new`
+  and `GET /agents/{template}/blocks` answer with the default budget, and
+  `GET /agents/{saved agent}/blocks` with that agent's budget and ask-first tools. These block drafts
+  have no id of their own, so the page passes the source's id as `cases_from`.
 - **`ask_first` is pruned on save** to the config's current tools, using `config_tools`.
 - **Limits in one place**: `harness/budget.py`, served by `GET /budget-limits`, so the frontend repeats
   no numbers.

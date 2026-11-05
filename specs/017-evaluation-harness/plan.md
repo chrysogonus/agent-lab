@@ -90,7 +90,7 @@ The rules behind each choice are in [research.md](research.md), and the shapes a
     returns the denial text with no tool span; a stopped call records that the answer was not awaited.
 - `runs.py`:
   - `execute_run(guard=…)`: sets `current_guard`, wraps the agent in `asyncio.timeout`, and maps
-    `OverBudget`, `TimeoutError` and a requested stop to their states, the guard's state first;
+    `OverBudget`, an expired time budget and a requested stop to their states, the guard's state first;
   - `new_run` splits so an evaluation can start from its copy, and takes a model override.
 - `workflows/orchestrator.py`: `gather(return_exceptions=True)`, re-raising the first, as `blocks/run.py`.
 - `llm/base.py`, `llm/openai_compat.py`, `llm/anthropic.py`: `PassingLLMError` with `wait_hint`.
@@ -135,7 +135,7 @@ The rules behind each choice are in [research.md](research.md), and the shapes a
 
 - `lib/api.ts`: the new types and calls. `RunStatus` grows, so `tsc` finds every status table.
 - `lib/run-state.ts` (+ test): `applyEvent` handles `run_status`; `RunView` gains `status`.
-- `lib/builder.ts` (+ test): `Draft` gains `budget`, `askFirst` and `casesFrom`; `draftFrom` sets them;
+- `lib/builder.ts` (+ test): `Draft` gains `budget`, `askFirst` and `casesFrom`; `draftFrom` copies a saved agent's, and leaves a template's budget unset so the server fills in the default;
   `draftTools(draft)` lists the tools the agent can mark.
 - `lib/evaluation.ts` (+ test):
   - check labels, a blank check per kind, and the case form's rules;
@@ -158,8 +158,8 @@ The rules behind each choice are in [research.md](research.md), and the shapes a
 ### Tests
 
 - **Backend**:
-  - `test_budget.py`: each limit, tokens over on one call, parallel branches, the time budget, retries
-    against the budget, no budget;
+  - `test_budget.py`: each limit, tokens over on one call, parallel branches, the time budget, a
+    `TimeoutError` from inside the agent not counting as one, retries against the budget, no budget;
   - `test_stop.py`: Stop within 2 s, during a tool call, across parallel branches, on village runs;
   - `test_retries.py`: the failure table with `MockTransport` for both clients, hints, the 30 s cap, one
     span per attempt, totals;
@@ -172,6 +172,7 @@ The rules behind each choice are in [research.md](research.md), and the shapes a
   - `test_evaluation_judge.py`: traced, its own run, outside the budget, neither yes nor no;
   - `test_evaluation_examples.py`: every template's examples pass with a scripted model;
   - `test_evaluation_api.py`: routes, limits, read-only examples, copying cases, deleting an agent, notice;
+  - `test_agents_api.py` (additions): which budget each way of making an agent starts with;
   - `test_interrupted.py`: runs and evaluations at start; village runs left alone.
 - **Existing tests**: unchanged, including `test_templates.py`, with the golden file and pinned config
   versions untouched.

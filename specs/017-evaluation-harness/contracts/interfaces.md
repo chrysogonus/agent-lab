@@ -24,6 +24,10 @@ Templates always have `"budget": null, "ask_first": []`.
 
 `GET /budget-limits` answers `{"default": <budget>, "max": <budget>}`.
 
+Unsaved block agents carry what a save should keep: `GET /blocks/new` and
+`GET /agents/{template}/blocks` answer with the default budget, and `GET /agents/{saved agent}/blocks`
+with that agent's budget and ask-first tools.
+
 `DELETE /agents/{id}` answers 409 while an evaluation of that agent is running.
 
 ## Runs
