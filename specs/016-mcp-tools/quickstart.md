@@ -65,9 +65,24 @@ HTTP, with `Authorization: Bearer ${M16_CHECK_TOKEN}`).
 
 | Check | Result |
 |---|---|
-| 1. The Tools page | API only: `lab`, `notes` and `journal` connected at start. `web` failed with "All connection attempts failed" because it was its own address before uvicorn accepted connections; Reconnect connected it (modern, 2026-07-28). **Not looked at in a browser.** |
+| 1. The Tools page | API: `lab`, `notes` and `journal` connected at start. `web` failed with "All connection attempts failed" because it was its own address before uvicorn accepted connections; Reconnect connected it (modern, 2026-07-28). Browser (2026-11-05, see below): passed. |
 | 2. Built-ins unchanged | Passed with reasoning off: "17 × 23 + 11°C = **402**". Both tool spans show `lab.mcp.server: lab`, 2026-07-28, the request id and the response. With reasoning on (the template's default), OpenAI refuses function tools for gpt-6-luna on `/v1/chat/completions` (HTTP 400). That limit predates M16. |
 | 3. The owner's own server | Passed: a `todo` entry was added to the file, then Reload, then a new block agent using `todo/write_note` and `web/calculator`. It completed 3.3 s after the file edit (through the API, not the builder UI). |
 | 4. Notes between runs (SC-006) | **3/5** with a plain system prompt: in both misses the model did not look in its notes. **4/5** with a system prompt saying "before answering any question, look in your notes": the one miss read the note and then refused to repeat a "password". Every tool call the model made worked. |
-| 5. Claude Code | **Not run**: `claude mcp add` changes the owner's Claude Code settings. `test_mcp_http.py` covers the same path with an outside client, in both revisions. |
+| 5. Claude Code | Not run on 2026-11-03: `claude mcp add` changes the owner's Claude Code settings. Run on 2026-11-05 without changing them: passed (see below). |
 | 6. Secrets (SC-004) | Passed: the token appeared 0 times in 35 tool spans, in the runs, on the Tools page and in the server log. |
+
+## Results (2026-11-05): the two open checks
+
+Both ran against a scratch backend on port 8010 with a scratch database and servers file, and no
+model keys, so the owner's database and settings were not touched.
+
+| Check | Result |
+|---|---|
+| 1. The Tools page | Passed in headless Chromium: `lab` and `notes` connected with their tools. With the notes command set to `nonexistent`, **Reload** showed notes as "failed: cannot start: No such file or directory", and `lab` stayed connected with its tools. Restoring the file and pressing **Reload** connected notes again. The page came from a scratch frontend on port 3001, which is not an allowed origin, so the browser ran with web security off; origin checks were not part of this check. |
+| 5. Claude Code (SC-005) | Passed on Claude Code 2.1.318 with `claude -p --mcp-config <file> --strict-mcp-config`, the same `/mcp` endpoint as `claude mcp add`: `get_weather` for Berlin gave 11 °C and rain, and `calculator` for `2**10 - 24` gave 1000. |
+
+**Limits of these results:**
+- SC-003 was met through the API. Picking the tool in the builder UI was not run on a real model.
+- SC-006 reached its 4 of 5 only with a system prompt telling the agent to look in its notes. A
+  plain system prompt gave 3 of 5.

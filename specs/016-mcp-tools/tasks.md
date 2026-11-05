@@ -449,7 +449,7 @@ lists and calls both built-ins, in both eras.
   path (< 5 ms added) and a notes stdio call (< 100 ms) once with a short script in the
   scratchpad; record the figures in specs/016-mcp-tools/quickstart.md under "Results".
 
-- [ ] T027 Manual checks 1–6 of specs/016-mcp-tools/quickstart.md with `openai/gpt-6-luna`
+- [X] T027 Manual checks 1–6 of specs/016-mcp-tools/quickstart.md with `openai/gpt-6-luna`
   (SC-003, SC-005, SC-006); record results in quickstart.md. Commit "M16 manual check results".
 
 ---
