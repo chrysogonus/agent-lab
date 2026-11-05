@@ -268,6 +268,7 @@ def test_the_work_plan_prompt() -> None:
     assert "- Greta: works at the fields, up 05:30 to 21:30, carries nothing" in prompt
     assert "The work you handed out before:" not in prompt
     assert "Nothing can be built until the goods are bought: hand out a buy task" in prompt
+    assert "Name the goods exactly as the trader sells them: wood, paint or saplings." in prompt
     assert prompt.endswith(
         'Answer with one JSON object: {"tasks": [{"task": "buy", "goods": "wood", "villagers": '
         '["Jonas"]}, {"task": "build", "villagers": ["Greta"]}]}'
@@ -301,6 +302,20 @@ def test_parse_tasks() -> None:
         "no usable task in the work plan",
     )
     assert parse_tasks("[]")[0] is None
+
+
+def test_a_buy_task_for_one_sapling_is_kept() -> None:
+    answer = tasks_answer(
+        {"task": "buy", "goods": "Sapling", "villagers": ["Lina"]},
+        {"task": "build", "villagers": ["Hilde"]},
+    )
+    assert parse_tasks(answer) == (
+        [
+            {"task": "buy", "goods": "saplings", "villagers": ["Lina"]},
+            {"task": "build", "goods": None, "villagers": ["Hilde"]},
+        ],
+        None,
+    )
 
 
 def test_task_text() -> None:

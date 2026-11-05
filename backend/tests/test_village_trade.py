@@ -12,6 +12,7 @@ from agent_lab.village.trade import (
     trader_stock,
     trader_text,
 )
+from agent_lab.village.turn import parse_action
 from agent_lab.village.world import new_world, place_cells
 
 MARKET = place_cells("market")[0]
@@ -84,6 +85,15 @@ def test_buy_refusals_in_order() -> None:
     world["villagers"][3]["basket"] = "flowers"
     assert buy_refusal(world, "Lina", "wood") is None
     assert buy_refusal(world, "Lina", "Wood ") is None  # as the model may write it
+
+
+def test_buying_a_sapling_buys_a_load_of_saplings() -> None:
+    world = world_at(10 * 60, trader={"day": 2, "stock": {"wood": 2, "paint": 0, "saplings": 1}})
+    world["villagers"][3]["basket"] = "flowers"
+    assert parse_action('{"action": "buy", "goods": "sapling"}', world, "Lina") == (
+        {"action": "buy", "goods": "saplings", "paid": "flowers"},
+        None,
+    )
 
 
 def test_trader_text() -> None:

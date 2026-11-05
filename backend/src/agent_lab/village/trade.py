@@ -19,7 +19,8 @@ def carried_text(goods: str) -> str:
 
 
 def goods_named(text: str) -> str:
-    return text.strip().lower()
+    name = text.strip().lower()
+    return "saplings" if name == "sapling" else name  # a site needing 3 reads as 3 of one sapling
 
 
 def trader_stock(day: int) -> dict[str, int]:

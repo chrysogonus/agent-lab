@@ -320,7 +320,8 @@ def work_plan_prompt(world: dict[str, Any]) -> str:
             "Hand out the work: who buys which goods from the trader (paying with a basket from "
             "their work), who brings them to the building site and who builds there. Nothing "
             "can be built until the goods are bought: hand out a buy task for each of the goods "
-            "still needed. Not everyone has to help. Answer with one JSON object: "
+            "still needed. Not everyone has to help. Name the goods exactly as the trader sells "
+            "them: wood, paint or saplings. Answer with one JSON object: "
             '{"tasks": [{"task": "buy", "goods": "wood", "villagers": ["Jonas"]}, '
             '{"task": "build", "villagers": ["Greta"]}]}',
         ]
